@@ -7,6 +7,7 @@ export type ActiveClass = {
   grade_level: number;
   subject: string;
   section: string | null;
+  term: number;
 };
 
 type ActiveClassState = {

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { BookOpen, Bot, Home, Menu, School, User, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useActiveClassStore } from "@/lib/store/active-class";
+import { ClassSelector } from "@/components/classes/class-selector";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 
@@ -18,7 +18,6 @@ const navItems = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
-  const activeClass = useActiveClassStore((state) => state.activeClass);
 
   return (
     <div className="min-h-screen bg-background">
@@ -55,9 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground sm:block">
-              {activeClass ? activeClass.name : "No active class"}
-            </div>
+            <ClassSelector />
             <DropdownMenu
               align="end"
               trigger={

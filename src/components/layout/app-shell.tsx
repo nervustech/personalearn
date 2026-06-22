@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Bot, Home, Menu, School, X } from "lucide-react";
+import { BookOpen, Bot, Home, Menu, School, User, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useActiveClassStore } from "@/lib/store/active-class";
+import { SignOutButton } from "@/components/auth/sign-out-button";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
@@ -21,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -33,7 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
               <BookOpen className="h-5 w-5 text-primary" />
-              <span>PersonaLearn</span>
+              <span className="hidden sm:inline">PersonaLearn</span>
             </Link>
           </div>
 
@@ -52,8 +54,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </div>
 
-          <div className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
-            {activeClass ? activeClass.name : "No active class"}
+          <div className="flex items-center gap-2">
+            <div className="hidden rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground sm:block">
+              {activeClass ? activeClass.name : "No active class"}
+            </div>
+            <DropdownMenu
+              align="end"
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted"
+                  aria-label="Account menu"
+                >
+                  <User className="h-4 w-4" />
+                </button>
+              }
+            >
+              <SignOutButton />
+            </DropdownMenu>
           </div>
         </div>
 

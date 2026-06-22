@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ensureUserProfile } from "@/lib/auth/ensure-user-profile";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -8,9 +9,11 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error && data.user) {
+      await ensureUserProfile(supabase, data.user);
+      const safePath = next.startsWith("/") ? next : "/dashboard";
+      return NextResponse.redirect(`${origin}${safePath}`);
     }
   }
 

@@ -19,20 +19,30 @@ npm install
 
 ### 2. Configure environment
 
-Copy `.env.example` to `.env.local` and fill in your Supabase credentials:
+Next.js reads **`.env.local`** for local development (not `.env.example`).
 
 ```bash
 cp .env.example .env.local
 ```
 
+Edit `.env.local` and set:
+
+- `NEXT_PUBLIC_SUPABASE_URL` — Project URL from Supabase → Settings → API
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — **anon / publishable** key (safe for browser)
+- `SUPABASE_SERVICE_ROLE_KEY` — service role key (server-only; never use in middleware or client)
+
+Restart the dev server after changing env files.
+
 ### 3. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run the migration in `supabase/migrations/20260621_init_schema.sql` via the SQL Editor
-3. Enable Google OAuth under Authentication → Providers
+3. **Auth (PSL-18):** Enable Google OAuth under Authentication → Providers
 4. Set Site URL and redirect URLs:
+   - `http://localhost:3000`
    - `http://localhost:3000/auth/callback`
    - Your Vercel preview/production URLs
+5. Confirm `handle_new_user` trigger is active (included in migration)
 
 ### 4. Run locally
 
@@ -64,7 +74,7 @@ supabase/migrations/        # Database schema + RLS
 
 ## Sprint status
 
-- **Sprint 0 (PSL-25):** Project infrastructure — scaffold, schema, middleware, CI
+- **Sprint 0 (PSL-25):** Project infrastructure — scaffold, schema, middleware, CI (complete)
 - **Sprint 1:** Auth, onboarding, dashboard, class management
 - **Sprint 2:** RAG, AI generation, co-pilot, multimodal feedback
 - **Sprint 3:** Progress tracking, exports, PWA, production deploy

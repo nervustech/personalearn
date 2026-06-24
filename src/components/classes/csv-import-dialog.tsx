@@ -13,7 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { studentSchema, type StudentFormValues } from "@/lib/validations/class";
+import { parseStudentRows } from "@/lib/csv/parse-student-rows";
+import type { StudentFormValues } from "@/lib/validations/class";
 import { useCreateStudentsBulk } from "@/lib/hooks/use-classes";
 
 const TEMPLATE_CSV = "full_name,admission_number,gender\nJane Doe,ADM001,Female\nJohn Kamau,ADM002,Male";
@@ -47,32 +48,15 @@ export function CsvImportDialog({ classId }: CsvImportDialogProps) {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const parsed: StudentFormValues[] = [];
-        const errors: string[] = [];
+        const parsed = parseStudentRows(results.data);
 
-        results.data.forEach((row, index) => {
-          const candidate = {
-            full_name: row.full_name?.trim() ?? "",
-            admission_number: row.admission_number?.trim() || undefined,
-            gender:
-              row.gender?.trim() === "Male" || row.gender?.trim() === "Female"
-                ? (row.gender.trim() as "Male" | "Female")
-                : undefined,
-          };
-          const result = studentSchema.safeParse(candidate);
-          if (result.success) {
-            parsed.push(result.data);
-          } else {
-            errors.push(`Row ${index + 2}: ${result.error.errors[0]?.message}`);
-          }
-        });
-
-        if (errors.length) {
-          setParseError(errors.slice(0, 3).join("; "));
+        if (!parsed.ok) {
+          setParseError(parsed.errors.slice(0, 3).join("; "));
           setPreview([]);
-        } else {
-          setPreview(parsed);
+          return;
         }
+
+        setPreview(parsed.students);
       },
       error: (error) => setParseError(error.message),
     });

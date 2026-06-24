@@ -1,0 +1,72 @@
+---
+description: Branching, commits, and PR workflow for Jira-ticketed work (PersonaLearn)
+alwaysApply: true
+---
+
+# Git workflow (PersonaLearn)
+
+## Before starting work
+
+Confirm you are on the **correct branch** for the task. Never implement on `develop` or `main` directly.
+
+1. Identify the **Jira ticket** (`PSL-N`) and work type (feature, bug, chore, docs).
+2. **Fetch and branch** from latest `origin/develop` (or the merged prerequisite for dependent work).
+3. If a branch for that ticket already exists locally or on origin, check it out instead of creating a duplicate.
+
+| Work type | Branch prefix | When to use | Commit prefix |
+|-----------|---------------|-------------|---------------|
+| Feature | `feature/` | New capability or user-facing story | `feat:` |
+| Bug | `fix/` | Defect fix (broken behaviour) | `fix:` |
+| Chore | `chore/` | Tooling, deps, refactors, CI — no user-facing change | `chore:` |
+| Documentation | `docs/` | README, setup guides, comments-only docs | `docs:` |
+
+**Branch naming:** `{prefix}/PSL-{ticket}-{short-kebab-description}`
+
+Examples: `feature/PSL-4-teacher-auth`, `fix/PSL-42-login-redirect`, `chore/PSL-30-eslint-flat-config`, `docs/PSL-18-supabase-auth-config`
+
+## Branches
+
+- **Integration branch:** `develop` — all PRs target `develop`, not `main`.
+- **Production branch:** `main` — release via `develop` → `main` when shipping.
+- **One Jira ticket → one branch → one PR.** Do not bundle multiple tickets in a single commit or PR.
+- Delete branches after merge (`gh pr merge --squash --delete-branch`).
+
+## Commits
+
+- **Conventional prefix + ticket:** `feat:`, `fix:`, `chore:`, `docs:` — each with `(PSL-N)`
+- **Focus on why**, one ticket per commit when possible.
+- **Stage only ticket-scoped files** — never `git add -A` when splitting or committing; exclude unrelated changes (e.g. `.cursor/`).
+- **Never commit secrets** (`.env.local`, credentials).
+
+```
+feat: add teacher authentication with Google and email (PSL-4)
+
+Wire login UI, OAuth callback, session middleware, and teacher profile provisioning.
+```
+
+## Pull requests
+
+1. **Rebase** feature branch onto `origin/develop` before opening/updating the PR (required after squash merges on stacked work).
+2. **Verify diff** — PR should only contain files for that ticket.
+3. **Open PR** targeting `develop` with title matching the commit style.
+4. **Body** must include `## Summary` and `## Test plan` (checkboxes).
+5. **Review before merge** — post a review comment with verdict and findings; wait for CI green.
+6. **Merge** with squash; do not merge your own PR with `--approve` (GitHub blocks self-approval).
+
+## Merge order (when tickets depend on each other)
+
+Merge to `develop` sequentially. Sprint 1 example:
+
+`PSL-25` → `PSL-18` → `PSL-4` → `PSL-26` → `PSL-28` → `PSL-5` (`PSL-19` can merge after `PSL-25`, parallel with the stack).
+
+Independent tickets can PR to `develop` in parallel; dependent tickets wait for their prerequisite to merge, then rebase.
+
+## Agent checklist
+
+- [ ] Correct branch type and name (`feature/`, `fix/`, `chore/`, or `docs/` + `PSL-N`)
+- [ ] Branched from current `develop` (not working on `develop`/`main`)
+- [ ] Single-ticket scope in diff
+- [ ] Rebased on current `develop` before PR
+- [ ] PR targets `develop`, not `main`
+- [ ] Review comment posted; CI passing
+- [ ] Squash merge + delete branch

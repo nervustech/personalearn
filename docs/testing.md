@@ -112,6 +112,28 @@ For P0/P1 Jira stories, include in acceptance criteria:
 
 > Automated tests added for new behavior; `npm test` passes in CI.
 
+## Branching tests
+
+Branch by **Jira ticket and user value**, not by test type (unit vs E2E).
+
+| Test work | Branch with | Example |
+|-----------|-------------|---------|
+| Test infrastructure (Vitest, Playwright, CI, docs) | Dedicated chore ticket | `chore/PSL-29-test-foundation` |
+| Tests for a new feature | Same feature branch | `feature/PSL-32-rag-pipeline` includes RAG tests |
+| Tests for a bug fix | Same fix branch | `fix/PSL-40-login-redirect` includes regression test |
+| Backfill tests for merged work | One backfill ticket | `chore/PSL-29-test-foundation` (Sprint 1 retro) |
+
+**Rules:**
+
+- One Jira ticket → one branch → one PR. Tests for that ticket live in the same PR.
+- Colocate unit/integration tests next to source (`foo.ts` + `foo.test.ts`). Group E2E by user journey in `e2e/`.
+- Do not reopen closed feature tickets just to add tests — use a backfill chore ticket instead.
+- From Sprint 2 onward, ship features with their tests; do not defer tests to a separate PR.
+
+**When to split into multiple branches:** only when scope is too large to review (e.g. test infra in PSL-29, then E2E-in-CI as a follow-up chore). Never split by test layer alone.
+
+See also [`.cursor/rules/git-workflow.mdc`](../.cursor/rules/git-workflow.mdc) for branch naming and commit prefixes.
+
 ## Manual checklist (not automated)
 
 - Real Google OAuth on staging

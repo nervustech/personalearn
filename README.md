@@ -33,6 +33,18 @@ Edit `.env.local` and set:
 
 Restart the dev server after changing env files.
 
+### Vercel preview / production
+
+In **Vercel → Project Settings → Environment Variables**, add the same Supabase vars for **Preview** and **Production**:
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Project URL from Supabase → Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes* | *Or `NEXT_PUBLIC_PUBLISHABLE_KEY` (same anon key) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server routes | Never expose to middleware or client |
+
+Missing Preview vars cause `MIDDLEWARE_INVOCATION_FAILED` on PR deployments. **Redeploy** after saving env changes.
+
 ### 3. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)

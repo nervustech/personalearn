@@ -29,7 +29,7 @@ export function SentryTestClient() {
       const response = await fetch("/api/dev/sentry-test");
       if (!response.ok) {
         setServerStatus(
-          `Server returned ${response.status} — check terminal and Sentry Issues.`
+          `Expected ${response.status} — server error triggered. Check Sentry Issues (may take a few seconds).`
         );
       } else {
         setServerStatus("Unexpected success — route should have thrown.");

@@ -1,0 +1,98 @@
+name: Bug report
+description: Report broken behavior. The team will create a Jira ticket (PSL-N) for tracking.
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. We'll triage this and create a **Jira ticket (`PSL-N`)** for tracking.
+        For urgent production issues, contact the team directly.
+
+        **Do not paste secrets** (passwords, API keys, `.env` values).
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence — what is broken and for whom?
+      placeholder: "CSV import creates duplicate students in the roster"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Production
+        - Staging / Vercel preview
+        - Local development
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: URL (if applicable)
+      placeholder: "https://personalearn-xxx.vercel.app/classes/..."
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps another person can follow.
+      placeholder: |
+        1. Sign in as a teacher with an existing class
+        2. Go to Students → Import CSV
+        3. Upload the attached file
+        4. Click Import
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: P0 = app unusable; P1 = major workflow blocked; P2 = annoyance
+      options:
+        - P0 — Critical (cannot use the app)
+        - P1 — Major (important workflow broken)
+        - P2 — Minor (cosmetic or workaround exists)
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Screenshots, error messages, sample files (redact PII). Drag files into the comment after submitting if needed.
+      placeholder: |
+        Console error:
+        Network response:
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / device
+      placeholder: "Chrome 125 on Android 14"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Frequency, related tickets, when it started, etc.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: PersonaLearn Jira board
+    url: https://nervustechnologies.atlassian.net/jira/software/projects/PSL/boards/34
+    about: Track bugs and features in Jira (PSL-N). GitHub Issues are for intake only.
+  - name: Testing guide
+    url: https://github.com/nervustech/personalearn/blob/develop/docs/testing.md
+    about: How we test PersonaLearn (Vitest, Playwright, CI).

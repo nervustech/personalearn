@@ -134,4 +134,13 @@ describe("middleware", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
   });
+
+  it("skips class lookup on public routes for authenticated users", async () => {
+    mockAuthenticatedUser();
+
+    const response = await middleware(createRequest("/"));
+
+    expect(response.status).toBe(200);
+    expect(from).not.toHaveBeenCalled();
+  });
 });

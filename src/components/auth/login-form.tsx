@@ -16,18 +16,33 @@ import {
   type SignupFormValues,
 } from "@/lib/validations/auth";
 import { GoogleIcon } from "@/components/auth/google-icon";
+import { OAuthSetupCallout } from "@/components/auth/oauth-setup-callout";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") ?? "/dashboard";
   const authError = searchParams.get("error") === "auth";
+  const authErrorCode = searchParams.get("error_code");
+  const authErrorDetail = searchParams.get("error_detail");
+
+  function getAuthErrorMessage(): string | null {
+    if (!authError) return null;
+    if (authErrorDetail?.includes("Unable to exchange external code")) {
+      return "Google sign-in failed: Supabase could not verify your Google OAuth credentials. Follow the setup steps below.";
+    }
+    if (authErrorDetail) {
+      return `Authentication failed: ${authErrorDetail}`;
+    }
+    if (authErrorCode) {
+      return `Authentication failed (${authErrorCode}). Please try again.`;
+    }
+    return "Authentication failed. Please try again.";
+  }
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(
-    authError ? "Authentication failed. Please try again." : null
-  );
+  const [error, setError] = useState<string | null>(getAuthErrorMessage());
 
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -49,12 +64,15 @@ export function LoginForm() {
     setError(null);
     const supabase = createClient();
     const origin = window.location.origin;
+    const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`;
+
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        redirectTo: callbackUrl,
       },
     });
+
     if (oauthError) {
       setError(oauthError.message);
       setLoading(false);
@@ -150,6 +168,10 @@ export function LoginForm() {
         >
           {error}
         </div>
+      ) : null}
+
+      {authErrorDetail?.includes("Unable to exchange external code") ? (
+        <OAuthSetupCallout />
       ) : null}
 
       <section className="space-y-3" aria-label="Social sign in">

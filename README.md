@@ -50,11 +50,13 @@ Missing Preview vars cause `MIDDLEWARE_INVOCATION_FAILED` on PR deployments. **R
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run the migration in `supabase/migrations/20260621_init_schema.sql` via the SQL Editor
 3. **Auth (PSL-18):** Enable Google OAuth under Authentication → Providers
-4. Set Site URL and redirect URLs:
-   - `http://localhost:3000`
-   - `http://localhost:3000/auth/callback`
-   - Your Vercel preview/production URLs
-5. Confirm `handle_new_user` trigger is active (included in migration)
+4. Set Site URL and redirect URLs in **Supabase** (Authentication → URL Configuration):
+   - Site URL: `http://localhost:3000`
+   - Redirect URLs: `http://localhost:3000/**`
+5. In **Google Cloud Console** (APIs & Services → Credentials → OAuth 2.0 Client), set **Authorized redirect URIs** to your Supabase callback — **not** `localhost`:
+   - `https://<your-project-ref>.supabase.co/auth/v1/callback`
+   - Copy the same Client ID and Client Secret into Supabase → Authentication → Providers → Google
+6. Confirm `handle_new_user` trigger is active (included in migration)
 
 ### 4. Run locally
 

@@ -17,6 +17,22 @@ function isAuthAwareRoute(pathname: string) {
   );
 }
 
+/** Site URL fallback lands on /?code=… — forward to the callback route on this host. */
+function redirectOAuthCodeFromSiteRoot(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const authCode = request.nextUrl.searchParams.get("code");
+  if (pathname !== "/" || !authCode) {
+    return null;
+  }
+
+  const redirectUrl = request.nextUrl.clone();
+  redirectUrl.pathname = "/auth/callback";
+  if (!redirectUrl.searchParams.has("next")) {
+    redirectUrl.searchParams.set("next", "/dashboard");
+  }
+  return NextResponse.redirect(redirectUrl);
+}
+
 async function teacherHasClasses(
   supabase: ReturnType<typeof createServerClient>,
   userId: string
@@ -39,9 +55,6 @@ function configurationErrorResponse(message: string) {
   });
 }
 
-// Cache the positive onboarding result so we don't hit the DB on every
-// navigation. Only `true` is cached; un-onboarded teachers are re-checked each
-// request (cheap onboarding flow) so a newly created class lets them in at once.
 const HAS_CLASSES_COOKIE = "pl_has_classes";
 const HAS_CLASSES_TTL_SECONDS = 300;
 
@@ -56,6 +69,11 @@ function setHasClassesCookie(response: NextResponse) {
 }
 
 export async function middleware(request: NextRequest) {
+  const oauthRedirect = redirectOAuthCodeFromSiteRoot(request);
+  if (oauthRedirect) {
+    return oauthRedirect;
+  }
+
   const { pathname } = request.nextUrl;
 
   // Public routes need no auth — skip all Supabase work (no network round-trip).
@@ -108,7 +126,6 @@ export async function middleware(request: NextRequest) {
         ? true
         : await teacherHasClasses(supabase, user.id);
 
-      // Persist the positive result so later navigations skip the DB query.
       const shouldCache = hasClasses && !cachedHasClasses;
 
       if (pathname === "/login") {
@@ -151,11 +168,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Auth + session work runs only on authAwarePrefixes; other routes return
-     * immediately (no Supabase round-trip). Excludes monitoring tunnel, static
-     * assets, and Next internals.
-     */
-    "/((?!_next/static|_next/image|favicon.ico|monitoring|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|monitoring|api/health|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

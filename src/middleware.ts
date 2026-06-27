@@ -7,6 +7,8 @@ const loginPath = "/login";
 const onboardingPath = "/onboarding";
 const protectedPrefixes = ["/dashboard", "/classes", "/ai-hub"];
 const authAwarePrefixes = [loginPath, onboardingPath, ...protectedPrefixes];
+/** Removed in #16; clear if still present in browsers from the old middleware. */
+const legacyHasClassesCookie = "pl_has_classes";
 
 function matchesPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -53,6 +55,36 @@ function configurationErrorResponse(message: string) {
   });
 }
 
+function applySessionCookies(
+  target: NextResponse,
+  cookiesToSet: { name: string; value: string; options: CookieOptions }[]
+) {
+  cookiesToSet.forEach(({ name, value, options }) =>
+    target.cookies.set(name, value, options)
+  );
+}
+
+function clearLegacyCookies(response: NextResponse) {
+  response.cookies.delete(legacyHasClassesCookie);
+}
+
+function redirectWithSession(
+  request: NextRequest,
+  pathname: string,
+  sessionCookies: { name: string; value: string; options: CookieOptions }[],
+  options?: { deleteSearchParams?: string[] }
+) {
+  const redirectUrl = request.nextUrl.clone();
+  redirectUrl.pathname = pathname;
+  options?.deleteSearchParams?.forEach((param) =>
+    redirectUrl.searchParams.delete(param)
+  );
+  const redirectResponse = NextResponse.redirect(redirectUrl);
+  applySessionCookies(redirectResponse, sessionCookies);
+  clearLegacyCookies(redirectResponse);
+  return redirectResponse;
+}
+
 export async function middleware(request: NextRequest) {
   const oauthForward = forwardOAuthCode(request);
   if (oauthForward) {
@@ -68,6 +100,8 @@ export async function middleware(request: NextRequest) {
 
   try {
     let response = NextResponse.next({ request });
+    let sessionCookies: { name: string; value: string; options: CookieOptions }[] =
+      [];
     const { url, anonKey } = getSupabaseEnv();
 
     const supabase = createServerClient(url, anonKey, {
@@ -76,13 +110,12 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
+          sessionCookies = cookiesToSet;
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
+          applySessionCookies(response, cookiesToSet);
         },
       },
     });
@@ -94,36 +127,39 @@ export async function middleware(request: NextRequest) {
     // Unauthenticated: only the login page is reachable.
     if (!user) {
       if (pathname === loginPath) {
+        clearLegacyCookies(response);
         return response;
       }
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = loginPath;
       redirectUrl.searchParams.set("redirectTo", pathname);
-      return NextResponse.redirect(redirectUrl);
+      const redirectResponse = NextResponse.redirect(redirectUrl);
+      applySessionCookies(redirectResponse, sessionCookies);
+      clearLegacyCookies(redirectResponse);
+      return redirectResponse;
     }
 
     // Authenticated: route based on whether they've created their first class.
     const hasClasses = await teacherHasClasses(supabase, user.id);
 
     if (pathname === loginPath) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = getPostLoginPath(hasClasses);
-      redirectUrl.searchParams.delete("redirectTo");
-      return NextResponse.redirect(redirectUrl);
+      return redirectWithSession(
+        request,
+        getPostLoginPath(hasClasses),
+        sessionCookies,
+        { deleteSearchParams: ["redirectTo"] }
+      );
     }
 
     if (pathname === onboardingPath && hasClasses) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/dashboard";
-      return NextResponse.redirect(redirectUrl);
+      return redirectWithSession(request, "/dashboard", sessionCookies);
     }
 
     if (isProtectedRoute(pathname) && !hasClasses) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = onboardingPath;
-      return NextResponse.redirect(redirectUrl);
+      return redirectWithSession(request, onboardingPath, sessionCookies);
     }
 
+    clearLegacyCookies(response);
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Middleware failed";

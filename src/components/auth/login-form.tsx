@@ -64,10 +64,15 @@ export function LoginForm() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
+    // Drop any partial session so OAuth starts fresh and Google can show the account picker.
+    await supabase.auth.signOut({ scope: "local" });
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: buildOAuthCallbackUrl(redirectTo, window.location.origin),
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
 

@@ -3,12 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getUser = vi.fn();
 const from = vi.fn();
+let setAllCallback:
+  | ((cookies: { name: string; value: string; options: Record<string, unknown> }[]) => void)
+  | null = null;
 
 vi.mock("@supabase/ssr", () => ({
-  createServerClient: vi.fn(() => ({
-    auth: { getUser },
-    from,
-  })),
+  createServerClient: vi.fn((_url, _key, options) => {
+    setAllCallback = options.cookies.setAll;
+    return {
+      auth: { getUser },
+      from,
+    };
+  }),
 }));
 
 vi.mock("@/lib/supabase/env", () => ({
@@ -171,5 +177,40 @@ describe("middleware", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("preserves refreshed auth cookies on login redirects", async () => {
+    getUser.mockImplementation(async () => {
+      setAllCallback?.([
+        {
+          name: "sb-test-auth-token",
+          value: "refreshed-token",
+          options: { path: "/", httpOnly: true },
+        },
+      ]);
+      return {
+        data: { user: { id: "teacher-1", email: "teacher@school.ke" } },
+      };
+    });
+    mockClassCount(1);
+
+    const response = await middleware(createRequest("/login"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/dashboard");
+    expect(response.cookies.get("sb-test-auth-token")?.value).toBe("refreshed-token");
+  });
+
+  it("clears the legacy has-classes cookie on authenticated responses", async () => {
+    mockAuthenticatedUser();
+    mockClassCount(1);
+
+    const request = createRequest("/dashboard");
+    request.cookies.set("pl_has_classes", "1");
+
+    const response = await middleware(request);
+
+    expect(response.status).toBe(200);
+    expect(response.cookies.get("pl_has_classes")?.value).toBeFalsy();
   });
 });

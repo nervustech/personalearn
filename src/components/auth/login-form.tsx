@@ -17,6 +17,7 @@ import {
 } from "@/lib/validations/auth";
 import { GoogleIcon } from "@/components/auth/google-icon";
 import { OAuthSetupCallout } from "@/components/auth/oauth-setup-callout";
+import { buildOAuthCallbackUrl } from "@/lib/auth/oauth-redirect";
 
 export function LoginForm() {
   const router = useRouter();
@@ -63,13 +64,10 @@ export function LoginForm() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const origin = window.location.origin;
-    const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`;
-
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: callbackUrl,
+        redirectTo: buildOAuthCallbackUrl(redirectTo, window.location.origin),
       },
     });
 

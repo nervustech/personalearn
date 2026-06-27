@@ -143,4 +143,33 @@ describe("middleware", () => {
     expect(response.status).toBe(200);
     expect(from).not.toHaveBeenCalled();
   });
+
+  it("forwards OAuth code on public routes to auth callback", async () => {
+    const response = await middleware(
+      createRequest("/?code=oauth-code&next=%2Fonboarding")
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/auth/callback?code=oauth-code&next=%2Fonboarding"
+    );
+  });
+
+  it("forwards OAuth code on site root with default next path", async () => {
+    const response = await middleware(createRequest("/?code=oauth-code"));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/auth/callback?code=oauth-code&next=%2Fdashboard"
+    );
+  });
+
+  it("does not forward OAuth code on non-root routes", async () => {
+    mockUnauthenticated();
+
+    const response = await middleware(createRequest("/login?code=oauth-code"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("location")).toBeNull();
+  });
 });

@@ -3,18 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getPostLoginPath } from "@/lib/auth/post-login-path";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 
-const loginPath = "/login";
-const onboardingPath = "/onboarding";
 const protectedPrefixes = ["/dashboard", "/classes", "/ai-hub"];
-const authAwarePrefixes = [loginPath, onboardingPath, ...protectedPrefixes];
-
-function matchesPrefix(pathname: string, prefix: string) {
-  return pathname === prefix || pathname.startsWith(`${prefix}/`);
-}
-
-function isProtectedRoute(pathname: string) {
-  return protectedPrefixes.some((prefix) => matchesPrefix(pathname, prefix));
-}
+const onboardingPath = "/onboarding";
 
 /** Supabase Site URL fallback returns ?code= on `/`; forward it to the callback route. */
 function forwardOAuthCode(request: NextRequest) {
@@ -59,15 +49,8 @@ export async function middleware(request: NextRequest) {
     return oauthForward;
   }
 
-  const { pathname } = request.nextUrl;
-
-  // Only the login/onboarding/protected routes need a session check.
-  if (!authAwarePrefixes.some((prefix) => matchesPrefix(pathname, prefix))) {
-    return NextResponse.next({ request });
-  }
-
   try {
-    let response = NextResponse.next({ request });
+    let supabaseResponse = NextResponse.next({ request });
     const { url, anonKey } = getSupabaseEnv();
 
     const supabase = createServerClient(url, anonKey, {
@@ -79,9 +62,9 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          response = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options)
           );
         },
       },
@@ -91,40 +74,43 @@ export async function middleware(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // Unauthenticated: only the login page is reachable.
-    if (!user) {
-      if (pathname === loginPath) {
-        return response;
-      }
+    const { pathname } = request.nextUrl;
+    const isProtected = protectedPrefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    );
+    const isOnboarding = pathname === onboardingPath;
+
+    if (!user && (isProtected || isOnboarding)) {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = loginPath;
+      redirectUrl.pathname = "/login";
       redirectUrl.searchParams.set("redirectTo", pathname);
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Authenticated: route based on whether they've created their first class.
-    const hasClasses = await teacherHasClasses(supabase, user.id);
+    if (user) {
+      const hasClasses = await teacherHasClasses(supabase, user.id);
 
-    if (pathname === loginPath) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = getPostLoginPath(hasClasses);
-      redirectUrl.searchParams.delete("redirectTo");
-      return NextResponse.redirect(redirectUrl);
+      if (pathname === "/login") {
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = getPostLoginPath(hasClasses);
+        redirectUrl.searchParams.delete("redirectTo");
+        return NextResponse.redirect(redirectUrl);
+      }
+
+      if (isOnboarding && hasClasses) {
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = "/dashboard";
+        return NextResponse.redirect(redirectUrl);
+      }
+
+      if (isProtected && !hasClasses) {
+        const redirectUrl = request.nextUrl.clone();
+        redirectUrl.pathname = onboardingPath;
+        return NextResponse.redirect(redirectUrl);
+      }
     }
 
-    if (pathname === onboardingPath && hasClasses) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/dashboard";
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    if (isProtectedRoute(pathname) && !hasClasses) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = onboardingPath;
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    return response;
+    return supabaseResponse;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Middleware failed";
     if (message.includes("Missing Supabase env")) {

@@ -3,6 +3,9 @@ contact_links:
   - name: PersonaLearn Jira board
     url: https://nervustechnologies.atlassian.net/jira/software/projects/PSL/boards/34
     about: Track bugs and features in Jira (PSL-N). GitHub Issues are for intake only.
+  - name: PersonaLearn Confluence (specs & SDLC)
+    url: https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/overview
+    about: Official specs, ADRs, release notes, and retros — linked from Jira tickets.
   - name: Testing guide
     url: https://github.com/nervustech/personalearn/blob/develop/docs/testing.md
     about: How we test PersonaLearn (Vitest, Playwright, CI).

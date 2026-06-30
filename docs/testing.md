@@ -28,17 +28,29 @@ Unit (Vitest)        — Zod schemas, parsers, pure functions
 | P1 | Form validations | Zod unit tests in `src/lib/validations/` |
 | P2 | Welcome tour, class selector | Manual QA for now |
 
+## Environments (MVP)
+
+For MVP we do **not** run a separate staging stack. Treat these as one pre-production lane:
+
+| Layer | What it is |
+|-------|------------|
+| **Integration** | `develop` branch on GitHub |
+| **Deploy / manual QA** | Vercel preview URLs for PRs and `develop` |
+| **Data** | Shared Supabase **dev** project (same as local `.env.local`) |
+
+`main` is production when we ship. Until then, validate features on `develop` previews before merge.
+
 ## E2E authentication strategy
 
-**Decision:** use a **dedicated Supabase staging project** with email/password auth — not `supabase start` in CI (heavier to maintain) and not real Google OAuth in automation.
+**Decision:** use the **shared dev Supabase project** with a dedicated email/password test teacher — not `supabase start` in CI (heavier to maintain) and not real Google OAuth in automation.
 
-1. Create a separate Supabase project for staging/E2E (never production).
+1. Use the existing PersonaLearn dev Supabase project (not production).
 2. Disable email confirmation for test accounts (Authentication → Providers → Email).
 3. Create a test teacher account (or one without classes for onboarding flows).
 4. Set in `.env.local` (local only — do not commit):
 
 ```bash
-E2E_TEST_EMAIL=teacher-e2e@your-staging-project.test
+E2E_TEST_EMAIL=teacher-e2e@your-dev-project.test
 E2E_TEST_PASSWORD=your-secure-test-password
 ```
 
@@ -48,7 +60,7 @@ E2E_TEST_PASSWORD=your-secure-test-password
 - `e2e/auth-gate.spec.ts` runs without credentials (redirect smoke test).
 - `e2e/onboarding.spec.ts` is **skipped** in CI until `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD` GitHub Actions secrets are configured.
 
-To enable authenticated E2E in CI later, add repository secrets and a separate workflow job with `npx playwright install --with-deps chromium`.
+To enable authenticated E2E in CI later, add repository secrets and a separate workflow job with `npx playwright install --with-deps chromium`. A dedicated staging Supabase project can wait until post-MVP.
 
 ## Running tests locally
 
@@ -91,7 +103,7 @@ npm run test:e2e   # optional without E2E credentials (auth-gate only)
 3. `npm test`
 4. `npm run build`
 
-E2E is intentionally not in the default CI job yet — add when staging Supabase secrets are ready.
+E2E is intentionally not in the default CI job yet — add when dev Supabase E2E secrets are ready.
 
 ## Test file map (Sprint 1 backfill)
 
@@ -136,6 +148,6 @@ See also [`.cursor/rules/git-workflow.mdc`](../.cursor/rules/git-workflow.mdc) f
 
 ## Manual checklist (not automated)
 
-- Real Google OAuth on staging
+- Real Google OAuth on develop preview
 - Mobile navigation (hamburger menu)
 - PWA install flow (Sprint 3)

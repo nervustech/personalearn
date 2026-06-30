@@ -1,6 +1,12 @@
 ## Jira
 
-PSL-__ — [link](https://your-org.atlassian.net/browse/PSL-__)
+PSL-__ — [link](https://nervustechnologies.atlassian.net/browse/PSL-__)
+
+## Labels
+
+- **Area:** area-auth | area-dashboard | area-classes | area-ai-rag | area-infra | area-docs
+- **Type:** type-feature | type-bug | type-chore | type-tech-debt
+- **Milestone:** Sprint 2 (when in current sprint)
 
 ## Summary
 

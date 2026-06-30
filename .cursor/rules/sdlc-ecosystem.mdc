@@ -30,31 +30,55 @@ If it does not link to `PSL-N`, treat it as unofficial until triaged into Jira.
 
 ## Jira workflow (PSL)
 
-| Status | Meaning | Agent action |
-|--------|---------|--------------|
-| **To Do** | Backlog; refine until spec linked | Do not branch |
-| **In Progress** | Branch exists; active implementation | On "implement PSL-N" after branch created |
-| **Review** | PR open; CI/review in flight | When PR is opened |
-| **Blocker** | Blocked on dependency or external factor | When blockers cannot be resolved in-session |
-| **Done** | Merged to `develop` | After squash merge (user approves merge) |
+| Status | Meaning |
+|--------|---------|
+| **To Do** | Backlog; spec linked before sprint pull |
+| **In Progress** | Branch exists; active implementation |
+| **Review** | PR open; CI/review in flight |
+| **Blocker** | Blocked on dependency or external factor |
+| **Done** | Merged to `develop` |
 
-Complements `git-workflow.mdc` — follow both rules together.
+Complements `git-workflow.mdc`. For step-by-step delivery (branch → PR → review → merge), use the **`sdlc-pr-lifecycle`** skill.
 
-## Labels (Jira + GitHub PRs)
+## Labels & tagging (Jira + GitHub)
 
-Apply one **area** and one **type** label on every ticket and PR:
+Labels are required on **every** tracked item. Use the same vocabulary on Jira tickets and GitHub PRs.
 
-**Area:** `area-auth`, `area-dashboard`, `area-classes`, `area-ai-rag`, `area-infra`, `area-docs`
+**Area (exactly one):** `area-auth`, `area-dashboard`, `area-classes`, `area-ai-rag`, `area-infra`, `area-docs`
 
-**Type:** `type-feature`, `type-bug`, `type-chore`, `type-tech-debt`
+**Type (exactly one):** `type-feature`, `type-bug`, `type-chore`, `type-tech-debt`
 
-**Sprint:** use Jira **Sprint** field (primary). Optional label: `sprint-N`.
+**Intake only (GitHub Issues):** `needs-triage` until a Jira `PSL-N` exists and labels are copied to the ticket.
+
+**Sprint:** Jira **Sprint** field (primary). GitHub PR **milestone** = current sprint when in active sprint.
 
 Reference vocabulary: Jira PSL-35 (do not delete).
 
-## Ticket description template
+### When labels are required
 
-When creating or refining Jira tickets, include:
+| Artifact | When | Labels |
+|----------|------|--------|
+| **Jira ticket** | On create or triage | `area-*` + `type-*` before leaving To Do |
+| **GitHub Issue** | On create | `needs-triage` + best-guess `type-*` |
+| **GitHub PR** | Before review | Same `area-*` + `type-*` as `PSL-N`; sprint milestone |
+| **Jira ticket** | After PR review | Re-verify; add follow-up ticket with `type-tech-debt` if needed |
+
+Fix missing or wrong labels **before** review verdicts or merge.
+
+### Comment tagging
+
+Every cross-system comment must include `PSL-N` and a link where applicable.
+
+| Where | When | Include |
+|-------|------|---------|
+| **Jira** | Branch / PR open / review / merge | `PSL-N`, branch or PR URL, verdict on review |
+| **GitHub PR** | Review | `PSL-N`, verdict, label confirmation |
+| **GitHub Issue** | Triage reply | `PSL-N` link, labels on ticket |
+| **Slack** | PR open / merge | `PSL-N`, PR URL, one-line summary |
+
+Use `@mention` only when someone must act.
+
+## Ticket description template
 
 ```markdown
 ## Ready checklist
@@ -67,45 +91,25 @@ When creating or refining Jira tickets, include:
 - ...
 
 ## Spec
-Duplicate https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/4325405 (Product requirements template)
+Duplicate Product requirements template in PLEARN (Create → Page → template picker)
 ```
 
-## Confluence templates (native Atlassian — duplicate, do not invent structure)
+## Confluence
 
-| Section | Atlassian template | Duplicate from |
-|---------|-------------------|----------------|
-| **Specs** | Product requirements | [Spec Template](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/4325405) |
-| **Architecture** | Decision documentation | [ADR Template](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/4685826) |
-| **Releases** | Status update | [Release Template](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/4423694) |
-| **Retros** | Retrospective | [Retro Template](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/4161547) |
+Use native Atlassian blueprints — **duplicate via Create → Page**, do not hand-roll structure:
 
-Full playbook: [SDLC Overview](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/4325385)
+| Section | Blueprint |
+|---------|-----------|
+| Specs | Product requirements |
+| Architecture | Decision documentation |
+| Releases | Status update |
+| Retros | Retrospective |
 
-## Agent playbook
-
-Before any implementation:
-
-1. `getJiraIssue(PSL-N)` — read ACs, labels, sprint, linked spec
-2. Check **blocks** links — abort if prerequisites are not Done
-3. Confirm ticket is in sprint or explicitly prioritized by user
-
-During implementation (with `git-workflow.mdc`):
-
-4. Branch from `origin/develop` → `{feature|fix|chore|docs}/PSL-N-*`
-5. Transition Jira → **In Progress**; comment with branch name
-6. Implement and test; commit only when user asks
-7. Open PR targeting `develop` with `PSL-N` in title; apply matching area/type labels; set milestone **Sprint 2** when in current sprint
-8. Transition Jira → **Review**; comment with PR URL and Vercel preview
-9. Babysit CI until green; do not merge without user approval
-10. On merge → transition **Done**; post to `#personalearn-dev` (channel `C0BDURJTXR8`)
-
-## Confluence structure
-
-Under [PersonaLearn](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/overview) (`PLEARN` space) — use native templates above; populate per ticket/sprint, not upfront.
+Populate per ticket/sprint, not bulk upfront. Hub: [PLEARN](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/overview).
 
 ## GitHub
 
-- **Milestone:** current sprint (e.g. Sprint 2) on PRs
+- **Milestone:** current sprint on PRs
 - **Release tags:** `v0.x.0` on `main` when promoting `develop` → `main`
 - **GitHub Projects:** not used — Jira board is the backlog
 

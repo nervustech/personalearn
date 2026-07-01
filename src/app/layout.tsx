@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, Source_Sans_3 } from "next/font/google";
 import { Providers } from "@/lib/providers";
 import "./globals.css";
 
-const inter = Inter({
+const display = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-display-family",
+  weight: ["500", "600", "700", "800"],
+});
+
+const body = Source_Sans_3({
+  subsets: ["latin"],
+  variable: "--font-body",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -20,7 +27,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0F766E",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0C6B63" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B1018" },
+  ],
 };
 
 export default function RootLayout({
@@ -30,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} antialiased`}>
+      <body className={`${display.variable} ${body.variable} antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

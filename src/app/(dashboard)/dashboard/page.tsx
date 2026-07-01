@@ -20,7 +20,7 @@ export default function DashboardPage() {
       <WelcomeTour />
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-semibold">Dashboard</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-muted-foreground">
             {activeClass
               ? `${activeClass.name} — Grade ${activeClass.grade_level} ${activeClass.subject}`

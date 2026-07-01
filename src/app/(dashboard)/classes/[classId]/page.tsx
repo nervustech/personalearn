@@ -10,6 +10,7 @@ import { StudentRosterTable } from "@/components/classes/student-roster-table";
 import { StudentForm } from "@/components/classes/student-form";
 import { CsvImportDialog } from "@/components/classes/csv-import-dialog";
 import { ClassEditDialog } from "@/components/classes/class-edit-dialog";
+import { ResourceUploadCard } from "@/components/classes/resource-upload-card";
 
 export default function ClassDetailPage({
   params,
@@ -54,6 +55,8 @@ export default function ClassDetailPage({
           {cls ? <ClassEditDialog cls={cls} /> : null}
         </div>
       </div>
+
+      <ResourceUploadCard classId={classId} />
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">

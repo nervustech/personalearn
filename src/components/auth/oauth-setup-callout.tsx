@@ -27,7 +27,7 @@ export function OAuthSetupCallout() {
 
   return (
     <div
-      className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-950 dark:text-amber-100"
+      className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-warning"
       role="note"
     >
       <p className="font-medium">Google OAuth setup required (PSL-18)</p>
@@ -35,7 +35,7 @@ export function OAuthSetupCallout() {
         Add this exact URI in Google Cloud Console → Credentials → Authorized
         redirect URIs:
       </p>
-      <code className="mt-2 block break-all rounded-md bg-black/10 px-2 py-1.5 text-xs dark:bg-white/10">
+      <code className="mt-2 block break-all rounded-md bg-foreground/5 px-2 py-1.5 text-xs">
         {setup.googleAuthorizedRedirectUri}
       </code>
       <ul className="mt-3 list-disc space-y-1 pl-4 text-xs leading-relaxed opacity-90">

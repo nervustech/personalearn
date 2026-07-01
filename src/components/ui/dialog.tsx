@@ -35,14 +35,14 @@ export function Dialog({
     <dialog
       ref={dialogRef}
       className={cn(
-        "fixed inset-0 z-50 m-auto w-full max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/50",
+        "fixed inset-0 z-50 m-auto w-full max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/60",
         className
       )}
       onClose={() => onOpenChange(false)}
     >
       <div className="flex items-start justify-between border-b border-border px-6 py-4">
         <div>
-          <h2 className="text-lg font-semibold">{title}</h2>
+          <h2 className="font-display text-lg font-semibold">{title}</h2>
           {description ? (
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           ) : null}

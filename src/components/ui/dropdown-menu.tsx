@@ -32,6 +32,7 @@ export function DropdownMenu({ trigger, children, align = "end" }: DropdownMenuP
             "absolute top-full z-50 mt-2 min-w-[12rem] rounded-xl border border-border bg-card p-1 shadow-lg",
             align === "end" ? "right-0" : "left-0"
           )}
+          onClick={() => setOpen(false)}
         >
           {children}
         </div>

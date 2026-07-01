@@ -26,7 +26,7 @@ Unit (Vitest)        — Zod schemas, parsers, pure functions
 | P0 | Class creation / onboarding | E2E onboarding (with credentials) + `classSchema` unit tests |
 | P1 | Student roster + CSV import | `parseStudentRows` unit tests |
 | P1 | Form validations | Zod unit tests in `src/lib/validations/` |
-| P2 | Welcome tour, class selector | Manual QA for now |
+| P1 | RAG ingest + co-pilot query | `chunk-text`, `ingest-resource`, `rag` unit tests |
 
 ## Environments (MVP)
 

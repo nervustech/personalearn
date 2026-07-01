@@ -5,7 +5,6 @@ import { Bot, Users } from "lucide-react";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { useStudents } from "@/lib/hooks/use-classes";
 import { WelcomeTour } from "@/components/onboarding/welcome-tour";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DashboardPage() {
@@ -65,21 +64,21 @@ export default function DashboardPage() {
                     <Bot className="h-5 w-5 text-primary" />
                     AI Hub
                   </CardTitle>
-                  <Badge variant="accent">Sprint 2</Badge>
                 </div>
                 <CardDescription>
-                  Generate lesson notes, activities, and get quick answers.
+                  Ask questions grounded in your class materials.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="mb-4 text-sm text-muted-foreground">
-                  Class-scoped AI generation and co-pilot chat coming in Sprint 2.
+                  Upload a .txt scheme on the class page, then use the co-pilot
+                  for cited answers.
                 </p>
                 <Link
                   href="/ai-hub"
                   className="inline-flex h-9 items-center rounded-xl border border-border bg-card px-4 text-xs font-medium hover:bg-muted"
                 >
-                  Preview AI Hub
+                  Open AI Hub
                 </Link>
               </CardContent>
             </Card>

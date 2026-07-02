@@ -12,7 +12,7 @@ const highlights = [
   },
   {
     icon: Sparkles,
-    text: "Ready for lesson generation in Sprint 2",
+    text: "Upload materials and ask the AI co-pilot in AI Hub",
   },
 ];
 

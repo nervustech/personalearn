@@ -20,8 +20,8 @@ const steps = [
     body: "Add students manually or import a CSV from the Classes page.",
   },
   {
-    title: "AI Hub coming soon",
-    body: "Sprint 2 brings lesson generation and a class-scoped co-pilot chat.",
+    title: "AI Hub",
+    body: "Upload a .txt scheme on your class page, then ask the co-pilot in AI Hub.",
   },
 ];
 

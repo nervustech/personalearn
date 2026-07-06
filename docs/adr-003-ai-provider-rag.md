@@ -1,7 +1,7 @@
 # ADR-003 — AI provider + RAG
 
-**Status:** Accepted (Sprint 2)  
-**Related:** PSL-37, PSL-6, PSL-9
+**Status:** Accepted (Sprint 2; Sprint 3 chat provider locked 2026-07-06)  
+**Related:** PSL-37, PSL-6, PSL-9, PSL-42, PSL-7, PSL-27
 
 ## Context
 
@@ -12,8 +12,8 @@ PersonaLearn needs embeddings for RAG and an LLM for co-pilot answers. Sprint 0 
 | Layer | Provider | Integration |
 |-------|----------|-------------|
 | Embeddings | Voyage AI `voyage-3.5` @ 1024 dims | REST API in `src/lib/ai/embeddings.ts` |
-| Chat (Sprint 2 interim) | DeepSeek default via `CHAT_PROVIDER` | Vercel AI SDK `@ai-sdk/deepseek` |
-| Chat (Sprint 3 TBD) | Grok vs DeepSeek primary | `@ai-sdk/xai` wired; product decision deferred |
+| Chat (Sprint 2–3) | DeepSeek primary via `CHAT_PROVIDER=deepseek` | Vercel AI SDK `@ai-sdk/deepseek` |
+| Vision (Sprint 5+) | Grok via `CHAT_PROVIDER=xai` | `@ai-sdk/xai` for handwriting reads on scanned scripts |
 
 **In-app SDK:** Vercel AI SDK (`ai` package). Not Cursor SDK (developer automation only).
 

@@ -150,4 +150,4 @@ See also [`.cursor/rules/git-workflow.mdc`](../.cursor/rules/git-workflow.mdc) f
 
 - Real Google OAuth on develop preview
 - Mobile navigation (hamburger menu)
-- PWA install flow (Sprint 3)
+- PWA install flow (Sprint 6)

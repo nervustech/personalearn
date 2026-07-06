@@ -1,6 +1,6 @@
 # v1.0 Program Specs — Agent-centric model (Confluence mirror)
 
-**Status:** Draft for requirements sign-off (Phase 0)
+**Status:** Sprint 3 **Approved** (2026-07-06); Sprints 4–6 draft for requirements sign-off (Phase 0)
 **Confluence:** [v1.0 Program Specs — Agent-centric (Sprints 3–6)](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/8388609/v1.0+Program+Specs+Agent-centric+Sprints+3+6) (index page; full ACs below)
 **Epic:** [PSL-3 — v1.0 Program: Agent-centric MVP](https://nervustechnologies.atlassian.net/browse/PSL-3)
 
@@ -101,41 +101,50 @@ flowchart TB
 
 ## Sprint 3 — AI Hub v2 (conversational agent)
 
-**Labels:** `area-ai-rag`, `type-feature`
-**Depends on:** PSL-6, PSL-9 (merged on `develop`)
+**Status:** Approved (2026-07-06)  
+**Labels:** `area-ai-rag`, `type-feature`  
+**Depends on:** PSL-6, PSL-9 (merged on `develop`)  
+**Merge order:** PSL-42 → PSL-7 → PSL-27
 
 ### User story
 
 As a CBC teacher, I want an AI Hub that works like a normal chat platform — a main conversation with history on the side — where a class-scoped assistant can answer questions about my materials, generate any learning resource, and save what I approve, so I have one place to get teaching work done.
 
-### Technical scope
+### Sprint-level acceptance criteria (AC-3.1–AC-3.9)
+
+Full Given/When/Then ACs are distributed per ticket below. Cross-ticket summary:
+
+| AC | Ticket | Summary |
+|----|--------|---------|
+| AC-3.1 | PSL-42 | Chat layout + history sidebar |
+| AC-3.2 | PSL-42 | Class-scoped conversations |
+| AC-3.3 | PSL-42 | New conversation persistence |
+| AC-3.4 | PSL-42 | Resume conversation |
+| AC-3.5 | PSL-7 | RAG query with citations |
+| AC-3.6 | PSL-7 | Generate any resource (draft only) |
+| AC-3.7 | PSL-27 | Save on confirmation |
+| AC-3.8 | PSL-42 (+ PSL-7/27 tool errors) | Streaming + error handling |
+| AC-3.9 | All three | Authorization 403 |
+
+---
+
+### PSL-42 — AI Hub v2 — chat UI + conversation history
+
+**Branch:** `feature/PSL-42-ai-hub-chat-history`  
+**Depends on:** PSL-6, PSL-9
+
+#### Technical scope
 
 | Item | Detail |
 |------|--------|
-| UI | `/ai-hub` — main chat thread + conversation history sidebar |
-| Chat API | `POST /api/ai-hub/chat` — streaming (Vercel AI SDK `streamText` + tools) |
+| UI | `/ai-hub` — main chat thread + conversation history sidebar + new-conversation action |
+| Chat API | `POST /api/ai-hub/chat` — streaming shell (`streamText`; tools stubbed until PSL-7) |
 | Conversations API | `GET/POST /api/ai-hub/conversations`, `GET /api/ai-hub/conversations/[id]` |
-| Agent | Single class assistant with tools (below); `getChatModel()` via DeepSeek ([ADR-003](./adr-003-ai-provider-rag.md)) |
-| RAG tool | Reuse `queryClassResources` from `src/lib/ai/rag.ts` |
-| Persistence | New `conversations` + `conversation_messages` tables |
+| Model | `getChatModel()` via DeepSeek ([ADR-003](./adr-003-ai-provider-rag.md)) |
+| Persistence | New `conversations` + `conversation_messages` tables + RLS |
 | Class scope | Conversations belong to the active class (header selector) |
 
-### Agent tools (MVP)
-
-| Tool | Behavior | Write? |
-|------|----------|--------|
-| `search_class_resources` | RAG retrieval + citations | No |
-| `generate_learning_resource` | Produce content; agent infers type (notes, scheme of work, assignment, marking scheme, other) | No (draft only) |
-| `save_resource` | Persist a draft to class resources + ingest for RAG | **Yes — confirm first** |
-| `list_students` | Read roster for context | No |
-
-### Data model (new)
-
-- `conversations`: `id`, `class_id` (FK), `teacher_id` (FK), `title`, `created_at`, `updated_at`
-- `conversation_messages`: `id`, `conversation_id` (FK), `role` (`user`/`assistant`/`tool`), `content`, `tool_calls` (JSONB, nullable), `created_at`
-- RLS: teacher can access conversations only for classes they own.
-
-### Acceptance criteria
+#### Acceptance criteria
 
 **AC-3.1 — Chat layout with history sidebar**
 
@@ -162,6 +171,42 @@ As a CBC teacher, I want an AI Hub that works like a normal chat platform — a 
 - **When** it loads
 - **Then** the full message history renders in order
 
+**AC-3.8 — Streaming + error handling (chat shell)**
+
+- **Given** I send a message
+- **When** the model responds
+- **Then** the reply streams token-by-token
+- **And** on model failure I see a user-facing error with a retry option (no raw stack trace)
+
+**AC-3.9 — Authorization**
+
+- **Given** I do not own the active class
+- **When** any AI Hub conversation or chat API is called for it
+- **Then** the response is 403
+
+#### Tests (same PR)
+
+- Unit: conversation title generation; message persistence order
+- API route tests: conversations CRUD, chat streaming (mocked), 403
+
+---
+
+### PSL-7 — Class assistant agent — generate any resource
+
+**Branch:** `feature/PSL-7-class-assistant-generate`  
+**Depends on:** PSL-42 merged
+
+#### Technical scope
+
+| Item | Detail |
+|------|--------|
+| Chat API | Extend `POST /api/ai-hub/chat` — `streamText` + agent tools |
+| Tools | `search_class_resources`, `generate_learning_resource`, `list_students` (no writes) |
+| RAG | Reuse `queryClassResources` from `src/lib/ai/rag.ts` |
+| Model | DeepSeek via `getChatModel()` |
+
+#### Acceptance criteria
+
 **AC-3.5 — Query grounded in class resources**
 
 - **Given** my class has ingested resources
@@ -175,6 +220,42 @@ As a CBC teacher, I want an AI Hub that works like a normal chat platform — a 
 - **Then** it returns a draft in the chat
 - **And** it does **not** save automatically
 
+**AC-3.8 — Streaming + error handling (tool failures)**
+
+- **Given** a tool call fails during chat
+- **When** the error surfaces
+- **Then** I see a user-facing error with a retry option (no raw stack trace)
+
+**AC-3.9 — Authorization**
+
+- **Given** I do not own the active class
+- **When** the chat API with tools is called for it
+- **Then** the response is 403
+
+#### Tests (same PR)
+
+- Unit: agent tool routing (mock model) — query vs generate intents
+- Unit: RAG citations in tool responses
+- API route test for chat with tools (mocked streaming)
+
+---
+
+### PSL-27 — Agent save-on-confirm to class resources
+
+**Branch:** `feature/PSL-27-agent-save-on-confirm`  
+**Depends on:** PSL-7 merged
+
+#### Technical scope
+
+| Item | Detail |
+|------|--------|
+| Tool | `save_resource` — persist draft to class resources + ingest for RAG |
+| Confirm gate | Agent asks in chat before calling `save_resource` (no silent writes) |
+| Ingest | Reuse `ingestTxtResource` from `src/lib/ai/ingest-resource.ts` |
+| Metadata | Sets `resource_type`, `ai_generated: true` on `resources` |
+
+#### Acceptance criteria
+
 **AC-3.7 — Save on confirmation**
 
 - **Given** the assistant produced a draft resource
@@ -183,18 +264,41 @@ As a CBC teacher, I want an AI Hub that works like a normal chat platform — a 
 - **And** the content is ingested into `resource_chunks` for future RAG
 - **And** I see confirmation in the chat with the saved title and type
 
-**AC-3.8 — Streaming + error handling**
+**AC-3.8 — Streaming + error handling (save failures)**
 
-- **Given** I send a message
-- **When** the model responds
-- **Then** the reply streams token-by-token
-- **And** on model/tool failure I see a user-facing error with a retry option (no raw stack trace)
+- **Given** `save_resource` fails
+- **When** the error surfaces
+- **Then** I see a user-facing error with a retry option (no raw stack trace)
 
 **AC-3.9 — Authorization**
 
 - **Given** I do not own the active class
-- **When** any AI Hub API is called for it
+- **When** save is attempted for that class
 - **Then** the response is 403
+
+#### Tests (same PR)
+
+- Unit: `save_resource` sets `resource_type` + `ai_generated`, triggers ingest (mocked Supabase)
+- Unit: no save without teacher confirmation in conversation flow
+
+---
+
+### Sprint 3 — shared reference
+
+#### Agent tools (full MVP after PSL-27)
+
+| Tool | Behavior | Write? | Ticket |
+|------|----------|--------|--------|
+| `search_class_resources` | RAG retrieval + citations | No | PSL-7 |
+| `generate_learning_resource` | Produce content; agent infers type | No (draft only) | PSL-7 |
+| `save_resource` | Persist draft + ingest for RAG | **Yes — confirm first** | PSL-27 |
+| `list_students` | Read roster for context | No | PSL-7 |
+
+#### Data model (new in PSL-42)
+
+- `conversations`: `id`, `class_id` (FK), `teacher_id` (FK), `title`, `created_at`, `updated_at`
+- `conversation_messages`: `id`, `conversation_id` (FK), `role` (`user`/`assistant`/`tool`), `content`, `tool_calls` (JSONB, nullable), `created_at`
+- RLS: teacher can access conversations only for classes they own.
 
 ### Out of scope (Sprint 3)
 

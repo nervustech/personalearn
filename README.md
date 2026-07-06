@@ -94,8 +94,8 @@ supabase/migrations/        # Database schema + RLS
 
 - **Sprint 0 (PSL-25):** Project infrastructure — scaffold, schema, middleware, CI (complete)
 - **Sprint 1:** Auth, onboarding, dashboard, class management
-- **Sprint 2 (PSL-2):** RAG vertical slice — Voyage embeddings, TXT upload + ingest, co-pilot Q&A (in progress)
-- **Sprint 3:** Lesson generation, multimodal feedback, progress tracking, exports, PWA, production deploy
+- **Sprint 2 (PSL-2):** RAG vertical slice — Voyage embeddings, TXT upload + ingest, co-pilot Q&A (complete)
+- **Sprint 3 (PSL-3):** Lesson generation + resource library — **planned** (v1.0 replan; Sprints 3–6)
 
 ## Scripts
 

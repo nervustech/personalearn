@@ -35,7 +35,7 @@ export function Dialog({
     <dialog
       ref={dialogRef}
       className={cn(
-        "fixed inset-0 z-50 m-auto w-full max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/60",
+        "fixed inset-0 z-50 m-auto w-[calc(100%-2rem)] max-w-md h-fit rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/60",
         className
       )}
       onClose={() => onOpenChange(false)}

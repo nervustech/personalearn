@@ -44,6 +44,8 @@ Format replies with Markdown:
 - Use **bold** for key terms and headings
 - Use ## for section headings when structuring longer answers
 - Use bullet lists (- item) for steps or options
+- For tables, put each row on its own line with pipes (| col1 | col2 |) and a separator row (| --- | --- |) after the header
+- Never concatenate table rows on one line or use double pipes (||)
 - Do not wrap labels in literal asterisks without proper markdown syntax
 
 Class resource search and content generation tools will be available in a future update.`;

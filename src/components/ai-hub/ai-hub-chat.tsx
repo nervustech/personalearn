@@ -3,8 +3,9 @@
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { ArrowUp, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowUp, RotateCcw, Sparkles, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { ChatMessage } from "@/components/ai-hub/chat-message";
 import { ConversationSidebar } from "@/components/ai-hub/conversation-sidebar";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
   conversationsQueryKey,
   useConversations,
 } from "@/lib/hooks/use-conversations";
+import { truncateMessagesBefore } from "@/lib/ai-hub/message-content";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { cn } from "@/lib/utils";
 
@@ -35,8 +37,10 @@ export function AiHubChat() {
     string | null
   >(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const {
     data: conversations = [],
@@ -65,6 +69,7 @@ export function AiHubChat() {
     error,
     setMessages,
     regenerate,
+    stop,
     clearError,
   } = useChat({
     id: chatInstanceId,
@@ -89,6 +94,7 @@ export function AiHubChat() {
     setDraft("");
     clearError();
     setActionError(null);
+    setEditingMessageId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when active class changes
   }, [activeClass?.id]);
 
@@ -136,6 +142,23 @@ export function AiHubChat() {
     setDraft("");
     clearError();
     setActionError(null);
+    setEditingMessageId(null);
+  }
+
+  function handleEditMessage(messageId: string, text: string) {
+    if (status === "streaming" || status === "submitted" || loadingConversation) {
+      return;
+    }
+
+    setEditingMessageId(messageId);
+    setDraft(text);
+    clearError();
+    setActionError(null);
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      const length = text.length;
+      textareaRef.current?.setSelectionRange(length, length);
+    });
   }
 
   async function ensureConversationId(messageText: string): Promise<string> {
@@ -179,11 +202,21 @@ export function AiHubChat() {
     clearError();
     setActionError(null);
 
+    const trimmed = text.trim();
+    const editingId = editingMessageId;
+
     try {
-      await ensureConversationId(text);
+      if (editingId) {
+        flushSync(() => {
+          setMessages((current) => truncateMessagesBefore(current, editingId));
+          setEditingMessageId(null);
+        });
+      }
+
+      await ensureConversationId(trimmed);
       setDraft("");
       await sendMessage(
-        { text: text.trim() },
+        { text: trimmed },
         {
           body: {
             classId: activeClass.id,
@@ -241,6 +274,7 @@ export function AiHubChat() {
   }
 
   const isBusy = status === "streaming" || status === "submitted" || loadingConversation;
+  const isGenerating = status === "streaming" || status === "submitted";
   const isStreaming = status === "streaming";
 
   if (!activeClass) {
@@ -318,7 +352,12 @@ export function AiHubChat() {
               ) : (
                 <div className="space-y-4">
                   {messages.map((message) => (
-                    <ChatMessage key={message.id} message={message} />
+                    <ChatMessage
+                      key={message.id}
+                      message={message}
+                      canEdit={!isBusy && message.role === "user"}
+                      onEdit={handleEditMessage}
+                    />
                   ))}
                   {isStreaming ? (
                     <div className="flex items-center gap-2 px-11 text-xs text-muted-foreground">
@@ -362,15 +401,25 @@ export function AiHubChat() {
 
               <form onSubmit={handleSubmit} className="flex items-center gap-2">
                 <textarea
+                  ref={textareaRef}
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
+                  onChange={(event) => {
+                    setDraft(event.target.value);
+                    if (editingMessageId) {
+                      setEditingMessageId(null);
+                    }
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
                       void handleSubmit(event);
                     }
                   }}
-                  placeholder={`Ask about ${activeClass.subject}…`}
+                  placeholder={
+                    editingMessageId
+                      ? "Edit your message and send to regenerate…"
+                      : `Ask about ${activeClass.subject}…`
+                  }
                   disabled={isBusy}
                   rows={1}
                   maxLength={4000}
@@ -380,14 +429,26 @@ export function AiHubChat() {
                     "disabled:cursor-not-allowed disabled:opacity-50"
                   )}
                 />
-                <Button
-                  type="submit"
-                  disabled={isBusy || !draft.trim()}
-                  className="h-11 w-11 shrink-0 rounded-full p-0 shadow-sm"
-                >
-                  <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
-                  <span className="sr-only">Send message</span>
-                </Button>
+                {isGenerating ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => stop()}
+                    className="h-11 shrink-0 rounded-full px-4 shadow-sm"
+                  >
+                    <Square className="h-3.5 w-3.5 fill-current" />
+                    Stop
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    disabled={!draft.trim()}
+                    className="h-11 w-11 shrink-0 rounded-full p-0 shadow-sm"
+                  >
+                    <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
+                    <span className="sr-only">Send message</span>
+                  </Button>
+                )}
               </form>
             </div>
           </div>

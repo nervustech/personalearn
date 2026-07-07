@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowUp, RotateCcw, Sparkles, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { ChatMessage } from "@/components/ai-hub/chat-message";
 import { ConversationSidebar } from "@/components/ai-hub/conversation-sidebar";
 import { ThinkingBubble } from "@/components/ai-hub/thinking-bubble";
@@ -16,7 +15,6 @@ import {
   conversationsQueryKey,
   useConversations,
 } from "@/lib/hooks/use-conversations";
-import { truncateMessagesBefore } from "@/lib/ai-hub/message-content";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { cn } from "@/lib/utils";
 
@@ -210,14 +208,12 @@ export function AiHubChat() {
 
   function handleStop() {
     stop();
-    flushSync(() => {
-      setMessages((current) => {
-        const last = current[current.length - 1];
-        if (last?.role === "assistant") {
-          return current.slice(0, -1);
-        }
-        return current;
-      });
+    setMessages((current) => {
+      const last = current[current.length - 1];
+      if (last?.role === "assistant") {
+        return current.slice(0, -1);
+      }
+      return current;
     });
   }
 
@@ -265,10 +261,19 @@ export function AiHubChat() {
           await truncateConversationInDb(fromIndex);
         }
 
-        flushSync(() => {
-          setMessages((current) => truncateMessagesBefore(current, editingId));
-          setEditingMessageId(null);
-        });
+        setEditingMessageId(null);
+        setDraft("");
+
+        await sendMessage(
+          { text: trimmed, messageId: editingId },
+          {
+            body: {
+              classId: activeClass.id,
+              conversationId: conversationIdRef.current,
+            },
+          }
+        );
+        return;
       }
 
       setDraft("");
@@ -463,12 +468,7 @@ export function AiHubChat() {
                 <textarea
                   ref={textareaRef}
                   value={draft}
-                  onChange={(event) => {
-                    setDraft(event.target.value);
-                    if (editingMessageId) {
-                      setEditingMessageId(null);
-                    }
-                  }}
+                  onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();

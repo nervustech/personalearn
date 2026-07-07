@@ -217,31 +217,6 @@ export function AiHubChat() {
     });
   }
 
-  async function truncateConversationInDb(fromMessageIndex: number) {
-    const conversationId = conversationIdRef.current;
-    if (!conversationId) {
-      return;
-    }
-
-    const response = await fetch(`/api/ai-hub/conversations/${conversationId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fromMessageIndex }),
-    });
-
-    const payload = (await response.json()) as { error?: string };
-
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Failed to truncate conversation");
-    }
-
-    queryClient.setQueryData(
-      conversationMessagesQueryKey(conversationId),
-      (current: UIMessage[] | undefined) =>
-        current ? current.slice(0, fromMessageIndex) : current
-    );
-  }
-
   async function submitMessage(text: string) {
     if (!text.trim() || !activeClass || status === "streaming" || status === "submitted") {
       return;
@@ -257,10 +232,6 @@ export function AiHubChat() {
       if (editingId) {
         const fromIndex = messages.findIndex((message) => message.id === editingId);
 
-        if (fromIndex !== -1) {
-          await truncateConversationInDb(fromIndex);
-        }
-
         setEditingMessageId(null);
         setDraft("");
 
@@ -270,6 +241,7 @@ export function AiHubChat() {
             body: {
               classId: activeClass.id,
               conversationId: conversationIdRef.current,
+              ...(fromIndex !== -1 ? { truncateFromMessageIndex: fromIndex } : {}),
             },
           }
         );

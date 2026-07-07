@@ -6,6 +6,7 @@ const mockRequireConversationAccess = vi.fn();
 const mockGetConversationWithMessages = vi.fn();
 const mockCreateConversation = vi.fn();
 const mockAppendConversationMessages = vi.fn();
+const mockTruncateConversationFromIndex = vi.fn();
 const mockStreamText = vi.fn();
 const mockToUIMessageStreamResponse = vi.fn();
 
@@ -30,6 +31,8 @@ vi.mock("@/lib/ai-hub/conversations", async () => {
       mockGetConversationWithMessages(...args),
     requireConversationAccess: (...args: unknown[]) =>
       mockRequireConversationAccess(...args),
+    truncateConversationFromIndex: (...args: unknown[]) =>
+      mockTruncateConversationFromIndex(...args),
   };
 });
 
@@ -71,6 +74,7 @@ describe("POST /api/ai-hub/chat", () => {
     mockRequireTeacherClass.mockResolvedValue({ id: "teacher-1" });
     mockGetConversationWithMessages.mockResolvedValue({ messages: [] });
     mockAppendConversationMessages.mockResolvedValue([]);
+    mockTruncateConversationFromIndex.mockResolvedValue(undefined);
     mockToUIMessageStreamResponse.mockReturnValue(
       new Response("stream", {
         status: 200,
@@ -114,6 +118,44 @@ describe("POST /api/ai-hub/chat", () => {
       expect.arrayContaining([
         expect.objectContaining({ role: "user", content: "Hello" }),
       ])
+    );
+  });
+
+  it("truncates the conversation when editing a prior message", async () => {
+    mockRequireConversationAccess.mockResolvedValue({
+      id: conversationId,
+      class_id: classId,
+    });
+
+    await POST(
+      new Request("http://localhost/api/ai-hub/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId,
+          conversationId,
+          truncateFromMessageIndex: 1,
+          messages: [
+            {
+              id: "user-1",
+              role: "user",
+              parts: [{ type: "text", text: "First" }],
+            },
+            {
+              id: "user-2",
+              role: "user",
+              parts: [{ type: "text", text: "Edited second" }],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(mockTruncateConversationFromIndex).toHaveBeenCalledWith(
+      {},
+      conversationId,
+      "teacher-1",
+      1
     );
   });
 

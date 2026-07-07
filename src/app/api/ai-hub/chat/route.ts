@@ -5,6 +5,7 @@ import {
   getConversationWithMessages,
   getLatestUserMessageText,
   requireConversationAccess,
+  truncateConversationFromIndex,
   updateConversationTitle,
 } from "@/lib/ai-hub/conversations";
 import {
@@ -33,6 +34,7 @@ const bodySchema = z.object({
   id: z.string().optional(),
   trigger: z.string().optional(),
   messageId: z.string().optional(),
+  truncateFromMessageIndex: z.number().int().min(0).optional(),
 });
 
 export async function POST(request: Request) {
@@ -45,7 +47,8 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { classId, conversationId, messages } = parsed.data;
+    const { classId, conversationId, messages, truncateFromMessageIndex } =
+      parsed.data;
     const user = await requireTeacherClass(supabase, classId);
     const classContext = await getClassContext(supabase, classId);
     const systemPrompt = buildClassAssistantSystemPrompt(classContext);
@@ -61,6 +64,15 @@ export async function POST(request: Request) {
 
       if (conversation.class_id !== classId) {
         throw new Error("Conversation not found");
+      }
+
+      if (truncateFromMessageIndex !== undefined) {
+        await truncateConversationFromIndex(
+          supabase,
+          activeConversationId,
+          user.id,
+          truncateFromMessageIndex
+        );
       }
     } else {
       const latestUserMessage = [...messages]

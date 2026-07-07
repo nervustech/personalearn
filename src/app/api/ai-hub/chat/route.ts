@@ -8,6 +8,7 @@ import {
   truncateConversationFromIndex,
   updateConversationTitle,
 } from "@/lib/ai-hub/conversations";
+import { createAgentTools } from "@/lib/ai-hub/agent-tools";
 import {
   buildClassAssistantSystemPrompt,
   getClassContext,
@@ -21,6 +22,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   convertToModelMessages,
   smoothStream,
+  stepCountIs,
   streamText,
   type UIMessage,
 } from "ai";
@@ -106,10 +108,14 @@ export async function POST(request: Request) {
       ]);
     }
 
+    const tools = createAgentTools({ supabase, classId, classContext });
+
     const result = streamText({
       model: getChatModel(),
       system: systemPrompt,
       messages: await convertToModelMessages(messages),
+      tools,
+      stopWhen: stepCountIs(5),
       experimental_transform: smoothStream({ delayInMs: null, chunking: "word" }),
     });
 

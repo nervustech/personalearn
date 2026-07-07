@@ -1,0 +1,182 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  executeGenerateLearningResource,
+  executeListStudents,
+  executeSearchClassResources,
+  type AgentToolDeps,
+} from "./agent-tools";
+
+const classContext = {
+  id: "class-1",
+  name: "Grade 7 Maths",
+  subject: "Mathematics",
+  grade_level: 7,
+  term: 1,
+  section: "East",
+  academic_year: "2026",
+};
+
+const deps: AgentToolDeps = {
+  supabase: {} as AgentToolDeps["supabase"],
+  classId: "class-1",
+  classContext,
+};
+
+vi.mock("@/lib/ai/rag", () => ({
+  queryClassResources: vi.fn(),
+}));
+
+vi.mock("@/lib/ai/llm", () => ({
+  getChatModel: vi.fn(() => ({ modelId: "mock" })),
+}));
+
+vi.mock("ai", async () => {
+  const actual = await vi.importActual<typeof import("ai")>("ai");
+  return {
+    ...actual,
+    generateText: vi.fn(async () => ({
+      text: "## Fractions assignment\n\n1. Add 1/2 + 1/4",
+    })),
+  };
+});
+
+import { queryClassResources } from "@/lib/ai/rag";
+import { generateText } from "ai";
+
+const mockQueryClassResources = vi.mocked(queryClassResources);
+const mockGenerateText = vi.mocked(generateText);
+
+describe("executeSearchClassResources", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns answer and source titles from RAG", async () => {
+    mockQueryClassResources.mockResolvedValue({
+      answer: "Week 3 covers fractions.",
+      sources: [
+        { resourceId: "res-1", title: "Scheme of Work" },
+        { resourceId: "res-2", title: "Term 1 Notes" },
+      ],
+    });
+
+    const result = await executeSearchClassResources(deps, {
+      query: "What does Week 3 cover?",
+    });
+
+    expect(result).toEqual({
+      answer: "Week 3 covers fractions.",
+      sources: [
+        { title: "Scheme of Work", resourceId: "res-1" },
+        { title: "Term 1 Notes", resourceId: "res-2" },
+      ],
+    });
+    expect(mockQueryClassResources).toHaveBeenCalledWith(
+      deps.supabase,
+      "class-1",
+      "What does Week 3 cover?"
+    );
+  });
+
+  it("returns a user-safe error when RAG fails", async () => {
+    mockQueryClassResources.mockRejectedValue(new Error("Vector search failed"));
+
+    const result = await executeSearchClassResources(deps, {
+      query: "Week 3",
+    });
+
+    expect(result).toEqual({
+      error: "Could not search class resources right now. Please try again.",
+    });
+  });
+});
+
+describe("executeGenerateLearningResource", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns a markdown draft without saving", async () => {
+    const result = await executeGenerateLearningResource(deps, {
+      resourceType: "assignment",
+      title: "Fractions quiz",
+      instructions: "Five short questions",
+    });
+
+    expect(result).toEqual({
+      title: "Fractions quiz",
+      resourceType: "assignment",
+      content: "## Fractions assignment\n\n1. Add 1/2 + 1/4",
+    });
+    expect(mockGenerateText).toHaveBeenCalled();
+  });
+
+  it("returns a user-safe error when generation fails", async () => {
+    mockGenerateText.mockRejectedValueOnce(new Error("Provider down"));
+
+    const result = await executeGenerateLearningResource(deps, {
+      resourceType: "lesson_notes",
+      title: "Intro to algebra",
+    });
+
+    expect(result).toEqual({
+      error: "Could not generate the resource draft. Please try again.",
+    });
+  });
+});
+
+describe("executeListStudents", () => {
+  it("returns roster entries for the class", async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: async () => ({
+              data: [
+                { full_name: "Ada Lovelace", admission_number: "A001" },
+                { full_name: "Grace Hopper", admission_number: null },
+              ],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const result = await executeListStudents({
+      ...deps,
+      supabase: supabase as AgentToolDeps["supabase"],
+    });
+
+    expect(result).toEqual({
+      students: [
+        { fullName: "Ada Lovelace", admissionNumber: "A001" },
+        { fullName: "Grace Hopper", admissionNumber: null },
+      ],
+    });
+  });
+
+  it("returns a user-safe error when roster lookup fails", async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            order: async () => ({
+              data: null,
+              error: { message: "db error" },
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const result = await executeListStudents({
+      ...deps,
+      supabase: supabase as AgentToolDeps["supabase"],
+    });
+
+    expect(result).toEqual({
+      error: "Could not load the class roster. Please try again.",
+    });
+  });
+});

@@ -3,6 +3,7 @@ import type { UIMessage } from "ai";
 import {
   appendConversationMessages,
   findNewPersistableMessages,
+  truncateConversationFromIndex,
 } from "./conversations";
 
 describe("findNewPersistableMessages", () => {
@@ -85,6 +86,74 @@ describe("appendConversationMessages", () => {
       expect.objectContaining({ role: "assistant", content: "Second" }),
     ]);
     expect(result.map((row) => row.content)).toEqual(["First", "Second"]);
+    expect(touch).toHaveBeenCalled();
+  });
+});
+
+describe("truncateConversationFromIndex", () => {
+  it("deletes the target message and all messages after it", async () => {
+    const deletedIds: string[] = [];
+    const touch = vi.fn().mockResolvedValue({ error: null });
+
+    const supabase = {
+      from: (table: string) => {
+        if (table === "conversations") {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  maybeSingle: () =>
+                    Promise.resolve({
+                      data: {
+                        id: "conv-1",
+                        class_id: "class-1",
+                        teacher_id: "teacher-1",
+                        title: "Test",
+                        created_at: "2026-07-06T10:00:00Z",
+                        updated_at: "2026-07-06T10:00:00Z",
+                      },
+                      error: null,
+                    }),
+                }),
+              }),
+            }),
+            update: () => ({
+              eq: touch,
+            }),
+          };
+        }
+
+        if (table === "conversation_messages") {
+          return {
+            select: () => ({
+              eq: () => ({
+                order: () =>
+                  Promise.resolve({
+                    data: [
+                      { id: "msg-1" },
+                      { id: "msg-2" },
+                      { id: "msg-3" },
+                    ],
+                    error: null,
+                  }),
+              }),
+            }),
+            delete: () => ({
+              in: (_column: string, ids: string[]) => {
+                deletedIds.push(...ids);
+                return Promise.resolve({ error: null });
+              },
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected table ${table}`);
+      },
+    };
+
+    await truncateConversationFromIndex(supabase as never, "conv-1", "teacher-1", 1);
+
+    expect(deletedIds).toEqual(["msg-2", "msg-3"]);
     expect(touch).toHaveBeenCalled();
   });
 });

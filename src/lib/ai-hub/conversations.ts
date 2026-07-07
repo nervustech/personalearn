@@ -177,6 +177,43 @@ export async function deleteConversation(
   }
 }
 
+export async function truncateConversationFromIndex(
+  supabase: SupabaseClient,
+  conversationId: string,
+  teacherId: string,
+  fromMessageIndex: number
+): Promise<void> {
+  await requireConversationAccess(supabase, conversationId, teacherId);
+
+  const { data, error } = await supabase
+    .from("conversation_messages")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Message lookup failed: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  if (fromMessageIndex >= rows.length) {
+    return;
+  }
+
+  const idsToDelete = rows.slice(fromMessageIndex).map((row) => row.id);
+
+  const { error: deleteError } = await supabase
+    .from("conversation_messages")
+    .delete()
+    .in("id", idsToDelete);
+
+  if (deleteError) {
+    throw new Error(`Message truncate failed: ${deleteError.message}`);
+  }
+
+  await touchConversation(supabase, conversationId);
+}
+
 export async function appendConversationMessages(
   supabase: SupabaseClient,
   conversationId: string,

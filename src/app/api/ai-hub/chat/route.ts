@@ -19,6 +19,7 @@ import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { createClient } from "@/lib/supabase/server";
 import {
   convertToModelMessages,
+  smoothStream,
   streamText,
   type UIMessage,
 } from "ai";
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
       model: getChatModel(),
       system: systemPrompt,
       messages: await convertToModelMessages(messages),
+      experimental_transform: smoothStream({ delayInMs: null, chunking: "word" }),
     });
 
     return result.toUIMessageStreamResponse({

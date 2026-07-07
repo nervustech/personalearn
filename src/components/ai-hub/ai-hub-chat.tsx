@@ -8,8 +8,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ChatMessage } from "@/components/ai-hub/chat-message";
 import { ConversationSidebar } from "@/components/ai-hub/conversation-sidebar";
+import { ThinkingBubble } from "@/components/ai-hub/thinking-bubble";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { conversationMessagesQueryKey } from "@/lib/hooks/use-conversation-messages";
 import {
   conversationsQueryKey,
   useConversations,
@@ -39,13 +41,16 @@ export function AiHubChat() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  const setSelectedConversationIdRef = useRef(setSelectedConversationId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prevStatusRef = useRef<string>("ready");
+
+  setSelectedConversationIdRef.current = setSelectedConversationId;
 
   const {
     data: conversations = [],
     isLoading: conversationsLoading,
-    refetch: refetchConversations,
   } = useConversations(activeClass?.id);
 
   const chatInstanceId = activeClass?.id ?? "none";
@@ -58,8 +63,26 @@ export function AiHubChat() {
           classId: activeClass?.id,
           conversationId: conversationIdRef.current,
         }),
+        fetch: async (input, init) => {
+          const response = await globalThis.fetch(input, init);
+          const conversationId = response.headers.get("X-Conversation-Id");
+
+          if (
+            conversationId &&
+            conversationId !== conversationIdRef.current &&
+            activeClass?.id
+          ) {
+            conversationIdRef.current = conversationId;
+            setSelectedConversationIdRef.current(conversationId);
+            void queryClient.invalidateQueries({
+              queryKey: conversationsQueryKey(activeClass.id),
+            });
+          }
+
+          return response;
+        },
       }),
-    [activeClass?.id]
+    [activeClass?.id, queryClient]
   );
 
   const {
@@ -74,7 +97,15 @@ export function AiHubChat() {
   } = useChat({
     id: chatInstanceId,
     transport,
-    onFinish: () => {
+    experimental_throttle: 50,
+    onFinish: ({ messages: finishedMessages }) => {
+      if (conversationIdRef.current) {
+        queryClient.setQueryData(
+          conversationMessagesQueryKey(conversationIdRef.current),
+          finishedMessages
+        );
+      }
+
       if (activeClass?.id) {
         void queryClient.invalidateQueries({
           queryKey: conversationsQueryKey(activeClass.id),
@@ -99,8 +130,20 @@ export function AiHubChat() {
   }, [activeClass?.id]);
 
   useEffect(() => {
+    const wasGenerating =
+      prevStatusRef.current === "streaming" ||
+      prevStatusRef.current === "submitted";
+    const isNowReady = status === "ready";
+    prevStatusRef.current = status;
+
+    if (wasGenerating && isNowReady) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [status]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, status]);
+  }, [messages.length]);
 
   async function handleSelectConversation(conversationId: string) {
     if (!activeClass) return;
@@ -123,6 +166,10 @@ export function AiHubChat() {
       setSelectedConversationId(conversationId);
       conversationIdRef.current = conversationId;
       setMessages(payload.messages ?? []);
+      queryClient.setQueryData(
+        conversationMessagesQueryKey(conversationId),
+        payload.messages ?? []
+      );
     } catch (loadError) {
       setActionError(
         loadError instanceof Error
@@ -161,37 +208,42 @@ export function AiHubChat() {
     });
   }
 
-  async function ensureConversationId(messageText: string): Promise<string> {
-    if (!activeClass) {
-      throw new Error("No active class selected");
+  function handleStop() {
+    stop();
+    flushSync(() => {
+      setMessages((current) => {
+        const last = current[current.length - 1];
+        if (last?.role === "assistant") {
+          return current.slice(0, -1);
+        }
+        return current;
+      });
+    });
+  }
+
+  async function truncateConversationInDb(fromMessageIndex: number) {
+    const conversationId = conversationIdRef.current;
+    if (!conversationId) {
+      return;
     }
 
-    if (conversationIdRef.current) {
-      return conversationIdRef.current;
-    }
-
-    const response = await fetch("/api/ai-hub/conversations", {
-      method: "POST",
+    const response = await fetch(`/api/ai-hub/conversations/${conversationId}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        classId: activeClass.id,
-        title: "New chat",
-      }),
+      body: JSON.stringify({ fromMessageIndex }),
     });
 
-    const payload = (await response.json()) as {
-      conversation?: { id: string };
-      error?: string;
-    };
+    const payload = (await response.json()) as { error?: string };
 
-    if (!response.ok || !payload.conversation) {
-      throw new Error(payload.error ?? "Failed to create conversation");
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Failed to truncate conversation");
     }
 
-    conversationIdRef.current = payload.conversation.id;
-    setSelectedConversationId(payload.conversation.id);
-    await refetchConversations();
-    return payload.conversation.id;
+    queryClient.setQueryData(
+      conversationMessagesQueryKey(conversationId),
+      (current: UIMessage[] | undefined) =>
+        current ? current.slice(0, fromMessageIndex) : current
+    );
   }
 
   async function submitMessage(text: string) {
@@ -207,13 +259,18 @@ export function AiHubChat() {
 
     try {
       if (editingId) {
+        const fromIndex = messages.findIndex((message) => message.id === editingId);
+
+        if (fromIndex !== -1) {
+          await truncateConversationInDb(fromIndex);
+        }
+
         flushSync(() => {
           setMessages((current) => truncateMessagesBefore(current, editingId));
           setEditingMessageId(null);
         });
       }
 
-      await ensureConversationId(trimmed);
       setDraft("");
       await sendMessage(
         { text: trimmed },
@@ -275,7 +332,19 @@ export function AiHubChat() {
 
   const isBusy = status === "streaming" || status === "submitted" || loadingConversation;
   const isGenerating = status === "streaming" || status === "submitted";
-  const isStreaming = status === "streaming";
+
+  const visibleMessages = useMemo(() => {
+    if (!isGenerating) {
+      return messages;
+    }
+
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant") {
+      return messages.slice(0, -1);
+    }
+
+    return messages;
+  }, [messages, isGenerating]);
 
   if (!activeClass) {
     return (
@@ -351,7 +420,7 @@ export function AiHubChat() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {messages.map((message) => (
+                  {visibleMessages.map((message) => (
                     <ChatMessage
                       key={message.id}
                       message={message}
@@ -359,16 +428,7 @@ export function AiHubChat() {
                       onEdit={handleEditMessage}
                     />
                   ))}
-                  {isStreaming ? (
-                    <div className="flex items-center gap-2 px-11 text-xs text-muted-foreground">
-                      <span className="inline-flex gap-1">
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.2s]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.1s]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" />
-                      </span>
-                      Assistant is typing…
-                    </div>
-                  ) : null}
+                  {isGenerating ? <ThinkingBubble /> : null}
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -433,7 +493,7 @@ export function AiHubChat() {
                   <Button
                     type="button"
                     variant="secondary"
-                    onClick={() => stop()}
+                    onClick={() => handleStop()}
                     className="h-11 shrink-0 rounded-full px-4 shadow-sm"
                   >
                     <Square className="h-3.5 w-3.5 fill-current" />

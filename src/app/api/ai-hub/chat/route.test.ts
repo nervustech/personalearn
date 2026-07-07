@@ -57,6 +57,16 @@ vi.mock("@/lib/ai/llm", () => ({
   getChatModel: vi.fn(() => ({ modelId: "mock" })),
 }));
 
+const mockCreateAgentTools = vi.fn(() => ({
+  search_class_resources: { description: "search" },
+  generate_learning_resource: { description: "generate" },
+  list_students: { description: "list" },
+}));
+
+vi.mock("@/lib/ai-hub/agent-tools", () => ({
+  createAgentTools: (...args: unknown[]) => mockCreateAgentTools(...args),
+}));
+
 vi.mock("ai", async () => {
   const actual = await vi.importActual<typeof import("ai")>("ai");
   return {
@@ -111,7 +121,21 @@ describe("POST /api/ai-hub/chat", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockStreamText).toHaveBeenCalled();
+    expect(mockStreamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          search_class_resources: expect.any(Object),
+          generate_learning_resource: expect.any(Object),
+          list_students: expect.any(Object),
+        }),
+        stopWhen: expect.any(Function),
+      })
+    );
+    expect(mockCreateAgentTools).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classId,
+      })
+    );
     expect(mockAppendConversationMessages).toHaveBeenCalledWith(
       {},
       conversationId,

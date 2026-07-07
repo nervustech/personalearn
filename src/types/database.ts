@@ -41,3 +41,21 @@ export type UserProfile = {
   created_at: string;
   updated_at: string;
 };
+
+export type Conversation = {
+  id: string;
+  class_id: string;
+  teacher_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationMessage = {
+  id: string;
+  conversation_id: string;
+  role: "user" | "assistant" | "tool";
+  content: string;
+  tool_calls: Record<string, unknown> | null;
+  created_at: string;
+};

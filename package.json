@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^3.0.2",
+    "@ai-sdk/react": "^4.0.17",
     "@ai-sdk/xai": "^4.0.3",
     "@hookform/resolvers": "^5.0.1",
     "@sentry/nextjs": "^10.60.0",
@@ -30,6 +31,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.57.0",
+    "react-markdown": "^10.1.0",
     "tailwind-merge": "^3.3.0",
     "zod": "^3.25.51",
     "zustand": "^5.0.5"

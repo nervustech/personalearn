@@ -1,6 +1,6 @@
 # v1.0 Program Specs — Agent-centric model (Confluence mirror)
 
-**Status:** Sprint 3 **Approved** (2026-07-06); Sprints 4–6 draft for requirements sign-off (Phase 0)
+**Status:** Sprint 3 **Complete** (merged 2026-07-08); Sprints 4–6 draft for requirements sign-off (Phase 0)
 **Confluence:** [v1.0 Program Specs — Agent-centric (Sprints 3–6)](https://nervustechnologies.atlassian.net/wiki/spaces/PLEARN/pages/8388609/v1.0+Program+Specs+Agent-centric+Sprints+3+6) (index page; full ACs below)
 **Epic:** [PSL-3 — v1.0 Program: Agent-centric MVP](https://nervustechnologies.atlassian.net/browse/PSL-3)
 
@@ -618,5 +618,7 @@ sequenceDiagram
 
 - [ADR-003 — AI provider + RAG](./adr-003-ai-provider-rag.md)
 - [Sprint 3 decision log](./sprint-3-decision-log.md)
+- [Sprint 3 release notes](./sprint-3-release-notes.md)
+- [Sprint 3 retrospective](./archive/retrospective-sprint-3-draft.md)
 - [Testing guide](./testing.md)
-- [Archived abandoned Sprint 3 draft](./archive/sprint-3-release-notes-draft.md)
+- [Archived pre-replan Sprint 3 draft](./archive/sprint-3-release-notes-draft.md)

@@ -20,6 +20,7 @@ import {
   formatResourceType,
 } from "@/lib/resources/format";
 import { ResourceViewDialog } from "@/components/classes/resource-view-dialog";
+import { ResourceDeleteDialog } from "@/components/classes/resource-delete-dialog";
 
 type ResourceListTableProps = {
   classId: string;
@@ -32,13 +33,13 @@ export function ResourceListTable({
 }: ResourceListTableProps) {
   const deleteResource = useDeleteResource(classId);
   const [viewResource, setViewResource] = useState<Resource | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Resource | null>(null);
 
-  function handleDelete(resource: Resource) {
-    const confirmed = confirm(
-      `Delete "${resource.title}"? This removes the file and its indexed chunks.`
-    );
-    if (!confirmed) return;
-    deleteResource.mutate(resource.id);
+  function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    deleteResource.mutate(deleteTarget.id, {
+      onSuccess: () => setDeleteTarget(null),
+    });
   }
 
   if (!resources.length) {
@@ -91,7 +92,7 @@ export function ResourceListTable({
                       size="sm"
                       className="h-8 w-8 p-0"
                       disabled={deleteResource.isPending}
-                      onClick={() => handleDelete(resource)}
+                      onClick={() => setDeleteTarget(resource)}
                       aria-label={`Delete ${resource.title}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -135,7 +136,7 @@ export function ResourceListTable({
                   variant="secondary"
                   size="sm"
                   disabled={deleteResource.isPending}
-                  onClick={() => handleDelete(resource)}
+                  onClick={() => setDeleteTarget(resource)}
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete
@@ -152,6 +153,21 @@ export function ResourceListTable({
         onOpenChange={(open) => {
           if (!open) setViewResource(null);
         }}
+      />
+
+      <ResourceDeleteDialog
+        resource={deleteTarget}
+        open={Boolean(deleteTarget)}
+        isDeleting={deleteResource.isPending}
+        error={
+          deleteResource.error instanceof Error
+            ? deleteResource.error.message
+            : null
+        }
+        onOpenChange={(open) => {
+          if (!open && !deleteResource.isPending) setDeleteTarget(null);
+        }}
+        onConfirm={handleConfirmDelete}
       />
     </>
   );

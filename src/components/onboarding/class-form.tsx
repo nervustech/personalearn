@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { classSchema, type ClassFormValues } from "@/lib/validations/class";
 import { useCreateClass } from "@/lib/hooks/use-classes";
+import type { Class } from "@/types/database";
 
 type ClassFormProps = {
-  onSuccess?: () => void;
+  onSuccess?: (created: Class) => void;
   submitLabel?: string;
   redirectOnSuccess?: string | null;
 };
@@ -42,8 +43,8 @@ export function ClassForm({
 
   async function onSubmit(values: ClassFormValues) {
     try {
-      await createClass.mutateAsync(values);
-      onSuccess?.();
+      const created = await createClass.mutateAsync(values);
+      onSuccess?.(created);
       if (redirectOnSuccess) {
         router.push(redirectOnSuccess);
         router.refresh();

@@ -1,11 +1,12 @@
 "use client";
 
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
-import { ArrowLeft, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useStudents } from "@/lib/hooks/use-classes";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { filterStudentsByQuery } from "@/lib/classes/filter-class-lists";
+import { useActiveClassStore } from "@/lib/store/active-class";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ export default function ClassDetailPage({
   const { classId } = use(params);
   const { data: classes } = useClasses();
   const { data: students, isLoading } = useStudents(classId);
+  const setActiveClass = useActiveClassStore((state) => state.setActiveClass);
   const [searchQuery, setSearchQuery] = useState("");
   const cls = classes?.find((c) => c.id === classId);
   const hasQuery = searchQuery.trim().length > 0;
@@ -32,12 +34,24 @@ export default function ClassDetailPage({
     [students, searchQuery]
   );
 
+  useEffect(() => {
+    if (!cls) return;
+    setActiveClass({
+      id: cls.id,
+      name: cls.name,
+      grade_level: cls.grade_level,
+      subject: cls.subject,
+      section: cls.section,
+      term: cls.term,
+    });
+  }, [cls, setActiveClass]);
+
   if (!cls && classes) {
     return (
-      <p className="text-muted-foreground">
+      <p className="text-center text-muted-foreground">
         Class not found.{" "}
         <Link href="/classes" className="text-primary hover:underline">
-          Back to classes
+          Go to classes
         </Link>
       </p>
     );
@@ -45,48 +59,38 @@ export default function ClassDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/classes"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          All classes
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">{cls?.name ?? "Class"}</h1>
-            {cls ? (
-              <p className="mt-1 text-muted-foreground">
-                Grade {cls.grade_level} · {cls.subject} · Term {cls.term}
-              </p>
-            ) : null}
+      <div className="flex flex-col items-center text-center">
+        <h1 className="text-3xl font-semibold">{cls?.name ?? "Class"}</h1>
+        {cls ? (
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-muted-foreground">
+            <p>
+              Grade {cls.grade_level} · {cls.subject} · Term {cls.term}
+              {cls.section ? ` · Section ${cls.section}` : ""}
+            </p>
+            <ClassEditDialog cls={cls} />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-full min-w-[14rem] sm:w-72">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search resources or students…"
-                className="h-9 pl-9 pr-9"
-                aria-label="Search resources or students"
-              />
-              {hasQuery ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0 text-muted-foreground"
-                  onClick={() => setSearchQuery("")}
-                  aria-label="Clear search"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              ) : null}
-            </div>
-            {cls ? <ClassEditDialog cls={cls} /> : null}
-          </div>
+        ) : null}
+        <div className="relative mt-4 w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search resources or students…"
+            className="h-9 pl-9 pr-9"
+            aria-label="Search resources or students"
+          />
+          {hasQuery ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0 text-muted-foreground"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </div>
       </div>
 

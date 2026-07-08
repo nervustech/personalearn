@@ -51,14 +51,14 @@ export function ClassEditDialog({ cls }: { cls: Class }) {
     <>
       <Button
         type="button"
-        variant="secondary"
+        variant="ghost"
         size="sm"
-        className="h-8 w-8 p-0"
+        className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
         onClick={() => setOpen(true)}
         aria-label="Edit class"
         title="Edit class"
       >
-        <Pencil className="h-4 w-4" />
+        <Pencil className="h-3.5 w-3.5" />
       </Button>
 
       <Dialog

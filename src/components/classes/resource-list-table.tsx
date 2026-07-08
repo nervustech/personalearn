@@ -53,14 +53,14 @@ export function ResourceListTable({
   return (
     <>
       <div className="hidden md:block">
-        <Table>
+        <Table containerClassName="overflow-visible">
           <TableHeader>
             <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead>Added</TableHead>
-              <TableHead className="w-24" />
+              <TableHead sticky>Title</TableHead>
+              <TableHead sticky>Type</TableHead>
+              <TableHead sticky>Source</TableHead>
+              <TableHead sticky>Added</TableHead>
+              <TableHead sticky className="w-24" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -126,20 +126,22 @@ export function ResourceListTable({
                   type="button"
                   variant="secondary"
                   size="sm"
+                  className="h-8 w-8 p-0"
                   onClick={() => setViewResource(resource)}
+                  aria-label={`Open ${resource.title}`}
                 >
                   <Eye className="h-4 w-4" />
-                  Open
                 </Button>
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
+                  className="h-8 w-8 p-0"
                   disabled={deleteResource.isPending}
                   onClick={() => setDeleteTarget(resource)}
+                  aria-label={`Delete ${resource.title}`}
                 >
                   <Trash2 className="h-4 w-4" />
-                  Delete
                 </Button>
               </div>
             </CardContent>

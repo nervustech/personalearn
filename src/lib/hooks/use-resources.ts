@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Resource } from "@/types/database";
+import type { Resource, ResourceType } from "@/types/database";
 
 export const resourcesQueryKey = (classId: string) =>
   ["resources", classId] as const;
@@ -52,10 +52,13 @@ export function useUploadResource(classId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (input: { file: File; resourceType?: ResourceType }) => {
       const formData = new FormData();
       formData.append("classId", classId);
-      formData.append("file", file);
+      formData.append("file", input.file);
+      if (input.resourceType) {
+        formData.append("resourceType", input.resourceType);
+      }
 
       const response = await fetch("/api/resources/ingest", {
         method: "POST",

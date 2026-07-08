@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/extract-text";
 import { ingestResource } from "@/lib/ai/ingest-resource";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
+import { isResourceType } from "@/lib/resources/format";
 import { createClient } from "@/lib/supabase/server";
 
 function authStatus(message: string) {
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const classId = formData.get("classId");
     const file = formData.get("file");
+    const resourceTypeRaw = formData.get("resourceType");
 
     if (typeof classId !== "string" || !classId) {
       return NextResponse.json({ error: "classId is required" }, { status: 400 });
@@ -33,6 +35,17 @@ export async function POST(request: Request) {
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
+    }
+
+    let resourceType: string | undefined;
+    if (typeof resourceTypeRaw === "string" && resourceTypeRaw.length > 0) {
+      if (!isResourceType(resourceTypeRaw)) {
+        return NextResponse.json(
+          { error: "Invalid resource type" },
+          { status: 400 }
+        );
+      }
+      resourceType = resourceTypeRaw;
     }
 
     const format = detectResourceFormat(file.name, file.type);
@@ -67,6 +80,7 @@ export async function POST(request: Request) {
       text,
       mimeType: file.type || "application/octet-stream",
       fileBytes: bytes,
+      resourceType,
     });
 
     return NextResponse.json(result);

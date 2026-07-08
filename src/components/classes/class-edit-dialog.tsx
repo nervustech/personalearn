@@ -49,9 +49,16 @@ export function ClassEditDialog({ cls }: { cls: Class }) {
 
   return (
     <>
-      <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <Pencil className="mr-2 h-4 w-4" />
-        Edit
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={() => setOpen(true)}
+        aria-label="Edit class"
+        title="Edit class"
+      >
+        <Pencil className="h-4 w-4" />
       </Button>
 
       <Dialog

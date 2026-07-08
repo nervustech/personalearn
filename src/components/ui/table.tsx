@@ -1,8 +1,17 @@
 import { cn } from "@/lib/utils";
 
-export function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
+type TableProps = React.HTMLAttributes<HTMLTableElement> & {
+  /** Classes for the outer scroll/wrapper div. Use `overflow-visible` when a parent scrolls and headers are sticky. */
+  containerClassName?: string;
+};
+
+export function Table({
+  className,
+  containerClassName,
+  ...props
+}: TableProps) {
   return (
-    <div className="w-full overflow-auto">
+    <div className={cn("w-full overflow-auto", containerClassName)}>
       <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   );
@@ -36,12 +45,14 @@ export function TableRow({
 
 export function TableHead({
   className,
+  sticky,
   ...props
-}: React.ThHTMLAttributes<HTMLTableCellElement>) {
+}: React.ThHTMLAttributes<HTMLTableCellElement> & { sticky?: boolean }) {
   return (
     <th
       className={cn(
         "h-10 px-3 text-left align-middle font-medium text-muted-foreground",
+        sticky && "sticky top-0 z-10 border-b border-border bg-card",
         className
       )}
       {...props}

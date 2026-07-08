@@ -19,10 +19,12 @@ export function AddStudentDialog({ classId }: AddStudentDialogProps) {
         type="button"
         variant="secondary"
         size="sm"
+        className="h-8 w-8 p-0"
         onClick={() => setOpen(true)}
+        aria-label="Add student"
+        title="Add student"
       >
         <UserPlus className="h-4 w-4" />
-        Add student
       </Button>
 
       <Dialog

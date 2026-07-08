@@ -1,5 +1,15 @@
 import type { ResourceType } from "@/types/database";
 
+export const RESOURCE_TYPE_OPTIONS = [
+  "scheme_of_work",
+  "assignment",
+  "lesson_notes",
+  "marking_scheme",
+  "quiz",
+  "examination",
+  "other",
+] as const satisfies readonly ResourceType[];
+
 export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   scheme_of_work: "Scheme of work",
   assignment: "Assignment",
@@ -7,8 +17,12 @@ export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   marking_scheme: "Marking scheme",
   quiz: "Quiz",
   examination: "Examination",
-  other: "Resource",
+  other: "Other",
 };
+
+export function isResourceType(value: string): value is ResourceType {
+  return (RESOURCE_TYPE_OPTIONS as readonly string[]).includes(value);
+}
 
 export function formatResourceType(resourceType: ResourceType | null) {
   if (!resourceType) return "Material";

@@ -25,7 +25,7 @@ export function StudentRosterTable({ classId, students }: StudentRosterTableProp
   if (!students.length) {
     return (
       <p className="text-sm text-muted-foreground">
-        No students yet. Add one below or import a CSV.
+        No students yet. Use the buttons above to add one or import a CSV.
       </p>
     );
   }
@@ -33,13 +33,13 @@ export function StudentRosterTable({ classId, students }: StudentRosterTableProp
   return (
     <>
       <div className="hidden md:block">
-        <Table>
+        <Table containerClassName="overflow-visible">
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Admission</TableHead>
-              <TableHead>Gender</TableHead>
-              <TableHead className="w-12" />
+              <TableHead sticky>Name</TableHead>
+              <TableHead sticky>Admission</TableHead>
+              <TableHead sticky>Gender</TableHead>
+              <TableHead sticky className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>

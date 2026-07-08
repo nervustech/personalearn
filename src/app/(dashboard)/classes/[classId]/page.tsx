@@ -10,11 +10,13 @@ import { useActiveClassStore } from "@/lib/store/active-class";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StudentRosterTable } from "@/components/classes/student-roster-table";
 import { AddStudentDialog } from "@/components/classes/add-student-dialog";
 import { CsvImportDialog } from "@/components/classes/csv-import-dialog";
 import { ClassEditDialog } from "@/components/classes/class-edit-dialog";
 import { ClassResourcesSection } from "@/components/classes/class-resources-section";
+import { ClassDetailSkeleton } from "@/components/classes/class-detail-skeleton";
 
 export default function ClassDetailPage({
   params,
@@ -22,8 +24,8 @@ export default function ClassDetailPage({
   params: Promise<{ classId: string }>;
 }) {
   const { classId } = use(params);
-  const { data: classes } = useClasses();
-  const { data: students, isLoading } = useStudents(classId);
+  const { data: classes, isLoading: classesLoading } = useClasses();
+  const { data: students, isLoading: studentsLoading } = useStudents(classId);
   const setActiveClass = useActiveClassStore((state) => state.setActiveClass);
   const [searchQuery, setSearchQuery] = useState("");
   const cls = classes?.find((c) => c.id === classId);
@@ -46,6 +48,10 @@ export default function ClassDetailPage({
     });
   }, [cls, setActiveClass]);
 
+  if (classesLoading && !cls) {
+    return <ClassDetailSkeleton />;
+  }
+
   if (!cls && classes) {
     return (
       <p className="text-center text-muted-foreground">
@@ -60,16 +66,23 @@ export default function ClassDetailPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center text-center">
-        <h1 className="text-3xl font-semibold">{cls?.name ?? "Class"}</h1>
         {cls ? (
-          <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-muted-foreground">
-            <p>
-              Grade {cls.grade_level} · {cls.subject} · Term {cls.term}
-              {cls.section ? ` · Section ${cls.section}` : ""}
-            </p>
-            <ClassEditDialog cls={cls} />
-          </div>
-        ) : null}
+          <>
+            <h1 className="text-3xl font-semibold">{cls.name}</h1>
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5 text-muted-foreground">
+              <p>
+                Grade {cls.grade_level} · {cls.subject} · Term {cls.term}
+                {cls.section ? ` · Section ${cls.section}` : ""}
+              </p>
+              <ClassEditDialog cls={cls} />
+            </div>
+          </>
+        ) : (
+          <>
+            <Skeleton className="h-9 w-56" />
+            <Skeleton className="mt-2 h-4 w-72" />
+          </>
+        )}
         <div className="relative mt-4 w-full max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -110,8 +123,12 @@ export default function ClassDetailPage({
             </div>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-y-auto">
-            {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading students…</p>
+            {studentsLoading ? (
+              <div className="space-y-2" aria-busy="true" aria-label="Loading students">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Skeleton key={index} className="h-10 w-full rounded-lg" />
+                ))}
+              </div>
             ) : (
               <StudentRosterTable
                 classId={classId}

@@ -6,6 +6,7 @@ import { useActiveClassStore } from "@/lib/store/active-class";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { Card, CardContent } from "@/components/ui/card";
 import { ClassCreateDialog } from "@/components/classes/class-create-dialog";
+import { ClassDetailSkeleton } from "@/components/classes/class-detail-skeleton";
 
 export default function ClassesPage() {
   const router = useRouter();
@@ -22,9 +23,7 @@ export default function ClassesPage() {
   }, [isSuccess, classes, activeClass, router]);
 
   if (isLoading || (isSuccess && classes?.length)) {
-    return (
-      <p className="text-sm text-muted-foreground">Opening class…</p>
-    );
+    return <ClassDetailSkeleton />;
   }
 
   return (

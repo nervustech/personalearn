@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useResources } from "@/lib/hooks/use-resources";
 import { filterResourcesByQuery } from "@/lib/classes/filter-class-lists";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ResourceListTable } from "@/components/classes/resource-list-table";
 import { ResourceUploadDialog } from "@/components/classes/resource-upload-dialog";
 import { cn } from "@/lib/utils";
@@ -51,7 +52,11 @@ export function ClassResourcesSection({
           )}
         >
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading resources…</p>
+            <div className="space-y-2" aria-busy="true" aria-label="Loading resources">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-10 w-full rounded-lg" />
+              ))}
+            </div>
           ) : error ? (
             <p className="text-sm text-destructive">
               {error instanceof Error

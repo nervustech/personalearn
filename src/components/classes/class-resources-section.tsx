@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import { useResources } from "@/lib/hooks/use-resources";
+import { filterResourcesByQuery } from "@/lib/classes/filter-class-lists";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResourceListTable } from "@/components/classes/resource-list-table";
 import { ResourceUploadDialog } from "@/components/classes/resource-upload-dialog";
@@ -10,13 +12,20 @@ type ClassResourcesSectionProps = {
   classId: string;
   /** Constrain height and scroll the list (side-by-side class page layout). */
   scrollable?: boolean;
+  searchQuery?: string;
 };
 
 export function ClassResourcesSection({
   classId,
   scrollable = false,
+  searchQuery = "",
 }: ClassResourcesSectionProps) {
   const { data: resources, isLoading, error } = useResources(classId);
+  const filteredResources = useMemo(
+    () => filterResourcesByQuery(resources ?? [], searchQuery),
+    [resources, searchQuery]
+  );
+  const hasQuery = searchQuery.trim().length > 0;
 
   return (
     <Card
@@ -50,7 +59,15 @@ export function ClassResourcesSection({
                 : "Failed to load resources"}
             </p>
           ) : (
-            <ResourceListTable classId={classId} resources={resources ?? []} />
+            <ResourceListTable
+              classId={classId}
+              resources={filteredResources}
+              emptyMessage={
+                hasQuery
+                  ? "No matching resources."
+                  : "No resources yet. Upload a scheme, notes, or assignment to get started."
+              }
+            />
           )}
         </div>
       </CardContent>

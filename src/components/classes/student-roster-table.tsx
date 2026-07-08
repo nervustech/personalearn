@@ -17,17 +17,18 @@ import {
 type StudentRosterTableProps = {
   classId: string;
   students: Student[];
+  emptyMessage?: string;
 };
 
-export function StudentRosterTable({ classId, students }: StudentRosterTableProps) {
+export function StudentRosterTable({
+  classId,
+  students,
+  emptyMessage = "No students yet. Use the buttons above to add one or import a CSV.",
+}: StudentRosterTableProps) {
   const deleteStudent = useDeleteStudent(classId);
 
   if (!students.length) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No students yet. Use the buttons above to add one or import a CSV.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;
   }
 
   return (
@@ -44,22 +45,24 @@ export function StudentRosterTable({ classId, students }: StudentRosterTableProp
           </TableHeader>
           <TableBody>
             {students.map((student) => (
-              <TableRow key={student.id}>
+              <TableRow key={student.id} className="group">
                 <TableCell className="font-medium">{student.full_name}</TableCell>
                 <TableCell>{student.admission_number ?? "—"}</TableCell>
                 <TableCell>{student.gender ?? "—"}</TableCell>
                 <TableCell>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    disabled={deleteStudent.isPending}
-                    onClick={() => deleteStudent.mutate(student.id)}
-                    aria-label={`Remove ${student.full_name}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+                      disabled={deleteStudent.isPending}
+                      onClick={() => deleteStudent.mutate(student.id)}
+                      aria-label={`Remove ${student.full_name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -80,9 +83,9 @@ export function StudentRosterTable({ classId, students }: StudentRosterTableProp
               </div>
               <Button
                 type="button"
-                variant="secondary"
+                variant="ghost"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 disabled={deleteStudent.isPending}
                 onClick={() => deleteStudent.mutate(student.id)}
                 aria-label={`Remove ${student.full_name}`}

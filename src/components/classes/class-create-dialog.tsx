@@ -49,7 +49,12 @@ export function ClassCreateDialog({
           New class
         </Button>
       ) : null}
-      <Dialog open={open} onOpenChange={setOpen} title="Create class">
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Create class"
+        className="max-w-sm"
+      >
         <ClassForm
           submitLabel="Create class"
           redirectOnSuccess={null}

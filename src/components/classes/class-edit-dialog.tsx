@@ -66,6 +66,7 @@ export function ClassEditDialog({ cls }: { cls: Class }) {
         onOpenChange={setOpen}
         title="Edit class"
         description="Update class details or archive this class."
+        className="max-w-sm"
       >
         <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
           <div className="space-y-1.5">

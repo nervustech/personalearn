@@ -34,10 +34,19 @@ export function ClassSelector() {
     }
   }
 
+  function shortLabel(cls: {
+    grade_level: number;
+    subject: string;
+    section: string | null;
+  }) {
+    const base = `G${cls.grade_level} ${cls.subject}`;
+    return cls.section ? `${base} · ${cls.section}` : base;
+  }
+
   const label = isLoading
     ? "Loading…"
     : activeClass
-      ? activeClass.name
+      ? shortLabel(activeClass)
       : classes?.length
         ? "Select class"
         : "No active class";
@@ -64,12 +73,7 @@ export function ClassSelector() {
             onClick={() => selectClass(cls)}
             className={activeClass?.id === cls.id ? "bg-primary/10 text-primary" : undefined}
           >
-            <div className="truncate">
-              <span className="font-medium">{cls.name}</span>
-              <span className="ml-1 text-muted-foreground">
-                · G{cls.grade_level} {cls.subject}
-              </span>
-            </div>
+            <span className="truncate font-medium">{shortLabel(cls)}</span>
           </DropdownMenuItem>
         ))}
         {!classes?.length && !isLoading ? (

@@ -9,6 +9,9 @@ export type IngestTxtInput = {
   classId: string;
   fileName: string;
   text: string;
+  title?: string;
+  aiGenerated?: boolean;
+  resourceType?: string;
 };
 
 export type IngestTxtResult = {
@@ -25,8 +28,12 @@ export async function ingestTxtResource(
   supabase: SupabaseClient,
   input: IngestTxtInput
 ): Promise<IngestTxtResult> {
-  const { classId, fileName, text } = input;
-  const title = fileName.replace(/\.txt$/i, "") || "Uploaded resource";
+  const { classId, fileName, text, title: titleOverride, aiGenerated, resourceType } =
+    input;
+  const title =
+    titleOverride?.trim() ||
+    fileName.replace(/\.txt$/i, "") ||
+    "Uploaded resource";
   const chunks = chunkText(text);
 
   if (chunks.length === 0) {
@@ -57,7 +64,8 @@ export async function ingestTxtResource(
       mimeType: "text/plain",
       storagePath,
     },
-    ai_generated: false,
+    ai_generated: aiGenerated ?? false,
+    resource_type: resourceType ?? null,
     status: "active",
   });
 

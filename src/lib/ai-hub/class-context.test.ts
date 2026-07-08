@@ -18,6 +18,8 @@ describe("buildClassAssistantSystemPrompt", () => {
     expect(prompt).toContain("Grade: 7");
     expect(prompt).toContain("Never ask which class");
     expect(prompt).toContain("search_class_resources");
-    expect(prompt).toContain("Never save or write");
+    expect(prompt).toContain("save_resource");
+    expect(prompt).toContain("revise further");
+    expect(prompt).toContain("explicitly confirms");
   });
 });

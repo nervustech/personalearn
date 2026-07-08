@@ -2,6 +2,7 @@ import { generateText, tool } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getChatModel } from "@/lib/ai/llm";
+import { ingestTxtResource } from "@/lib/ai/ingest-resource";
 import { queryClassResources } from "@/lib/ai/rag";
 import type { ClassContext } from "@/lib/ai-hub/class-context";
 
@@ -10,6 +11,8 @@ export const RESOURCE_TYPES = [
   "assignment",
   "lesson_notes",
   "marking_scheme",
+  "quiz",
+  "examination",
   "other",
 ] as const;
 
@@ -22,6 +25,8 @@ const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   assignment: "assignment",
   lesson_notes: "lesson notes",
   marking_scheme: "marking scheme",
+  quiz: "quiz",
+  examination: "examination",
   other: "learning resource",
 };
 
@@ -33,6 +38,58 @@ export type AgentToolDeps = {
 
 function userSafeError(message: string) {
   return { error: message };
+}
+
+export function sanitizeResourceFileName(title: string): string {
+  const base = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+
+  return `${base || "resource"}.txt`;
+}
+
+export async function executeSaveResource(
+  deps: AgentToolDeps,
+  input: {
+    title: string;
+    resourceType: ResourceType;
+    content: string;
+    teacherConfirmed: true;
+  }
+) {
+  if (input.teacherConfirmed !== true) {
+    return userSafeError("Save requires explicit teacher confirmation.");
+  }
+
+  const content = input.content.trim();
+  if (!content) {
+    return userSafeError("Cannot save an empty resource. Please try again.");
+  }
+
+  try {
+    const fileName = sanitizeResourceFileName(input.title);
+    const result = await ingestTxtResource(deps.supabase, {
+      classId: deps.classId,
+      fileName,
+      text: content,
+      title: input.title.trim(),
+      aiGenerated: true,
+      resourceType: input.resourceType,
+    });
+
+    return {
+      saved: true,
+      resourceId: result.resourceId,
+      title: input.title.trim(),
+      resourceType: input.resourceType,
+      chunkCount: result.chunkCount,
+    };
+  } catch {
+    return userSafeError("Could not save the resource. Please try again.");
+  }
 }
 
 export async function executeSearchClassResources(
@@ -141,7 +198,7 @@ export function createAgentTools(deps: AgentToolDeps) {
     }),
     generate_learning_resource: tool({
       description:
-        "Generate a draft learning resource (scheme of work, assignment, lesson notes, marking scheme, or other). Returns markdown content only — never saves automatically.",
+        "Generate a draft learning resource (scheme of work, assignment, lesson notes, marking scheme, quiz, examination, or other). Returns markdown content only — never saves automatically. After showing a draft, offer to save or revise based on teacher feedback.",
       inputSchema: z.object({
         resourceType: resourceTypeSchema.describe("Type of resource to generate"),
         title: z.string().min(1).describe("Title for the draft resource"),
@@ -157,6 +214,24 @@ export function createAgentTools(deps: AgentToolDeps) {
         "List students in the active class roster with names and admission numbers. Use when the teacher asks about their students or class size.",
       inputSchema: z.object({}),
       execute: async () => executeListStudents(deps),
+    }),
+    save_resource: tool({
+      description:
+        "Persist the final draft resource to the class library and ingest for RAG. Only call after the teacher has explicitly confirmed they want to save the latest draft (e.g. 'yes, save it'). Never call immediately after generating or while the teacher is still requesting revisions.",
+      inputSchema: z.object({
+        title: z.string().min(1).describe("Title for the saved resource"),
+        resourceType: resourceTypeSchema.describe("Type of resource being saved"),
+        content: z
+          .string()
+          .min(1)
+          .describe("Full markdown content of the latest approved draft"),
+        teacherConfirmed: z
+          .literal(true)
+          .describe(
+            "Must be true only after the teacher explicitly confirms save in this conversation"
+          ),
+      }),
+      execute: async (input) => executeSaveResource(deps, input),
     }),
   };
 }

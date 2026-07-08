@@ -73,7 +73,7 @@ Then the product owner reframed it: *make the students write their admission num
 
 Question numbers don't disappear — they're **demoted to a secondary signal**: order pages *within* a student and tell the agent which question it's grading (which it must read anyway). Identity and grouping ride on one variable; ordering rides on a signal we get for free.
 
-**The reading tech matters too.** We'd tried this before: traditional **OCR failed on handwritten scripts**, but a **multimodal LLM (Grok) read the same handwriting reliably**. So every handwriting read — admission numbers, question numbers, answers — goes through the vision model, not an OCR engine. The graceful-degradation path stays: a missing or unreadable ID drops to amber, the agent guesses, and the teacher confirms against the image.
+**The reading tech matters too.** We'd tried this before: traditional **OCR failed on handwritten scripts**, but a **multimodal LLM read the same handwriting reliably** (early tests used Grok; production path updated to **Gemini tiered vision** per [ADR-003](./adr-003-ai-provider-rag.md)). So every handwriting read — admission numbers, question numbers, answers — goes through the vision model, not an OCR engine. The graceful-degradation path stays: a missing or unreadable ID drops to amber, the agent guesses, and the teacher confirms against the image.
 
 **Lesson:** the sharpest simplifications often come from changing the *input*, not the algorithm. A one-line ask of students ("put your admission number on every page") dissolved a whole class of segmentation edge cases that no amount of clever heuristics would have fully tamed.
 

@@ -15,7 +15,7 @@
 | Decision | Resolution |
 |----------|------------|
 | Sprint 3 chat provider | DeepSeek (`CHAT_PROVIDER=deepseek`) |
-| Vision (Sprint 5) | Grok/xAI for handwriting reads |
+| Vision (Sprint 4–5) | Gemini tiered (Flash-Lite → Flash → Pro); see [ADR-003](./adr-003-ai-provider-rag.md) (updated 2026-07-08) |
 
 ## Design review (AC traceability)
 

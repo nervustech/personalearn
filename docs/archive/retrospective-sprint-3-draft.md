@@ -49,7 +49,7 @@ AI Hub v2 — class-scoped chat with conversation history sidebar and a class as
 
 - [ ] Kick off Sprint 4: [PSL-43](https://nervustechnologies.atlassian.net/browse/PSL-43) — class resources section (upload any type + unified list with agent-saved items)
 - [ ] Confirm dev Supabase has migrations `20260706_ai_hub_conversations` and `20260708_resources_resource_type` applied on all preview environments
-- [ ] Carry forward: Grok/xAI for vision reads in Sprint 5 bulk evaluation (locked in Phase 0 sign-off)
+- [ ] Carry forward: Gemini tiered vision for Sprint 4 image OCR + Sprint 5 bulk evaluation ([ADR-003](../adr-003-ai-provider-rag.md); Grok retired 2026-07-08)
 
 ## Deferred to later sprints
 

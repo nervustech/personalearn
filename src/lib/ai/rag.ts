@@ -22,7 +22,7 @@ type MatchRow = {
 };
 
 const EMPTY_ANSWER =
-  "No class resources are indexed yet. Upload a .txt scheme of work on the class page, then ask again.";
+  "No class resources are indexed yet. Upload materials on the class page, then ask again.";
 
 export async function queryClassResources(
   supabase: SupabaseClient,

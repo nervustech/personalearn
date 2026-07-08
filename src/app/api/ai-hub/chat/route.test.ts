@@ -61,6 +61,7 @@ const mockCreateAgentTools = vi.fn(() => ({
   search_class_resources: { description: "search" },
   generate_learning_resource: { description: "generate" },
   list_students: { description: "list" },
+  save_resource: { description: "save" },
 }));
 
 vi.mock("@/lib/ai-hub/agent-tools", () => ({
@@ -127,6 +128,7 @@ describe("POST /api/ai-hub/chat", () => {
           search_class_resources: expect.any(Object),
           generate_learning_resource: expect.any(Object),
           list_students: expect.any(Object),
+          save_resource: expect.any(Object),
         }),
         stopWhen: expect.any(Function),
       })

@@ -22,12 +22,22 @@ export type Student = {
   created_at: string;
 };
 
+export type ResourceType =
+  | "scheme_of_work"
+  | "assignment"
+  | "lesson_notes"
+  | "marking_scheme"
+  | "quiz"
+  | "examination"
+  | "other";
+
 export type Resource = {
   id: string;
   class_id: string;
   title: string;
   raw_content: Record<string, unknown>;
   ai_generated: boolean;
+  resource_type: ResourceType | null;
   status: "draft" | "active" | "archived";
   created_at: string;
   updated_at: string;

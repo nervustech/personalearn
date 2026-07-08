@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   executeGenerateLearningResource,
   executeListStudents,
+  executeSaveResource,
   executeSearchClassResources,
+  sanitizeResourceFileName,
   type AgentToolDeps,
 } from "./agent-tools";
 
@@ -30,6 +32,10 @@ vi.mock("@/lib/ai/llm", () => ({
   getChatModel: vi.fn(() => ({ modelId: "mock" })),
 }));
 
+vi.mock("@/lib/ai/ingest-resource", () => ({
+  ingestTxtResource: vi.fn(),
+}));
+
 vi.mock("ai", async () => {
   const actual = await vi.importActual<typeof import("ai")>("ai");
   return {
@@ -41,9 +47,11 @@ vi.mock("ai", async () => {
 });
 
 import { queryClassResources } from "@/lib/ai/rag";
+import { ingestTxtResource } from "@/lib/ai/ingest-resource";
 import { generateText } from "ai";
 
 const mockQueryClassResources = vi.mocked(queryClassResources);
+const mockIngestTxtResource = vi.mocked(ingestTxtResource);
 const mockGenerateText = vi.mocked(generateText);
 
 describe("executeSearchClassResources", () => {
@@ -98,14 +106,14 @@ describe("executeGenerateLearningResource", () => {
 
   it("returns a markdown draft without saving", async () => {
     const result = await executeGenerateLearningResource(deps, {
-      resourceType: "assignment",
+      resourceType: "quiz",
       title: "Fractions quiz",
       instructions: "Five short questions",
     });
 
     expect(result).toEqual({
       title: "Fractions quiz",
-      resourceType: "assignment",
+      resourceType: "quiz",
       content: "## Fractions assignment\n\n1. Add 1/2 + 1/4",
     });
     expect(mockGenerateText).toHaveBeenCalled();
@@ -177,6 +185,80 @@ describe("executeListStudents", () => {
 
     expect(result).toEqual({
       error: "Could not load the class roster. Please try again.",
+    });
+  });
+});
+
+describe("sanitizeResourceFileName", () => {
+  it("slugifies titles for storage paths", () => {
+    expect(sanitizeResourceFileName("Fractions Quiz #1")).toBe(
+      "fractions-quiz-1.txt"
+    );
+  });
+});
+
+describe("executeSaveResource", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("persists an approved draft with ai_generated metadata", async () => {
+    mockIngestTxtResource.mockResolvedValue({
+      resourceId: "res-1",
+      chunkCount: 3,
+      title: "Fractions Quiz",
+    });
+
+    const result = await executeSaveResource(deps, {
+      title: "Fractions Quiz",
+      resourceType: "quiz",
+      content: "## Q1\nWhat is 1/2 + 1/4?",
+      teacherConfirmed: true,
+    });
+
+    expect(result).toEqual({
+      saved: true,
+      resourceId: "res-1",
+      title: "Fractions Quiz",
+      resourceType: "quiz",
+      chunkCount: 3,
+    });
+    expect(mockIngestTxtResource).toHaveBeenCalledWith(deps.supabase, {
+      classId: "class-1",
+      fileName: "fractions-quiz.txt",
+      text: "## Q1\nWhat is 1/2 + 1/4?",
+      title: "Fractions Quiz",
+      aiGenerated: true,
+      resourceType: "quiz",
+    });
+  });
+
+  it("returns a user-safe error when ingest fails", async () => {
+    mockIngestTxtResource.mockRejectedValue(new Error("Storage upload failed"));
+
+    const result = await executeSaveResource(deps, {
+      title: "Term Exam",
+      resourceType: "examination",
+      content: "## Section A",
+      teacherConfirmed: true,
+    });
+
+    expect(result).toEqual({
+      error: "Could not save the resource. Please try again.",
+    });
+  });
+
+  it("rejects save without teacher confirmation", async () => {
+    const result = await executeSaveResource(deps, {
+      title: "Quiz",
+      resourceType: "quiz",
+      content: "## Q1",
+      teacherConfirmed: false as unknown as true,
+    });
+
+    expect(mockIngestTxtResource).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      error: "Save requires explicit teacher confirmation.",
     });
   });
 });

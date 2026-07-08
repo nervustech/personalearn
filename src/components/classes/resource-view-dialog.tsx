@@ -3,6 +3,7 @@
 import { Download } from "lucide-react";
 import type { Resource } from "@/types/database";
 import { Dialog } from "@/components/ui/dialog";
+import { MarkdownContent } from "@/components/markdown/markdown-content";
 import {
   formatResourceDate,
   formatResourceType,
@@ -32,22 +33,15 @@ export function ResourceViewDialog({
       onOpenChange={onOpenChange}
       title={resource.title}
       description={`${formatResourceType(resource.resource_type)} · ${formatResourceDate(resource.created_at)}`}
-      className="max-w-2xl"
+      className="max-h-[min(90vh,48rem)] w-[calc(100%-2rem)] max-w-4xl"
     >
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>{resource.ai_generated ? "AI-generated" : "Uploaded"}</span>
-          <span>·</span>
-          <span>{fileName}</span>
-        </div>
-
-        <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-border bg-muted/30 p-4">
-          <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
-            {preview || "No extracted text is available for this resource."}
-          </pre>
-        </div>
-
-        <div className="flex justify-end">
+      <div className="flex max-h-[min(75vh,40rem)] flex-col gap-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{resource.ai_generated ? "AI-generated" : "Uploaded"}</span>
+            <span>·</span>
+            <span>{fileName}</span>
+          </div>
           <a
             href={`/api/resources/${resource.id}`}
             target="_blank"
@@ -57,6 +51,19 @@ export function ResourceViewDialog({
             <Download className="h-4 w-4" />
             Download original
           </a>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xs">
+          {preview ? (
+            <MarkdownContent
+              content={preview}
+              className="text-[0.9375rem] text-foreground"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No extracted text is available for this resource.
+            </p>
+          )}
         </div>
       </div>
     </Dialog>

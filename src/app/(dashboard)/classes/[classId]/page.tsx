@@ -7,7 +7,7 @@ import { useStudents } from "@/lib/hooks/use-classes";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StudentRosterTable } from "@/components/classes/student-roster-table";
-import { StudentForm } from "@/components/classes/student-form";
+import { AddStudentDialog } from "@/components/classes/add-student-dialog";
 import { CsvImportDialog } from "@/components/classes/csv-import-dialog";
 import { ClassEditDialog } from "@/components/classes/class-edit-dialog";
 import { ClassResourcesSection } from "@/components/classes/class-resources-section";
@@ -56,30 +56,26 @@ export default function ClassDetailPage({
         </div>
       </div>
 
-      <ClassResourcesSection classId={classId} />
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        <ClassResourcesSection classId={classId} scrollable />
 
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-          <CardTitle>Student roster</CardTitle>
-          <CsvImportDialog classId={classId} />
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading students…</p>
-          ) : (
-            <StudentRosterTable classId={classId} students={students ?? []} />
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Add student</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <StudentForm classId={classId} />
-        </CardContent>
-      </Card>
+        <Card className="flex min-h-0 flex-col lg:max-h-[min(70vh,40rem)]">
+          <CardHeader className="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-lg">Student roster</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <AddStudentDialog classId={classId} />
+              <CsvImportDialog classId={classId} />
+            </div>
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 overflow-y-auto">
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading students…</p>
+            ) : (
+              <StudentRosterTable classId={classId} students={students ?? []} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

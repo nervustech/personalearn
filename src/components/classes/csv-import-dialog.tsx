@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Papa from "papaparse";
-import { Upload } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import {
@@ -73,9 +73,16 @@ export function CsvImportDialog({ classId }: CsvImportDialogProps) {
 
   return (
     <>
-      <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <Upload className="mr-2 h-4 w-4" />
-        Import CSV
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={() => setOpen(true)}
+        aria-label="Import CSV"
+        title="Import CSV"
+      >
+        <FileSpreadsheet className="h-4 w-4" />
       </Button>
 
       <Dialog

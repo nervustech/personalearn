@@ -15,6 +15,7 @@ import {
   conversationsQueryKey,
   useConversations,
 } from "@/lib/hooks/use-conversations";
+import { resourcesQueryKey } from "@/lib/hooks/use-resources";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,10 @@ export function AiHubChat() {
       if (activeClass?.id) {
         void queryClient.invalidateQueries({
           queryKey: conversationsQueryKey(activeClass.id),
+        });
+        // Agent save_resource writes to class resources — keep the class page in sync.
+        void queryClient.invalidateQueries({
+          queryKey: resourcesQueryKey(activeClass.id),
         });
       }
     },

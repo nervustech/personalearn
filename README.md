@@ -96,7 +96,7 @@ supabase/migrations/        # Database schema + RLS
 - **Sprint 1:** Auth, onboarding, dashboard, class management
 - **Sprint 2 (PSL-2):** RAG vertical slice — Voyage embeddings, TXT upload + ingest, co-pilot Q&A (complete)
 - **Sprint 3 (PSL-3):** AI Hub v2 — chat + history + agent (query, generate, save on confirm) (complete)
-- **Sprint 4 (PSL-43):** Class resources section — upload any file type, unified list with agent-saved materials (next)
+- **Sprint 4 (PSL-43):** Class resources section — upload any file type, unified list with agent-saved materials (in review)
 
 ## Scripts
 

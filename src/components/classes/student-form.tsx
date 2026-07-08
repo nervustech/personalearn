@@ -9,7 +9,17 @@ import { Select } from "@/components/ui/select";
 import { studentSchema, type StudentFormValues } from "@/lib/validations/class";
 import { useCreateStudent } from "@/lib/hooks/use-classes";
 
-export function StudentForm({ classId }: { classId: string }) {
+type StudentFormProps = {
+  classId: string;
+  onSuccess?: () => void;
+  submitLabel?: string;
+};
+
+export function StudentForm({
+  classId,
+  onSuccess,
+  submitLabel = "Add student",
+}: StudentFormProps) {
   const createStudent = useCreateStudent(classId);
 
   const {
@@ -25,6 +35,7 @@ export function StudentForm({ classId }: { classId: string }) {
   async function onSubmit(values: StudentFormValues) {
     await createStudent.mutateAsync(values);
     reset();
+    onSuccess?.();
   }
 
   return (
@@ -53,9 +64,11 @@ export function StudentForm({ classId }: { classId: string }) {
       {createStudent.error ? (
         <p className="text-sm text-destructive">{createStudent.error.message}</p>
       ) : null}
-      <Button type="submit" size="sm" disabled={createStudent.isPending}>
-        {createStudent.isPending ? "Adding…" : "Add student"}
-      </Button>
+      <div className="flex justify-end">
+        <Button type="submit" size="sm" disabled={createStudent.isPending}>
+          {createStudent.isPending ? "Adding…" : submitLabel}
+        </Button>
+      </div>
     </form>
   );
 }

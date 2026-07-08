@@ -13,6 +13,8 @@ import { classSchema, type ClassFormValues } from "@/lib/validations/class";
 import { useArchiveClass, useUpdateClass } from "@/lib/hooks/use-classes";
 import type { Class } from "@/types/database";
 
+const fieldClass = "h-9 rounded-lg px-2.5 py-1.5 shadow-none";
+
 export function ClassEditDialog({ cls }: { cls: Class }) {
   const [open, setOpen] = useState(false);
   const updateClass = useUpdateClass();
@@ -49,9 +51,16 @@ export function ClassEditDialog({ cls }: { cls: Class }) {
 
   return (
     <>
-      <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <Pencil className="mr-2 h-4 w-4" />
-        Edit
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        onClick={() => setOpen(true)}
+        aria-label="Edit class"
+        title="Edit class"
+      >
+        <Pencil className="h-3.5 w-3.5" />
       </Button>
 
       <Dialog
@@ -59,19 +68,29 @@ export function ClassEditDialog({ cls }: { cls: Class }) {
         onOpenChange={setOpen}
         title="Edit class"
         description="Update class details or archive this class."
+        className="max-w-sm"
       >
-        <form className="space-y-3" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-1.5">
+        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+          <div className="space-y-2">
             <Label htmlFor={`name-${cls.id}`}>Class name</Label>
-            <Input id={`name-${cls.id}`} {...register("name")} />
+            <Input
+              id={`name-${cls.id}`}
+              className={fieldClass}
+              {...register("name")}
+            />
             {errors.name ? (
               <p className="text-xs text-destructive">{errors.name.message}</p>
             ) : null}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Grade</Label>
-              <Select {...register("grade_level")}>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor={`grade-${cls.id}`}>Grade</Label>
+              <Select
+                id={`grade-${cls.id}`}
+                className={fieldClass}
+                {...register("grade_level")}
+              >
                 {Array.from({ length: 9 }, (_, i) => i + 1).map((g) => (
                   <option key={g} value={g}>
                     Grade {g}
@@ -79,33 +98,53 @@ export function ClassEditDialog({ cls }: { cls: Class }) {
                 ))}
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label>Term</Label>
-              <Select {...register("term")}>
+            <div className="space-y-2">
+              <Label htmlFor={`term-${cls.id}`}>Term</Label>
+              <Select
+                id={`term-${cls.id}`}
+                className={fieldClass}
+                {...register("term")}
+              >
                 <option value={1}>Term 1</option>
                 <option value={2}>Term 2</option>
                 <option value={3}>Term 3</option>
               </Select>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Subject</Label>
-            <Input {...register("subject")} />
+
+          <div className="space-y-2">
+            <Label htmlFor={`subject-${cls.id}`}>Subject</Label>
+            <Input
+              id={`subject-${cls.id}`}
+              className={fieldClass}
+              {...register("subject")}
+            />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Section</Label>
-              <Input {...register("section")} />
+
+          <div className="grid grid-cols-[5.5rem_1fr] gap-3">
+            <div className="space-y-2">
+              <Label htmlFor={`section-${cls.id}`}>Section</Label>
+              <Input
+                id={`section-${cls.id}`}
+                className={fieldClass}
+                {...register("section")}
+              />
             </div>
-            <div className="space-y-1.5">
-              <Label>Academic year</Label>
-              <Input {...register("academic_year")} />
+            <div className="space-y-2">
+              <Label htmlFor={`year-${cls.id}`}>Academic year</Label>
+              <Input
+                id={`year-${cls.id}`}
+                className={fieldClass}
+                {...register("academic_year")}
+              />
             </div>
           </div>
-          <div className="flex flex-wrap justify-between gap-2 pt-2">
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <Button
               type="button"
               variant="secondary"
+              size="sm"
               className="text-destructive"
               onClick={handleArchive}
               disabled={archiveClass.isPending}
@@ -113,10 +152,15 @@ export function ClassEditDialog({ cls }: { cls: Class }) {
               Archive class
             </Button>
             <div className="flex gap-2">
-              <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={updateClass.isPending}>
+              <Button type="submit" size="sm" disabled={updateClass.isPending}>
                 Save
               </Button>
             </div>

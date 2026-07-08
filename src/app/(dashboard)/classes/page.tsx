@@ -1,71 +1,45 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { useClasses } from "@/lib/hooks/use-classes";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { ClassCreateDialog } from "@/components/classes/class-create-dialog";
-import { ClassEditDialog } from "@/components/classes/class-edit-dialog";
+import { ClassDetailSkeleton } from "@/components/classes/class-detail-skeleton";
 
 export default function ClassesPage() {
-  const { data: classes, isLoading } = useClasses();
+  const router = useRouter();
+  const { data: classes, isLoading, isSuccess } = useClasses();
   const activeClass = useActiveClassStore((state) => state.activeClass);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Classes</h1>
-          <p className="mt-1 text-muted-foreground">
-            Manage your classes and student rosters.
-          </p>
-        </div>
-        <ClassCreateDialog />
-      </div>
+  useEffect(() => {
+    if (!isSuccess || !classes?.length) return;
 
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading classes…</p>
-      ) : !classes?.length ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No classes yet. Create your first class to get started.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {classes.map((cls) => (
-            <Card
-              key={cls.id}
-              className={activeClass?.id === cls.id ? "ring-2 ring-primary/30" : undefined}
-            >
-              <CardHeader>
-                <CardTitle className="flex items-start justify-between gap-2">
-                  <Link
-                    href={`/classes/${cls.id}`}
-                    className="hover:text-primary hover:underline"
-                  >
-                    {cls.name}
-                  </Link>
-                  <ClassEditDialog cls={cls} />
-                </CardTitle>
-                <CardDescription>
-                  Grade {cls.grade_level} · {cls.subject} · Term {cls.term} ·{" "}
-                  {cls.academic_year}
-                  {cls.section ? ` · Section ${cls.section}` : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link
-                  href={`/classes/${cls.id}`}
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  View student roster →
-                </Link>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+    const preferred =
+      (activeClass && classes.find((c) => c.id === activeClass.id)) ?? classes[0];
+
+    router.replace(`/classes/${preferred.id}`);
+  }, [isSuccess, classes, activeClass, router]);
+
+  if (isLoading || (isSuccess && classes?.length)) {
+    return <ClassDetailSkeleton />;
+  }
+
+  return (
+    <div className="mx-auto max-w-lg space-y-6 text-center">
+      <div>
+        <h1 className="text-3xl font-semibold">Classes</h1>
+        <p className="mt-1 text-muted-foreground">
+          Create your first class to manage resources and students.
+        </p>
+      </div>
+      <Card>
+        <CardContent className="flex flex-col items-center gap-4 py-8">
+          <p className="text-sm text-muted-foreground">No classes yet.</p>
+          <ClassCreateDialog />
+        </CardContent>
+      </Card>
     </div>
   );
 }

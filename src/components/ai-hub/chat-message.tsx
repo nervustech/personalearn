@@ -2,65 +2,14 @@
 
 import type { UIMessage } from "ai";
 import { Pencil, Sparkles, User } from "lucide-react";
-import type { Components } from "react-markdown";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { getMessageText } from "@/lib/ai-hub/message-content";
-import { normalizeMarkdown } from "@/lib/ai-hub/normalize-markdown";
 import { cn } from "@/lib/utils";
 
 type ChatMessageProps = {
   message: UIMessage;
   canEdit?: boolean;
   onEdit?: (messageId: string, text: string) => void;
-};
-
-const markdownComponents: Components = {
-  p: ({ children }) => (
-    <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>
-  ),
-  strong: ({ children }) => (
-    <strong className="font-semibold text-foreground">{children}</strong>
-  ),
-  em: ({ children }) => <em className="italic">{children}</em>,
-  ul: ({ children }) => (
-    <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>
-  ),
-  ol: ({ children }) => (
-    <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>
-  ),
-  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-  h2: ({ children }) => (
-    <h2 className="mb-2 mt-4 text-base font-semibold text-foreground first:mt-0">
-      {children}
-    </h2>
-  ),
-  h3: ({ children }) => (
-    <h3 className="mb-1 mt-3 text-sm font-semibold text-foreground first:mt-0">
-      {children}
-    </h3>
-  ),
-  table: ({ children }) => (
-    <div className="my-3 overflow-x-auto rounded-lg border border-border/80">
-      <table className="w-full min-w-[16rem] border-collapse text-sm">
-        {children}
-      </table>
-    </div>
-  ),
-  thead: ({ children }) => (
-    <thead className="bg-muted/60">{children}</thead>
-  ),
-  th: ({ children }) => (
-    <th className="border-b border-border px-3 py-2 text-left font-semibold">
-      {children}
-    </th>
-  ),
-  td: ({ children }) => (
-    <td className="border-b border-border/60 px-3 py-2 align-top leading-relaxed">
-      {children}
-    </td>
-  ),
-  tr: ({ children }) => <tr className="last:[&>td]:border-b-0">{children}</tr>,
 };
 
 export function ChatMessage({
@@ -112,12 +61,7 @@ export function ChatMessage({
           {isUser ? (
             <p className="whitespace-pre-wrap">{text}</p>
           ) : (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
-              {normalizeMarkdown(text)}
-            </ReactMarkdown>
+            <MarkdownContent content={text} />
           )}
         </div>
 

@@ -12,6 +12,8 @@ type DialogProps = {
   description?: string;
   children: React.ReactNode;
   className?: string;
+  /** Optional control rendered before the close button (e.g. download). */
+  headerAction?: React.ReactNode;
 };
 
 export function Dialog({
@@ -21,6 +23,7 @@ export function Dialog({
   description,
   children,
   className,
+  headerAction,
 }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -35,30 +38,35 @@ export function Dialog({
     <dialog
       ref={dialogRef}
       className={cn(
-        "fixed inset-0 z-50 m-auto w-[calc(100%-2rem)] max-w-md h-fit rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/60",
+        // Important: do not set `display:flex` unconditionally — it overrides the
+        // UA rule `dialog:not([open]) { display: none }` and makes closed modals visible.
+        "fixed inset-0 z-50 m-auto h-fit max-h-[min(92vh,54rem)] w-[calc(100%-2rem)] max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg open:flex backdrop:bg-black/60",
         className
       )}
       onClose={() => onOpenChange(false)}
     >
-      <div className="flex items-start justify-between border-b border-border px-6 py-4">
-        <div>
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-6 py-4">
+        <div className="min-w-0">
           <h2 className="font-display text-lg font-semibold">{title}</h2>
           {description ? (
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           ) : null}
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="h-8 w-8 shrink-0 p-0"
-          onClick={() => onOpenChange(false)}
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {headerAction}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-      <div className="px-6 py-4">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
     </dialog>
   );
 }

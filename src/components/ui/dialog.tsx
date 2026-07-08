@@ -38,7 +38,9 @@ export function Dialog({
     <dialog
       ref={dialogRef}
       className={cn(
-        "fixed inset-0 z-50 m-auto flex h-fit max-h-[min(92vh,54rem)] w-[calc(100%-2rem)] max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/60",
+        // Important: do not set `display:flex` unconditionally — it overrides the
+        // UA rule `dialog:not([open]) { display: none }` and makes closed modals visible.
+        "fixed inset-0 z-50 m-auto h-fit max-h-[min(92vh,54rem)] w-[calc(100%-2rem)] max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg open:flex backdrop:bg-black/60",
         className
       )}
       onClose={() => onOpenChange(false)}

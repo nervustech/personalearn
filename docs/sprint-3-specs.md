@@ -86,8 +86,13 @@ flowchart TB
 | **3** | [PSL-7](https://nervustechnologies.atlassian.net/browse/PSL-7) | Class assistant agent — generate any resource | 2nd |
 | **3** | [PSL-27](https://nervustechnologies.atlassian.net/browse/PSL-27) | Agent save-on-confirm to class resources | 3rd |
 | **4** | [PSL-43](https://nervustechnologies.atlassian.net/browse/PSL-43) | Class resources section — upload any file type | — |
-| **5** | [PSL-8](https://nervustechnologies.atlassian.net/browse/PSL-8) | Bulk evaluation + review queue | 1st |
-| **5** | [PSL-38](https://nervustechnologies.atlassian.net/browse/PSL-38) | Dashboard competency snapshot | 2nd |
+| **5** | [PSL-8](https://nervustechnologies.atlassian.net/browse/PSL-8) | **Umbrella** — Bulk evaluation + student bridge (do not mega-PR) | — |
+| **5** | [PSL-44](https://nervustechnologies.atlassian.net/browse/PSL-44) | Schema + start + upload; gradable save → assessment | 1st |
+| **5** | [PSL-45](https://nervustechnologies.atlassian.net/browse/PSL-45) | Identity + grouping (Gemini tiered vision) | 2nd |
+| **5** | [PSL-46](https://nervustechnologies.atlassian.net/browse/PSL-46) | Per-question drafts | 3rd |
+| **5** | [PSL-47](https://nervustechnologies.atlassian.net/browse/PSL-47) | Review queue + sign-off | 4th |
+| **5** | [PSL-48](https://nervustechnologies.atlassian.net/browse/PSL-48) | Roster student profile + `N=1` eval | 5th |
+| **5** | [PSL-38](https://nervustechnologies.atlassian.net/browse/PSL-38) | Dashboard competency snapshot | 6th |
 | **6** | [PSL-10](https://nervustechnologies.atlassian.net/browse/PSL-10) | Simple report export | — |
 | **6** | [PSL-39](https://nervustechnologies.atlassian.net/browse/PSL-39) | PWA offline shell (optional) | — |
 | **6** | [PSL-40](https://nervustechnologies.atlassian.net/browse/PSL-40) | Production Supabase | before PSL-41 |
@@ -403,14 +408,48 @@ As a CBC teacher, I want a resources section on each class page where I can uplo
 
 ---
 
-## Sprint 5 — Bulk evaluation
+## Sprint 5 — Bulk evaluation + student bridge
 
-**Labels:** `area-ai-rag`, `type-feature`
-**Depends on:** Sprint 4 merged (needs class resources for marking schemes)
+**Labels:** `area-ai-rag` / `area-dashboard`, `type-feature`  
+**Depends on:** Sprint 4 merged (needs class resources for marking schemes)  
+**Parent:** [PSL-8](https://nervustechnologies.atlassian.net/browse/PSL-8) (umbrella) under epic [PSL-3](https://nervustechnologies.atlassian.net/browse/PSL-3)  
+**Merge order:** [PSL-44](https://nervustechnologies.atlassian.net/browse/PSL-44) → [PSL-45](https://nervustechnologies.atlassian.net/browse/PSL-45) → [PSL-46](https://nervustechnologies.atlassian.net/browse/PSL-46) → [PSL-47](https://nervustechnologies.atlassian.net/browse/PSL-47) → [PSL-48](https://nervustechnologies.atlassian.net/browse/PSL-48) → [PSL-38](https://nervustechnologies.atlassian.net/browse/PSL-38)
 
 ### User story
 
-As a CBC teacher, I want to bulk-upload scanned pen-and-paper scripts and have the AI group them per student by admission number, draft per-question feedback against a marking scheme, and let me review and correct before signing off, so grading is faster while I stay in control.
+As a CBC teacher, I want to bulk- or single-upload scanned pen-and-paper scripts and have the AI group them per student by admission number, draft per-question feedback against a marking scheme, and let me review and correct before signing off — and I want assignments saved from AI Hub to appear on every student profile immediately so I can evaluate one student without waiting for a class-wide batch.
+
+### Product model — resource vs assessment vs batch
+
+**Selective publish on save:** when the agent confirms `save_resource` for a **gradable** type (`assignment`, `quiz`, `examination`), write both the class-library `resources` row **and** a linked class-level `assessments` row. That assessment appears on **every** student profile immediately as `not_started`.
+
+Non-gradable saves (`lesson_notes`, `scheme_of_work`, `marking_scheme`, `other`) stay **resources only**.
+
+```mermaid
+flowchart TB
+  chat[AI Hub save_resource]
+  res[resources class library]
+  assess[assessments if gradable]
+  roster[Student profile all students]
+  start[Start eval class or N equals 1]
+  batch[evaluation_batch]
+  sub[student_submissions]
+  dash[Dashboard PSL-38]
+
+  chat --> res
+  chat -->|assignment quiz examination| assess
+  assess --> roster
+  assess --> start
+  start --> batch
+  batch -->|sign-off| sub
+  sub --> roster
+  sub --> dash
+  roster -->|Upload evaluate this student| batch
+```
+
+- **Resource** = material in the class library (all types).
+- **Assessment** = class graded event, created **at save** for gradable types (linked to the resource); also creatable when starting eval from an uploaded assignment that was never chat-saved.
+- **Batch** = one grading run for 1..N students against an assessment. Physical stack order never matters; admission # on every page is the primary key.
 
 ### Workflow
 
@@ -422,8 +461,8 @@ sequenceDiagram
   participant Review as Review queue
   participant Results
 
-  Teacher->>Eval: Start evaluation (pick/generate marking scheme, optional)
-  Teacher->>Eval: Bulk upload scan images (any order)
+  Teacher->>Eval: Start evaluation (pick assessment + marking scheme, optional)
+  Teacher->>Eval: Bulk upload scan images (any order) or N equals 1 from profile
   Eval->>Agent: Per-page read admission number (Gemini vision) + question numbers
   Agent->>Agent: Group pages by admission number (validate vs roster)
   Agent->>Review: Identity pass - green matches + amber (missing/unknown ID)
@@ -457,12 +496,56 @@ sequenceDiagram
 
 ### Data model (new)
 
+- `assessments.resource_id` (nullable FK) — links a class assessment to its library resource when created from gradable `save_resource` or eval start.
 - `evaluation_batches`: `id`, `class_id`, `assessment_id` (nullable), `marking_scheme_resource_id` (nullable), `status` (`draft`/`in_review`/`signed_off`), `created_at`
 - `evaluated_scripts`: `id`, `batch_id`, `student_id` (nullable until matched), `read_admission_number` (text, nullable), `match_confidence` (`high`/`low`), `page_order` (JSONB of storage paths ordered by question number), `status`
 - `question_evaluations`: `id`, `script_id`, `question_number`, `awarded`, `max`, `feedback`, `status` (`ai_draft`/`ai_estimate`/`teacher_edited`/`reevaluated`), `created_at`
 - On sign-off: write `student_submissions` (feedback) + upsert `competency_progress` (existing tables).
 
-### Acceptance criteria
+### Phase 0 — Vision benchmark (before Ticket 2)
+
+Benchmark Gemini Lite → Flash → Pro on **20–30 real Kenyan handwritten script samples** before identity coding. Record escalation thresholds in [ADR-003](./adr-003-ai-provider-rag.md). Ticket 1 may ship schema/upload without the full tier stack; Ticket 2 must not open until Phase 0 notes are recorded.
+
+### Cross-ticket AC summary
+
+| AC | Ticket | Summary |
+|----|--------|---------|
+| AC-5.1 | PSL-44 | Start evaluation + marking scheme choice |
+| AC-5.2 | PSL-44 | Bulk upload |
+| AC-5.16 | PSL-44 | Gradable save publishes assessment to profiles |
+| AC-5.3 | PSL-45 | Group pages by admission number |
+| AC-5.4 | PSL-45 | Identity confidence + fallback |
+| AC-5.8 | PSL-45 | Fix identity in review |
+| AC-5.9 | PSL-45 | Missing page handling |
+| AC-5.12 | PSL-45 | Duplicate ID + question conflict |
+| AC-5.5 | PSL-46 | Per-question drafts |
+| AC-5.6 | PSL-47 | Review queue: manual edit |
+| AC-5.7 | PSL-47 | Review queue: single-question re-evaluation |
+| AC-5.10 | PSL-47 | Sign-off writes results |
+| AC-5.11 | PSL-47 (+ PSL-38) | Cache invalidation / dashboard refresh |
+| AC-5.13 | PSL-48 | Student profile lists assessments |
+| AC-5.14 | PSL-48 | Evaluate / upload for one student (`N=1`) |
+| AC-5.15 | PSL-48 | View signed-off feedback on profile |
+
+---
+
+### PSL-44 — Schema + start + upload
+
+**Branch:** `feature/PSL-44-eval-schema-upload`  
+**Labels:** `area-ai-rag`, `type-feature`  
+**Depends on:** PSL-43  
+**Phase 0:** document Gemini benchmark requirement on this ticket / ADR-003 (full benchmark before PSL-45)
+
+#### Technical scope
+
+| Item | Detail |
+|------|--------|
+| Migration | `evaluation_batches`, `evaluated_scripts`, `question_evaluations` + RLS; `assessments.resource_id`; `student_submissions` storage RLS if missing |
+| Gradable save | Extend `save_resource` so `assignment` / `quiz` / `examination` inserts resource **and** linked `assessments` row (idempotent) |
+| UI | Class page CTA: Start evaluation; scheme pick / generate / proceed-without notice; multi-image upload |
+| Auth | `requireTeacherClass` on all new APIs |
+
+#### Acceptance criteria
 
 **AC-5.1 — Start evaluation + marking scheme choice**
 
@@ -476,6 +559,36 @@ sequenceDiagram
 - **Given** I have scanned scripts as images
 - **When** I upload them in one batch (any order)
 - **Then** all pages are stored and queued for processing
+
+**AC-5.16 — Gradable save publishes to profiles**
+
+- **Given** I confirm saving an assignment/quiz/examination in AI Hub
+- **When** `save_resource` succeeds
+- **Then** the item appears in the class library **and** a class `assessments` row exists linked to it
+- **And** every student profile lists that assessment as `not_started` until a batch/submission exists for that student
+
+#### Tests (same PR)
+
+- Unit: gradable `save_resource` creates linked assessment; non-gradable does not
+- API: batch create + upload auth (403 for non-owner)
+
+---
+
+### PSL-45 — Identity + grouping
+
+**Branch:** `feature/PSL-45-eval-identity`  
+**Labels:** `area-ai-rag`, `type-feature`  
+**Depends on:** PSL-44 merged + Phase 0 benchmark recorded
+
+#### Technical scope
+
+| Item | Detail |
+|------|--------|
+| Vision | Extend `vision-model.ts` to Lite → Flash → Pro per ADR-003 |
+| Pipeline | Per-page admission # + question numbers; group by admission #; roster validate; amber confirm **before** grading |
+| Flags | Missing-page gap; duplicate admission+question conflict |
+
+#### Acceptance criteria
 
 **AC-5.3 — Group pages by admission number**
 
@@ -492,12 +605,61 @@ sequenceDiagram
 - **Then** that page/script is flagged amber with the agent's best-guess student
 - **And** the teacher confirms or reassigns against the image **before** grading runs
 
+**AC-5.8 — Fix identity in review**
+
+- **Given** an amber-flagged student match
+- **When** I pick the correct student from a dropdown
+- **Then** the script reassigns to that student
+
+**AC-5.9 — Missing page handling**
+
+- **Given** a script has a question-number gap
+- **When** I view it in review
+- **Then** I see a "possible missing page" warning and can still proceed or add a page
+
+**AC-5.12 — Duplicate ID + question conflict**
+
+- **Given** two pages share the same admission number and the same question number
+- **When** grouping runs
+- **Then** a conflict is flagged for the teacher (possible second attempt or misread)
+- **And** the system does not silently choose one page
+
+#### Tests (same PR)
+
+- Unit: grouping by admission number; roster validation; amber on missing/unknown ID
+- Unit: ordering by question number; missing-page gap flag; duplicate ID+Q conflict
+
+---
+
+### PSL-46 — Per-question drafts
+
+**Branch:** `feature/PSL-46-eval-drafts`  
+**Labels:** `area-ai-rag`, `type-feature`  
+**Depends on:** PSL-45 merged
+
+#### Acceptance criteria
+
 **AC-5.5 — Per-question drafts**
 
 - **Given** a marking scheme is attached
-- **When** drafting runs
+- **When** drafting runs (only for identity-cleared scripts)
 - **Then** each question has an awarded mark, max, and feedback, graded against the scheme
 - **And** without a scheme, marks are produced but flagged `ai_estimate`
+
+#### Tests (same PR)
+
+- Unit: no-scheme path flags `ai_estimate`
+- API: draft route mocked vision; skips scripts with uncleared amber identity
+
+---
+
+### PSL-47 — Review + sign-off
+
+**Branch:** `feature/PSL-47-eval-review-signoff`  
+**Labels:** `area-ai-rag`, `type-feature`  
+**Depends on:** PSL-46 merged
+
+#### Acceptance criteria
 
 **AC-5.6 — Review queue: manual edit**
 
@@ -513,18 +675,6 @@ sequenceDiagram
 - **And** only that question updates (status `reevaluated`); all other reviewed questions are untouched
 - **And** the script total and competency mapping recompute
 
-**AC-5.8 — Fix identity in review**
-
-- **Given** an amber-flagged student match
-- **When** I pick the correct student from a dropdown
-- **Then** the script reassigns to that student
-
-**AC-5.9 — Missing page handling**
-
-- **Given** a script has a question-number gap
-- **When** I view it in review
-- **Then** I see a "possible missing page" warning and can still proceed or add a page
-
 **AC-5.10 — Sign-off writes results**
 
 - **Given** I have reviewed a script
@@ -538,38 +688,74 @@ sequenceDiagram
 - **When** I open the dashboard
 - **Then** competency reflects the updates without manual refresh
 
-**AC-5.12 — Duplicate ID + question conflict**
+#### Tests (same PR)
 
-- **Given** two pages share the same admission number and the same question number
-- **When** grouping runs
-- **Then** a conflict is flagged for the teacher (possible second attempt or misread)
-- **And** the system does not silently choose one page
+- Unit: single-question re-evaluation updates only the target question + recomputes total
+- API: sign-off writes submissions; 403 for non-owner
+
+---
+
+### PSL-48 — Roster student profile
+
+**Branch:** `feature/PSL-48-student-eval-profile`  
+**Labels:** `area-classes`, `type-feature`  
+**Depends on:** PSL-47 merged
+
+#### Acceptance criteria
+
+**AC-5.13 — Student profile lists assessments**
+
+- **Given** class assessments exist (including ones just saved from chat)
+- **When** I click a student in the roster
+- **Then** a profile shows identity + those assessments with that student’s status (`not_started` / `in_review` / `signed_off`) and mark summary when signed off
+
+**AC-5.14 — Evaluate / upload for one student**
+
+- **Given** I am on a student profile
+- **When** I choose Evaluate / Upload work for an assessment
+- **Then** I enter the same eval pipeline scoped to that student (`N=1` batch)
+
+**AC-5.15 — View signed-off feedback**
+
+- **Given** a signed-off submission exists
+- **When** I open the profile
+- **Then** I can view feedback for that assessment without re-running vision
+
+#### Tests (same PR)
+
+- Unit/API: profile lists assessments with derived per-student status; `N=1` batch create scoped to student
+
+---
+
+### PSL-38 — Dashboard competency snapshot
+
+**Branch:** `feature/PSL-38-dashboard-competency`  
+**Labels:** `area-dashboard`, `type-feature`  
+**Depends on:** PSL-47 (sign-off writes) — ideally after PSL-48
+
+Replace dashboard placeholder with per-student competency from `competency_progress` after sign-off; reflect updates without manual refresh (AC-5.11 consumer).
+
+---
 
 ### Out of scope (Sprint 5)
 
+- Auto-create assessments for **non-gradable** resource types (notes, schemes, marking schemes)
 - Auto-detecting the assessment/topic from the scripts (teacher selects/enters)
 - Cross-batch analytics
 - Non-image scan formats (images only for MVP)
 - Original-vs-revised mark audit trail (nice-to-have)
+- Term-level analytics / report PDF (PSL-10)
 
-### Tests (same PR)
+### Manual QA script (end-to-end after PSL-48 + PSL-38)
 
-- Unit: grouping pages by admission number; roster validation; amber on missing/unknown ID
-- Unit: ordering pages within a student by question number; missing-page gap flag
-- Unit: duplicate ID + same question conflict flag
-- Unit: single-question re-evaluation updates only the target question + recomputes total
-- Unit: no-scheme path flags `ai_estimate`
-- API route tests for batch create, draft, sign-off (mocked vision model)
-
-### Manual QA script
-
-1. Generate + approve a marking scheme in AI Hub.
+1. Generate + approve an assignment and a marking scheme in AI Hub; confirm assignment appears on a student profile as `not_started`.
 2. Start evaluation, attach the scheme, bulk-upload a **shuffled** mixed stack of scripts (pages out of order).
 3. Confirm pages group per student by admission number and reconcile despite the shuffle.
 4. Leave one page without an ID; confirm it is amber; assign the student from the image.
 5. Re-evaluate one question with an instruction; confirm only it changes.
-6. Sign off; confirm results on dashboard.
-7. Repeat once without a scheme; confirm amber estimate flags + notice.
+6. Sign off; confirm results on dashboard and on the student profile.
+7. From another student’s profile, upload `N=1` pages for the same assessment.
+8. Repeat once without a scheme; confirm amber estimate flags + notice.
 
 ---
 
@@ -614,6 +800,9 @@ sequenceDiagram
 | 6 | Marking scheme is a **generated + approved resource**; missing scheme → inform teacher, allow model judgment flagged `ai_estimate` |
 | 7 | Uploads: **any supported type** (MVP: TXT/PDF/image); extend later |
 | 8 | Agents over many pages: **single class assistant with tools**, human confirm on writes |
+| 9 | Gradable `save_resource` (`assignment` / `quiz` / `examination`) creates a linked class `assessments` row immediately; non-gradable types stay library-only |
+| 10 | Evaluation batches support **1..N students** (class stack or single-student from roster profile); same pipeline |
+| 11 | Sprint 5 delivery is **split tickets** under PSL-8 (schema → identity → drafts → review → profile → PSL-38), not one mega-PR |
 
 ## Related docs
 

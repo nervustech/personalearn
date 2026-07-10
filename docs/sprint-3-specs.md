@@ -502,9 +502,9 @@ sequenceDiagram
 - `question_evaluations`: `id`, `script_id`, `question_number`, `awarded`, `max`, `feedback`, `status` (`ai_draft`/`ai_estimate`/`teacher_edited`/`reevaluated`), `created_at`
 - On sign-off: write `student_submissions` (feedback) + upsert `competency_progress` (existing tables).
 
-### Phase 0 — Vision benchmark (before Ticket 2)
+### Phase 0 — Vision benchmark (deferred — [PSL-50](https://nervustechnologies.atlassian.net/browse/PSL-50))
 
-Benchmark Gemini Lite → Flash → Pro on **20–30 real Kenyan handwritten script samples** before identity coding. Record escalation thresholds in [ADR-003](./adr-003-ai-provider-rag.md). Ticket 1 may ship schema/upload without the full tier stack; Ticket 2 must not open until Phase 0 notes are recorded.
+**Deferred 2026-07-10:** Do not block PSL-45 on a pre-implementation Lite→Flash→Pro sample lab. Ship identity/grouping on **`gemini-2.5-flash-lite`** with amber teacher confirm; treat Flash/Pro auto-escalation as a contingency after real/pilot handwriting evidence. Synthetic images are fine for pipeline QA, not as the sole accuracy verdict. Details: [ADR-003](./adr-003-ai-provider-rag.md) § Sprint 5 Phase 0, [docs/sprint-5-phase-0-deferral.md](./sprint-5-phase-0-deferral.md).
 
 ### Cross-ticket AC summary
 
@@ -534,7 +534,7 @@ Benchmark Gemini Lite → Flash → Pro on **20–30 real Kenyan handwritten scr
 **Branch:** `feature/PSL-44-eval-schema-upload`  
 **Labels:** `area-ai-rag`, `type-feature`  
 **Depends on:** PSL-43  
-**Phase 0:** document Gemini benchmark requirement on this ticket / ADR-003 (full benchmark before PSL-45)
+**Phase 0:** originally documented the vision benchmark gate; **deferred** via [PSL-50](https://nervustechnologies.atlassian.net/browse/PSL-50) / [ADR-003](./adr-003-ai-provider-rag.md) (Lite-first; no lab before PSL-45)
 
 #### Technical scope
 
@@ -578,13 +578,13 @@ Benchmark Gemini Lite → Flash → Pro on **20–30 real Kenyan handwritten scr
 
 **Branch:** `feature/PSL-45-eval-identity`  
 **Labels:** `area-ai-rag`, `type-feature`  
-**Depends on:** PSL-44 merged + Phase 0 benchmark recorded
+**Depends on:** PSL-44 merged ([PSL-50](https://nervustechnologies.atlassian.net/browse/PSL-50) clears the former Phase 0 lab gate)
 
 #### Technical scope
 
 | Item | Detail |
 |------|--------|
-| Vision | Extend `vision-model.ts` to Lite → Flash → Pro per ADR-003 |
+| Vision | Use `gemini-2.5-flash-lite` via `vision-model.ts` (Lite-first per [ADR-003](./adr-003-ai-provider-rag.md)); keep a thin escape hatch for later Flash/Pro if needed — full auto-escalation **out of scope** |
 | Pipeline | Per-page admission # + question numbers; group by admission #; roster validate; amber confirm **before** grading |
 | Flags | Missing-page gap; duplicate admission+question conflict |
 

@@ -1,7 +1,7 @@
 # ADR-003 — AI provider + RAG
 
-**Status:** Accepted (Sprint 2; Sprint 3 chat provider locked 2026-07-06; vision provider updated 2026-07-08)  
-**Related:** PSL-37, PSL-6, PSL-9, PSL-42, PSL-7, PSL-27, PSL-43, PSL-8 (Sprint 5 parent)
+**Status:** Accepted (Sprint 2; Sprint 3 chat provider locked 2026-07-06; vision provider updated 2026-07-08; Sprint 5 Phase 0 deferred 2026-07-10)  
+**Related:** PSL-37, PSL-6, PSL-9, PSL-42, PSL-7, PSL-27, PSL-43, PSL-8 (Sprint 5 parent), PSL-50 (Phase 0 deferral), PSL-45
 
 ## Context
 
@@ -19,13 +19,13 @@ PersonaLearn needs embeddings for RAG, an LLM for co-pilot answers, and a vision
 
 | Tier | Model | Use |
 |------|-------|-----|
-| Default | `gemini-2.5-flash-lite` | Bulk page reads, image upload OCR (Sprint 4), admission/question reads (Sprint 5) |
-| Standard | `gemini-2.5-flash` | Fallback when Lite confidence is low |
-| Escalation | `gemini-2.5-pro` | Amber flags, conflicts, illegible handwriting (~10–20% of pages in Sprint 5) |
+| Default (Sprint 5 ship) | `gemini-2.5-flash-lite` | Admission/question reads (PSL-45+); preferred bulk path |
+| Standard (deferred) | `gemini-2.5-flash` | Optional fallback if Lite accuracy fails in pilot / real scripts |
+| Escalation (deferred) | `gemini-2.5-pro` | Optional for amber/conflict/illegible once evidence warrants |
 
 **Sprint 4 (PSL-43):** TXT via `file.text()`, PDF via `unpdf` (no vision API), JPEG/PNG via Gemini Flash.
 
-**Sprint 5 (PSL-8 children):** All handwriting reads (admission numbers, question numbers, answers) go through the vision LLM tier stack — **not traditional OCR**. Teacher review queue remains the quality gate. Identity/grouping ticket must not open until Phase 0 below is recorded.
+**Sprint 5 (PSL-8 children):** All handwriting reads (admission numbers, question numbers, answers) go through the vision LLM — **not traditional OCR**. **Ship Lite-first** for identity/grouping; teacher amber confirm remains the quality gate. Flash/Pro auto-escalation is a contingency, not a PSL-45 prerequisite (see Phase 0 below).
 
 **Deprecated for vision:** Grok/xAI — no API access; not recommended for production OCR per 2026 benchmarks (hallucination risk). `XAI_API_KEY` / `CHAT_PROVIDER=xai` remain optional for chat experiments only, not the vision path.
 
@@ -37,19 +37,21 @@ PersonaLearn needs embeddings for RAG, an LLM for co-pilot answers, and a vision
 - Env: `VOYAGE_API_KEY`, `VOYAGE_EMBEDDING_MODEL`, `DEEPSEEK_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `CHAT_PROVIDER`.
 - **Testing:** Gemini free tier is sufficient for local dev and QA (see Sprint 4 sign-off). Enable Cloud billing (paid tier) before production — Google does not use paid-tier prompts for model training.
 
-### Sprint 5 Phase 0 — Vision benchmark (gate before identity ticket)
+### Sprint 5 Phase 0 — Vision benchmark (deferred)
 
-**Required before Ticket 2 (identity + grouping) opens:**
+**Decision (2026-07-10, [PSL-50](https://nervustechnologies.atlassian.net/browse/PSL-50)):** Do **not** block [PSL-45](https://nervustechnologies.atlassian.net/browse/PSL-45) on a pre-implementation 20–30 sample Lite→Flash→Pro lab.
 
-1. Collect **20–30 real Kenyan handwritten script page samples** (admission numbers + question numbers visible; mix of clear / messy / missing ID).
-2. Run each page through the tier stack: `gemini-2.5-flash-lite` → escalate to `gemini-2.5-flash` on low confidence → `gemini-2.5-pro` for amber/conflict/illegible cases.
-3. Record in this ADR (or a linked note under PLEARN Architecture):
-   - Admission-number read accuracy per tier
-   - Escalation rate (% pages needing Flash / Pro)
-   - Chosen confidence thresholds for Lite→Flash and Flash→Pro
-4. Sign-off: thresholds accepted before identity PR branch opens.
+| Locked now | Deferred |
+|------------|----------|
+| Default model: `gemini-2.5-flash-lite` | Calibrated Lite→Flash / Flash→Pro confidence thresholds |
+| Amber teacher confirm for missing / unreadable / off-roster IDs (AC-5.4, AC-5.8) | Auto-escalation stack in product code |
+| Synthetic / generated images OK for **pipeline** QA (grouping, amber UI, conflicts) | Accuracy verdict from Gemini-generated handwriting alone |
 
-**Status:** Pending — run during Ticket 1 / before Ticket 2 kickoff.
+**Rationale:** Teacher review is already the quality gate. Lite is the ADR default; escalation can land after real (or pilot) handwriting evidence — synthetic neat handwriting is a weak proxy for Kenyan classroom scripts.
+
+**Follow-up (not a PSL-45 blocker):** If Lite misreads real scripts in QA/pilot, add Flash/Pro fallback (or switch default) and record thresholds here. Prefer a thin model-id / escalate-on-amber escape hatch in PSL-45 so that change is not a rewrite.
+
+**Status:** Complete (deferred) — PSL-45 may open.
 
 ## Mirror in Confluence
 

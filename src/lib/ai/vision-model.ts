@@ -2,7 +2,8 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 
 export const GEMINI_FLASH_MODEL = "gemini-2.5-flash";
-export const GEMINI_FLASH_LITE_MODEL = "gemini-2.5-flash-lite";
+/** Preferred bulk/eval path — replaces retired-for-new-users `gemini-2.5-flash-lite`. */
+export const GEMINI_FLASH_LITE_MODEL = "gemini-3.1-flash-lite";
 
 function clean(value: string | undefined) {
   const trimmed = value?.trim();

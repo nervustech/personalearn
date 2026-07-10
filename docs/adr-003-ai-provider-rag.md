@@ -19,9 +19,9 @@ PersonaLearn needs embeddings for RAG, an LLM for co-pilot answers, and a vision
 
 | Tier | Model | Use |
 |------|-------|-----|
-| Default (Sprint 5 ship) | `gemini-2.5-flash-lite` | Admission/question reads (PSL-45+); preferred bulk path |
-| Standard (deferred) | `gemini-2.5-flash` | Optional fallback if Lite accuracy fails in pilot / real scripts |
-| Escalation (deferred) | `gemini-2.5-pro` | Optional for amber/conflict/illegible once evidence warrants |
+| Default (Sprint 5 ship) | `gemini-3.1-flash-lite` | Admission/question reads (PSL-45+); preferred bulk path |
+| Standard (deferred) | `gemini-2.5-flash` / `gemini-3.5-flash` | Optional fallback if Lite accuracy fails in pilot / real scripts |
+| Escalation (deferred) | `gemini-2.5-pro` / newer Pro | Optional for amber/conflict/illegible once evidence warrants |
 
 **Sprint 4 (PSL-43):** TXT via `file.text()`, PDF via `unpdf` (no vision API), JPEG/PNG via Gemini Flash.
 
@@ -43,7 +43,7 @@ PersonaLearn needs embeddings for RAG, an LLM for co-pilot answers, and a vision
 
 | Locked now | Deferred |
 |------------|----------|
-| Default model: `gemini-2.5-flash-lite` | Calibrated Lite→Flash / Flash→Pro confidence thresholds |
+| Default model: `gemini-3.1-flash-lite` | Calibrated Lite→Flash / Flash→Pro confidence thresholds |
 | Amber teacher confirm for missing / unreadable / off-roster IDs (AC-5.4, AC-5.8) | Auto-escalation stack in product code |
 | Synthetic / generated images OK for **pipeline** QA (grouping, amber UI, conflicts) | Accuracy verdict from Gemini-generated handwriting alone |
 

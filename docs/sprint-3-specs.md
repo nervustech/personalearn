@@ -88,7 +88,7 @@ flowchart TB
 | **4** | [PSL-43](https://nervustechnologies.atlassian.net/browse/PSL-43) | Class resources section — upload any file type | — |
 | **5** | [PSL-8](https://nervustechnologies.atlassian.net/browse/PSL-8) | **Umbrella** — Bulk evaluation + student bridge (do not mega-PR) | — |
 | **5** | [PSL-44](https://nervustechnologies.atlassian.net/browse/PSL-44) | Schema + start + upload; gradable save → assessment | 1st |
-| **5** | [PSL-45](https://nervustechnologies.atlassian.net/browse/PSL-45) | Identity + grouping (Gemini tiered vision) | 2nd |
+| **5** | [PSL-45](https://nervustechnologies.atlassian.net/browse/PSL-45) | Identity + grouping (Gemini Lite-first; Flash/Pro deferred) | 2nd |
 | **5** | [PSL-46](https://nervustechnologies.atlassian.net/browse/PSL-46) | Per-question drafts | 3rd |
 | **5** | [PSL-47](https://nervustechnologies.atlassian.net/browse/PSL-47) | Review queue + sign-off | 4th |
 | **5** | [PSL-48](https://nervustechnologies.atlassian.net/browse/PSL-48) | Roster student profile + `N=1` eval | 5th |
@@ -478,7 +478,7 @@ sequenceDiagram
 
 **Prerequisite (student-facing ask):** every page carries the student's **admission number**. This is a simple classroom habit and it becomes the primary key for the whole evaluation flow.
 
-- **Primary key — admission number per page:** read the admission number on **every** page with the **Gemini tiered vision stack** (Flash-Lite default, Pro escalation) — handwriting recognition is done by the vision LLM, **not traditional OCR** (see reliability note below). Validate each read against the class roster allowlist.
+- **Primary key — admission number per page:** read the admission number on **every** page with **Gemini vision** (`gemini-2.5-flash-lite` default; Flash/Pro auto-escalation deferred per [PSL-50](https://nervustechnologies.atlassian.net/browse/PSL-50) / [ADR-003](./adr-003-ai-provider-rag.md)) — handwriting recognition is done by the vision LLM, **not traditional OCR** (see reliability note below). Validate each read against the class roster allowlist.
 - **Grouping (replaces stack-order segmentation):** group all pages by admission number. Physical stack order is irrelevant — interleaved or shuffled pages reconcile automatically because each page self-identifies.
 - **Identity confidence:** ID present and in roster = **green** (auto-grouped); missing, unreadable, or not-in-roster = **amber** — the agent proposes a best guess (from content continuity / handwriting) and the teacher confirms against the image.
 - **Ordering (secondary signal):** within a student, order pages by detected **question numbers**. Question numbers no longer segment scripts — they only order pages within a student and tell the agent which question each answer belongs to (needed for grading anyway). A page may hold several questions (carries a range).
@@ -486,7 +486,7 @@ sequenceDiagram
 - **Conflict flag:** the same admission number + same question number on two pages flags a conflict (possible second attempt or misread) for the teacher, rather than silently choosing one.
 - **Pipeline order:** resolve identity/grouping for the **whole batch first**; the teacher clears amber identities; only then spend vision calls on per-question grading (no wasted grading on mis-attributed pages).
 
-**Handwriting reliability note:** traditional OCR performed poorly on handwritten scripts in testing; multimodal LLMs read the same handwriting reliably (early tests used Grok; production uses **Gemini tiered vision** per [ADR-003](./adr-003-ai-provider-rag.md)). All handwriting reading — admission numbers, question numbers, and answers — goes through the vision model.
+**Handwriting reliability note:** traditional OCR performed poorly on handwritten scripts in testing; multimodal LLMs read the same handwriting reliably (early tests used Grok; production uses **Gemini Lite-first vision** per [ADR-003](./adr-003-ai-provider-rag.md), with Flash/Pro as a deferred contingency). All handwriting reading — admission numbers, question numbers, and answers — goes through the vision model.
 
 ### Marking scheme
 
@@ -795,7 +795,7 @@ Replace dashboard placeholder with per-student competency from `competency_progr
 | 2 | Bulk-evaluation grouping: **full multi-student stack**, grouped by **admission number on every page** (primary key); physical order irrelevant, shuffled/interleaved pages reconcile |
 | 3 | Identity matching: **admission number per page** validated against roster; missing/unknown ID → amber, teacher confirms against image before grading; duplicate ID+question → conflict flag |
 | 4 | Question numbers are the **secondary signal** — order pages within a student + identify which question is graded (not segmentation); multi-question pages carry a range |
-| 4b | Handwriting read by **Gemini tiered vision, not OCR** — OCR tested poorly; multimodal LLM reads handwriting reliably ([ADR-003](./adr-003-ai-provider-rag.md)) |
+| 4b | Handwriting read by **Gemini vision, not OCR** — Lite-first for Sprint 5 ([PSL-50](https://nervustechnologies.atlassian.net/browse/PSL-50)); Flash/Pro escalation deferred; OCR tested poorly; multimodal LLM reads handwriting reliably ([ADR-003](./adr-003-ai-provider-rag.md)) |
 | 5 | Single-question re-evaluation: **per-question storage** + re-eval touches only that question, with optional teacher instruction |
 | 6 | Marking scheme is a **generated + approved resource**; missing scheme → inform teacher, allow model judgment flagged `ai_estimate` |
 | 7 | Uploads: **any supported type** (MVP: TXT/PDF/image); extend later |

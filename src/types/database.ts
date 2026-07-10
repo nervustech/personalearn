@@ -106,13 +106,23 @@ export type EvaluatedScriptStatus =
   | "drafted"
   | "signed_off";
 
+/** Enriched page entry stored in evaluated_scripts.page_order (PSL-45+). */
+export type EvaluatedScriptPage = {
+  storagePath: string;
+  fileName: string;
+  uploadIndex: number;
+  questionNumbers?: number[];
+  readAdmissionNumber?: string | null;
+  conflict?: boolean;
+};
+
 export type EvaluatedScript = {
   id: string;
   batch_id: string;
   student_id: string | null;
   read_admission_number: string | null;
   match_confidence: "high" | "low" | null;
-  page_order: unknown[];
+  page_order: EvaluatedScriptPage[];
   status: EvaluatedScriptStatus;
   created_at: string;
 };

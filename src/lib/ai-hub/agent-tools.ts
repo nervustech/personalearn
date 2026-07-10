@@ -5,6 +5,11 @@ import { getChatModel } from "@/lib/ai/llm";
 import { ingestTxtResource } from "@/lib/ai/ingest-resource";
 import { queryClassResources } from "@/lib/ai/rag";
 import type { ClassContext } from "@/lib/ai-hub/class-context";
+import {
+  ensureAssessmentForGradableResource,
+  shouldPublishAssessment,
+} from "@/lib/evaluation/create-assessment-from-resource";
+import type { GradableResourceType } from "@/lib/evaluation/gradable";
 
 export const RESOURCE_TYPES = [
   "scheme_of_work",
@@ -71,21 +76,34 @@ export async function executeSaveResource(
 
   try {
     const fileName = sanitizeResourceFileName(input.title);
+    const title = input.title.trim();
     const result = await ingestTxtResource(deps.supabase, {
       classId: deps.classId,
       fileName,
       text: content,
-      title: input.title.trim(),
+      title,
       aiGenerated: true,
       resourceType: input.resourceType,
     });
 
+    let assessmentId: string | undefined;
+    if (shouldPublishAssessment(input.resourceType)) {
+      const linked = await ensureAssessmentForGradableResource(deps.supabase, {
+        classId: deps.classId,
+        resourceId: result.resourceId,
+        title,
+        resourceType: input.resourceType as GradableResourceType,
+      });
+      assessmentId = linked.assessmentId;
+    }
+
     return {
       saved: true,
       resourceId: result.resourceId,
-      title: input.title.trim(),
+      title,
       resourceType: input.resourceType,
       chunkCount: result.chunkCount,
+      ...(assessmentId ? { assessmentId } : {}),
     };
   } catch {
     return userSafeError("Could not save the resource. Please try again.");

@@ -69,3 +69,67 @@ export type ConversationMessage = {
   tool_calls: Record<string, unknown> | null;
   created_at: string;
 };
+
+export type AssessmentType =
+  | "practical"
+  | "written"
+  | "formative"
+  | "summative";
+
+export type Assessment = {
+  id: string;
+  class_id: string;
+  title: string;
+  description: string | null;
+  linked_strand: string | null;
+  linked_sub_strand: string | null;
+  type: AssessmentType | null;
+  resource_id: string | null;
+  created_at: string;
+};
+
+export type EvaluationBatchStatus = "draft" | "in_review" | "signed_off";
+
+export type EvaluationBatch = {
+  id: string;
+  class_id: string;
+  assessment_id: string | null;
+  marking_scheme_resource_id: string | null;
+  status: EvaluationBatchStatus;
+  created_at: string;
+};
+
+export type EvaluatedScriptStatus =
+  | "pending"
+  | "identity_amber"
+  | "identity_cleared"
+  | "drafted"
+  | "signed_off";
+
+export type EvaluatedScript = {
+  id: string;
+  batch_id: string;
+  student_id: string | null;
+  read_admission_number: string | null;
+  match_confidence: "high" | "low" | null;
+  page_order: unknown[];
+  status: EvaluatedScriptStatus;
+  created_at: string;
+};
+
+export type QuestionEvaluationStatus =
+  | "ai_draft"
+  | "ai_estimate"
+  | "teacher_edited"
+  | "reevaluated";
+
+export type QuestionEvaluation = {
+  id: string;
+  script_id: string;
+  question_number: string;
+  awarded: number | null;
+  max: number | null;
+  feedback: string | null;
+  status: QuestionEvaluationStatus;
+  created_at: string;
+};

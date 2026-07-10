@@ -16,6 +16,7 @@ import {
   useConversations,
 } from "@/lib/hooks/use-conversations";
 import { resourcesQueryKey } from "@/lib/hooks/use-resources";
+import { assessmentsQueryKey } from "@/lib/hooks/use-evaluation";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { cn } from "@/lib/utils";
 
@@ -112,6 +113,10 @@ export function AiHubChat() {
         // Agent save_resource writes to class resources — keep the class page in sync.
         void queryClient.invalidateQueries({
           queryKey: resourcesQueryKey(activeClass.id),
+        });
+        // Gradable saves also create assessments (AC-5.16).
+        void queryClient.invalidateQueries({
+          queryKey: assessmentsQueryKey(activeClass.id),
         });
       }
     },

@@ -36,6 +36,13 @@ vi.mock("@/lib/ai/ingest-resource", () => ({
   ingestTxtResource: vi.fn(),
 }));
 
+vi.mock("@/lib/evaluation/create-assessment-from-resource", () => ({
+  ensureAssessmentForGradableResource: vi.fn(),
+  shouldPublishAssessment: vi.fn((type: string) =>
+    ["assignment", "quiz", "examination"].includes(type)
+  ),
+}));
+
 vi.mock("ai", async () => {
   const actual = await vi.importActual<typeof import("ai")>("ai");
   return {
@@ -48,10 +55,12 @@ vi.mock("ai", async () => {
 
 import { queryClassResources } from "@/lib/ai/rag";
 import { ingestTxtResource } from "@/lib/ai/ingest-resource";
+import { ensureAssessmentForGradableResource } from "@/lib/evaluation/create-assessment-from-resource";
 import { generateText } from "ai";
 
 const mockQueryClassResources = vi.mocked(queryClassResources);
 const mockIngestTxtResource = vi.mocked(ingestTxtResource);
+const mockEnsureAssessment = vi.mocked(ensureAssessmentForGradableResource);
 const mockGenerateText = vi.mocked(generateText);
 
 describe("executeSearchClassResources", () => {
@@ -208,6 +217,10 @@ describe("executeSaveResource", () => {
       chunkCount: 3,
       title: "Fractions Quiz",
     });
+    mockEnsureAssessment.mockResolvedValue({
+      assessmentId: "assess-1",
+      created: true,
+    });
 
     const result = await executeSaveResource(deps, {
       title: "Fractions Quiz",
@@ -222,6 +235,7 @@ describe("executeSaveResource", () => {
       title: "Fractions Quiz",
       resourceType: "quiz",
       chunkCount: 3,
+      assessmentId: "assess-1",
     });
     expect(mockIngestTxtResource).toHaveBeenCalledWith(deps.supabase, {
       classId: "class-1",
@@ -231,6 +245,36 @@ describe("executeSaveResource", () => {
       aiGenerated: true,
       resourceType: "quiz",
     });
+    expect(mockEnsureAssessment).toHaveBeenCalledWith(deps.supabase, {
+      classId: "class-1",
+      resourceId: "res-1",
+      title: "Fractions Quiz",
+      resourceType: "quiz",
+    });
+  });
+
+  it("does not create an assessment for non-gradable types", async () => {
+    mockIngestTxtResource.mockResolvedValue({
+      resourceId: "res-notes",
+      chunkCount: 1,
+      title: "Lesson notes",
+    });
+
+    const result = await executeSaveResource(deps, {
+      title: "Lesson notes",
+      resourceType: "lesson_notes",
+      content: "## Notes",
+      teacherConfirmed: true,
+    });
+
+    expect(result).toEqual({
+      saved: true,
+      resourceId: "res-notes",
+      title: "Lesson notes",
+      resourceType: "lesson_notes",
+      chunkCount: 1,
+    });
+    expect(mockEnsureAssessment).not.toHaveBeenCalled();
   });
 
   it("returns a user-safe error when ingest fails", async () => {

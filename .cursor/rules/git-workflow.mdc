@@ -34,14 +34,29 @@ Examples: `feature/PSL-4-teacher-auth`, `fix/PSL-42-login-redirect`, `chore/PSL-
 ## Commits
 
 - **Conventional prefix + ticket:** `feat:`, `fix:`, `chore:`, `docs:` — each with `(PSL-N)`
-- **Focus on why**, one ticket per commit when possible.
+- **Focus on why** in the message body when useful.
 - **Stage only ticket-scoped files** — never `git add -A` when splitting or committing; exclude unrelated changes (e.g. `.cursor/`).
 - **Never commit secrets** (`.env.local`, credentials).
 
-```
-feat: add teacher authentication with Google and email (PSL-4)
+### Multiple commits on the feature branch (preferred)
 
-Wire login UI, OAuth callback, session middleware, and teacher profile provisioning.
+Prefer **several focused commits as work lands**, not one mega-commit at the end of the ticket.
+
+- **Align commits to ACs or coherent slices** when practical (e.g. AC-5.3 grouping, then AC-5.4 amber path, then tests). ACs are a guide, not a hard 1:1 rule — a commit may cover one AC, part of an AC, or a vertical slice that still builds/tests.
+- **Commit when a slice is green** (builds, relevant tests pass) so history supports logging, bisect, and PR review.
+- **One ticket only** — every commit on the branch still belongs to the same `PSL-N`; do not mix tickets.
+- **Squash merge still applies** — intermediate commits are for branch/PR history and agent logging; `develop` keeps **one** squashed commit per ticket/PR.
+
+```
+feat: group eval pages by admission number (PSL-45)
+
+AC-5.3 — Lite vision read + roster validate + per-student grouping.
+```
+
+```
+feat: amber identity confirm before grading (PSL-45)
+
+AC-5.4 / AC-5.8 — flag low-confidence matches; teacher reassign dropdown.
 ```
 
 ## Pull requests
@@ -67,6 +82,7 @@ Independent tickets can PR to `develop` in parallel; dependent tickets wait for 
 - [ ] Correct branch type and name (`feature/`, `fix/`, `chore/`, or `docs/` + `PSL-N`)
 - [ ] Branched from current `develop` (not working on `develop`/`main`)
 - [ ] Single-ticket scope in diff
+- [ ] Multiple focused commits as ACs/slices land (not one mega-commit at the end)
 - [ ] Rebased on current `develop` before PR
 - [ ] PR targets `develop`, not `main`
 - [ ] `area-*` + `type-*` labels on PR and Jira (synced) — see **`sdlc-pr-lifecycle`** skill

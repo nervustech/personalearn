@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { useResources } from "@/lib/hooks/use-resources";
 import {
   useAssessments,
   useCreateEvaluationBatch,
+  useProcessEvaluationIdentity,
   useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
 import { isGradableResourceType } from "@/lib/evaluation/gradable";
@@ -22,6 +24,7 @@ type StartEvaluationDialogProps = {
 type SchemeMode = "attach" | "generate" | "none";
 
 export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [assessmentId, setAssessmentId] = useState("");
@@ -37,6 +40,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const { data: resources } = useResources(classId);
   const createBatch = useCreateEvaluationBatch(classId);
   const uploadPages = useUploadEvaluationPages(classId);
+  const processIdentity = useProcessEvaluationIdentity(classId);
 
   const markingSchemes = useMemo(
     () =>
@@ -55,7 +59,10 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     [resources, assessments]
   );
 
-  const pending = createBatch.isPending || uploadPages.isPending;
+  const pending =
+    createBatch.isPending ||
+    uploadPages.isPending ||
+    processIdentity.isPending;
 
   function resetForm() {
     setStep(0);
@@ -68,6 +75,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     setFormError(null);
     createBatch.reset();
     uploadPages.reset();
+    processIdentity.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -122,9 +130,14 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
         batchId: createdBatchId,
         files: selectedFiles,
       });
+      await processIdentity.mutateAsync(createdBatchId);
+      const batchId = createdBatchId;
       handleOpenChange(false);
+      router.push(`/classes/${classId}/evaluations/${batchId}`);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Upload failed");
+      setFormError(
+        error instanceof Error ? error.message : "Upload or identity failed"
+      );
     }
   }
 
@@ -280,7 +293,8 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
             <>
               <p className="text-sm text-muted-foreground">
                 Upload scanned script pages as JPEG or PNG (any order, max 5 MB
-                each). Identity grouping runs in a later step.
+                each). After upload we read admission numbers and open identity
+                review.
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>
@@ -323,7 +337,9 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                   disabled={pending || selectedFiles.length === 0}
                   onClick={handleUpload}
                 >
-                  {uploadPages.isPending ? "Uploading…" : "Upload & queue"}
+                  {uploadPages.isPending || processIdentity.isPending
+                    ? "Uploading & reading…"
+                    : "Upload & review identity"}
                 </Button>
               </div>
             </>

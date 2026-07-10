@@ -29,7 +29,7 @@ PSL-N — branch created: {branch-name}
 
 ## Implement
 
-7. Code and test. Commit **only when the user asks** (see user commit rule).
+7. Code and test. Commit **only when the user asks** (see user commit rule). When committing, prefer **multiple focused commits** aligned to ACs or coherent green slices — not one mega-commit at ticket end (see `git-workflow.mdc`). Squash merge still yields one commit on `develop`.
 8. Keep diff scoped to one ticket.
 
 ## Open PR

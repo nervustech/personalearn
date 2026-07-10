@@ -1,0 +1,335 @@
+"use client";
+
+import { useMemo, useRef, useState } from "react";
+import { ClipboardCheck } from "lucide-react";
+import { useResources } from "@/lib/hooks/use-resources";
+import {
+  useAssessments,
+  useCreateEvaluationBatch,
+  useUploadEvaluationPages,
+} from "@/lib/hooks/use-evaluation";
+import { isGradableResourceType } from "@/lib/evaluation/gradable";
+import { RESOURCE_TYPE_LABELS } from "@/lib/resources/format";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+
+type StartEvaluationDialogProps = {
+  classId: string;
+};
+
+type SchemeMode = "attach" | "generate" | "none";
+
+export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState(0);
+  const [assessmentId, setAssessmentId] = useState("");
+  const [resourceId, setResourceId] = useState("");
+  const [schemeMode, setSchemeMode] = useState<SchemeMode>("attach");
+  const [markingSchemeResourceId, setMarkingSchemeResourceId] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: assessments } = useAssessments(classId);
+  const { data: resources } = useResources(classId);
+  const createBatch = useCreateEvaluationBatch(classId);
+  const uploadPages = useUploadEvaluationPages(classId);
+
+  const markingSchemes = useMemo(
+    () =>
+      (resources ?? []).filter((r) => r.resource_type === "marking_scheme"),
+    [resources]
+  );
+
+  const gradableResources = useMemo(
+    () =>
+      (resources ?? []).filter(
+        (r) =>
+          r.resource_type &&
+          isGradableResourceType(r.resource_type) &&
+          !(assessments ?? []).some((a) => a.resource_id === r.id)
+      ),
+    [resources, assessments]
+  );
+
+  const pending = createBatch.isPending || uploadPages.isPending;
+
+  function resetForm() {
+    setStep(0);
+    setAssessmentId("");
+    setResourceId("");
+    setSchemeMode("attach");
+    setMarkingSchemeResourceId("");
+    setSelectedFiles([]);
+    setCreatedBatchId(null);
+    setFormError(null);
+    createBatch.reset();
+    uploadPages.reset();
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) resetForm();
+  }
+
+  async function handleCreateBatch() {
+    setFormError(null);
+    if (!assessmentId && !resourceId) {
+      setFormError("Select an assessment or a gradable resource.");
+      return;
+    }
+    if (schemeMode === "generate") {
+      setFormError(
+        "Generate and save a marking scheme in AI Hub first, then attach it here."
+      );
+      return;
+    }
+    if (schemeMode === "attach" && !markingSchemeResourceId) {
+      setFormError("Select a marking scheme, or proceed without one.");
+      return;
+    }
+
+    try {
+      const batch = await createBatch.mutateAsync({
+        assessmentId: assessmentId || null,
+        resourceId: assessmentId ? null : resourceId || null,
+        markingSchemeResourceId:
+          schemeMode === "attach" ? markingSchemeResourceId : null,
+        proceedWithoutScheme: schemeMode === "none",
+      });
+      setCreatedBatchId(batch.id);
+      setStep(1);
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : "Could not start evaluation"
+      );
+    }
+  }
+
+  async function handleUpload() {
+    setFormError(null);
+    if (!createdBatchId || !selectedFiles.length) {
+      setFormError("Choose at least one scan image.");
+      return;
+    }
+
+    try {
+      await uploadPages.mutateAsync({
+        batchId: createdBatchId,
+        files: selectedFiles,
+      });
+      handleOpenChange(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Upload failed");
+    }
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => setOpen(true)}
+      >
+        <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
+        Start evaluation
+      </Button>
+
+      <Dialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title="Start evaluation"
+        description="Pick an assessment and marking scheme, then upload scanned script images."
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Step {step + 1} of 2
+          </p>
+
+          {step === 0 ? (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="eval-assessment">Assessment</Label>
+                <Select
+                  id="eval-assessment"
+                  value={assessmentId}
+                  onChange={(event) => {
+                    setAssessmentId(event.target.value);
+                    if (event.target.value) setResourceId("");
+                  }}
+                >
+                  <option value="">Select an assessment…</option>
+                  {(assessments ?? []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.title}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              {!assessmentId && gradableResources.length > 0 ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="eval-resource">
+                    Or create from class resource
+                  </Label>
+                  <Select
+                    id="eval-resource"
+                    value={resourceId}
+                    onChange={(event) => setResourceId(event.target.value)}
+                  >
+                    <option value="">Select a resource…</option>
+                    {gradableResources.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                        {r.resource_type
+                          ? ` (${RESOURCE_TYPE_LABELS[r.resource_type]})`
+                          : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              ) : null}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="eval-scheme-mode">Marking scheme</Label>
+                <Select
+                  id="eval-scheme-mode"
+                  value={schemeMode}
+                  onChange={(event) =>
+                    setSchemeMode(event.target.value as SchemeMode)
+                  }
+                >
+                  <option value="attach">Attach existing scheme</option>
+                  <option value="generate">Generate one in AI Hub</option>
+                  <option value="none">Proceed without a scheme</option>
+                </Select>
+              </div>
+
+              {schemeMode === "attach" ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="eval-scheme">Scheme resource</Label>
+                  <Select
+                    id="eval-scheme"
+                    value={markingSchemeResourceId}
+                    onChange={(event) =>
+                      setMarkingSchemeResourceId(event.target.value)
+                    }
+                  >
+                    <option value="">Select a marking scheme…</option>
+                    {markingSchemes.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                      </option>
+                    ))}
+                  </Select>
+                  {markingSchemes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No marking schemes in this class yet. Generate one in AI
+                      Hub, or proceed without a scheme.
+                    </p>
+                  ) : null}
+                </div>
+              ) : schemeMode === "generate" ? (
+                <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  Open{" "}
+                  <a
+                    href="/ai-hub"
+                    className="font-medium text-foreground underline underline-offset-2"
+                  >
+                    AI Hub
+                  </a>
+                  , ask the assistant to generate a marking scheme, confirm
+                  save, then return here and attach the new scheme.
+                </p>
+              ) : (
+                <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
+                  AI will grade using its own judgment, which is less reliable.
+                  All resulting marks will be flagged as AI estimates.
+                </p>
+              )}
+
+              {formError ? (
+                <p className="text-sm text-destructive">{formError}</p>
+              ) : null}
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => handleOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={pending || schemeMode === "generate"}
+                  onClick={handleCreateBatch}
+                >
+                  {createBatch.isPending ? "Starting…" : "Next: upload scans"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Upload scanned script pages as JPEG or PNG (any order, max 5 MB
+                each). Identity grouping runs in a later step.
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="eval-files">Scan images</Label>
+                <input
+                  ref={fileInputRef}
+                  id="eval-files"
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                  className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm file:font-medium"
+                  disabled={pending}
+                  onChange={(event) => {
+                    setSelectedFiles(Array.from(event.target.files ?? []));
+                    setFormError(null);
+                  }}
+                />
+                {selectedFiles.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {selectedFiles.length} file
+                    {selectedFiles.length === 1 ? "" : "s"} selected
+                  </p>
+                ) : null}
+              </div>
+
+              {formError ? (
+                <p className="text-sm text-destructive">{formError}</p>
+              ) : null}
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={pending}
+                  onClick={() => setStep(0)}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="button"
+                  disabled={pending || selectedFiles.length === 0}
+                  onClick={handleUpload}
+                >
+                  {uploadPages.isPending ? "Uploading…" : "Upload & queue"}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Dialog>
+    </>
+  );
+}

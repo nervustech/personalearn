@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResourceListTable } from "@/components/classes/resource-list-table";
 import { ResourceUploadDialog } from "@/components/classes/resource-upload-dialog";
+import { StartEvaluationDialog } from "@/components/classes/start-evaluation-dialog";
 import { cn } from "@/lib/utils";
 
 type ClassResourcesSectionProps = {
@@ -37,7 +38,10 @@ export function ClassResourcesSection({
     >
       <CardHeader className="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle className="text-lg">Class resources</CardTitle>
-        <ResourceUploadDialog classId={classId} />
+        <div className="flex flex-wrap items-center gap-2">
+          <StartEvaluationDialog classId={classId} />
+          <ResourceUploadDialog classId={classId} />
+        </div>
       </CardHeader>
       <CardContent
         className={cn(

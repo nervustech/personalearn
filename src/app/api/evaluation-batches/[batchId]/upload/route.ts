@@ -3,7 +3,8 @@ import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { requireTeacherEvaluationBatch } from "@/lib/evaluation/batches";
 import { createClient } from "@/lib/supabase/server";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+/** Safety net after client compress; phone originals may still arrive briefly. */
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/jpg"]);
 
 function authStatus(message: string) {
@@ -73,7 +74,7 @@ export async function POST(
       }
       if (file.size > MAX_IMAGE_BYTES) {
         return NextResponse.json(
-          { error: `File too large (max 5 MB): ${file.name}` },
+          { error: `File too large (max 15 MB): ${file.name}` },
           { status: 400 }
         );
       }

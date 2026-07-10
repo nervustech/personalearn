@@ -10,6 +10,7 @@ import {
   useProcessEvaluationIdentity,
   useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
+import { compressEvalScanImages } from "@/lib/evaluation/compress-eval-image";
 import { isGradableResourceType } from "@/lib/evaluation/gradable";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resources/format";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,8 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [compressing, setCompressing] = useState(false);
 
   const { data: assessments } = useAssessments(classId);
   const { data: resources } = useResources(classId);
@@ -62,7 +65,8 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const pending =
     createBatch.isPending ||
     uploadPages.isPending ||
-    processIdentity.isPending;
+    processIdentity.isPending ||
+    compressing;
 
   function resetForm() {
     setStep(0);
@@ -126,15 +130,19 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     }
 
     try {
+      setCompressing(true);
+      const files = await compressEvalScanImages(selectedFiles);
+      setCompressing(false);
       await uploadPages.mutateAsync({
         batchId: createdBatchId,
-        files: selectedFiles,
+        files,
       });
       await processIdentity.mutateAsync(createdBatchId);
       const batchId = createdBatchId;
       handleOpenChange(false);
       router.push(`/classes/${classId}/evaluations/${batchId}`);
     } catch (error) {
+      setCompressing(false);
       setFormError(
         error instanceof Error ? error.message : "Upload or identity failed"
       );
@@ -292,9 +300,10 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Upload scanned script pages as JPEG or PNG (any order, max 5 MB
-                each). After upload we read admission numbers and open identity
-                review.
+                Upload scanned script pages as JPEG or PNG (any order). Large
+                phone photos are resized in the browser first so handwriting
+                stays readable. After upload we read admission numbers and open
+                identity review.
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>
@@ -337,9 +346,11 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                   disabled={pending || selectedFiles.length === 0}
                   onClick={handleUpload}
                 >
-                  {uploadPages.isPending || processIdentity.isPending
-                    ? "Uploading & reading…"
-                    : "Upload & review identity"}
+                  {compressing
+                    ? "Preparing images…"
+                    : uploadPages.isPending || processIdentity.isPending
+                      ? "Uploading & reading…"
+                      : "Upload & review identity"}
                 </Button>
               </div>
             </>

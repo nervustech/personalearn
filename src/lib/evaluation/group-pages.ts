@@ -1,4 +1,9 @@
 import { normalizeAdmissionNumber } from "@/lib/evaluation/normalize-admission";
+import {
+  compareQuestionLabels,
+  hasIntegerQuestionGap,
+  normalizeQuestionLabel,
+} from "@/lib/evaluation/normalize-question";
 import type {
   EvaluatedScriptPage,
   EvaluatedScriptStatus,
@@ -15,7 +20,7 @@ export type PageIdentityInput = {
   fileName: string;
   uploadIndex: number;
   admissionNumber: string | null;
-  questionNumbers: number[];
+  questionNumbers: string[];
   contentHash?: string;
   duplicate?: boolean;
 };
@@ -41,26 +46,25 @@ function buildRosterMap(roster: RosterStudent[]): Map<string, RosterStudent> {
   return map;
 }
 
-function primaryQuestion(page: EvaluatedScriptPage): number {
-  const nums = page.questionNumbers ?? [];
-  return nums.length ? Math.min(...nums) : Number.POSITIVE_INFINITY;
+function coerceLabels(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => normalizeQuestionLabel(item))
+    .filter((x): x is string => Boolean(x))
+    .sort(compareQuestionLabels);
 }
 
-function hasQuestionGap(questionNumbers: number[]): boolean {
-  const unique = [...new Set(questionNumbers)].sort((a, b) => a - b);
-  if (unique.length < 2) return false;
-  for (let i = 1; i < unique.length; i++) {
-    if (unique[i]! - unique[i - 1]! > 1) return true;
-  }
-  return false;
+function primaryQuestion(page: EvaluatedScriptPage): string | null {
+  const labels = coerceLabels(page.questionNumbers);
+  return labels.length ? labels[0]! : null;
 }
 
-/** Same admission + same question number on two pages (AC-5.12). */
+/** Same admission + same question label on two pages (AC-5.12). */
 function markQuestionConflicts(pages: EvaluatedScriptPage[]): boolean {
-  const seen = new Map<number, number>();
+  const seen = new Map<string, number>();
   let hasConflict = false;
   for (const page of pages) {
-    for (const q of page.questionNumbers ?? []) {
+    for (const q of coerceLabels(page.questionNumbers)) {
       seen.set(q, (seen.get(q) ?? 0) + 1);
     }
   }
@@ -70,7 +74,7 @@ function markQuestionConflicts(pages: EvaluatedScriptPage[]): boolean {
   if (conflictQuestions.size === 0) return false;
 
   for (const page of pages) {
-    if ((page.questionNumbers ?? []).some((q) => conflictQuestions.has(q))) {
+    if (coerceLabels(page.questionNumbers).some((q) => conflictQuestions.has(q))) {
       page.conflict = true;
       hasConflict = true;
     }
@@ -195,14 +199,18 @@ export function groupPagesByAdmission(
       uploadIndex: p.uploadIndex,
       contentHash: p.contentHash,
       duplicate: p.duplicate,
-      questionNumbers: [...p.questionNumbers].sort((a, b) => a - b),
+      questionNumbers: coerceLabels(p.questionNumbers),
       readAdmissionNumber: normalizeAdmissionNumber(p.admissionNumber),
     }));
 
     pageOrder.sort((a, b) => {
       const qa = primaryQuestion(a);
       const qb = primaryQuestion(b);
-      if (qa !== qb) return qa - qb;
+      if (qa == null && qb == null) return a.uploadIndex - b.uploadIndex;
+      if (qa == null) return 1;
+      if (qb == null) return -1;
+      const cmp = compareQuestionLabels(qa, qb);
+      if (cmp !== 0) return cmp;
       return a.uploadIndex - b.uploadIndex;
     });
 
@@ -222,8 +230,10 @@ export function groupPagesByAdmission(
       }
     }
     const hasConflict = qConflict || byteConflict || inheritedConflict;
-    const allQuestions = pageOrder.flatMap((p) => p.questionNumbers ?? []);
-    const missingPageWarning = hasQuestionGap(allQuestions);
+    const allQuestions = pageOrder.flatMap((p) =>
+      coerceLabels(p.questionNumbers)
+    );
+    const missingPageWarning = hasIntegerQuestionGap(allQuestions);
 
     const highMatch = Boolean(rosterHit) && !hasConflict && !isUnmatched;
     drafts.push({
@@ -298,7 +308,9 @@ function markCrossDraftByteConflicts(drafts: GroupedScriptDraft[]): void {
 export function scriptHasMissingPageWarning(
   pageOrder: EvaluatedScriptPage[]
 ): boolean {
-  return hasQuestionGap(pageOrder.flatMap((p) => p.questionNumbers ?? []));
+  return hasIntegerQuestionGap(
+    pageOrder.flatMap((p) => coerceLabels(p.questionNumbers))
+  );
 }
 
 export function scriptHasConflict(pageOrder: EvaluatedScriptPage[]): boolean {

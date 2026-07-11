@@ -26,7 +26,18 @@ describe("parseScriptPageReadJson", () => {
       parseScriptPageReadJson(
         '```json\n{"admission_number":"A001","question_numbers":[2,1]}\n```'
       )
-    ).toEqual({ admissionNumber: "A001", questionNumbers: [1, 2] });
+    ).toEqual({ admissionNumber: "A001", questionNumbers: ["1", "2"] });
+  });
+
+  it("parses part and letter labels", () => {
+    expect(
+      parseScriptPageReadJson(
+        '{"admission_number":"A001","question_numbers":["1.a","1(b)","a"]}'
+      )
+    ).toEqual({
+      admissionNumber: "A001",
+      questionNumbers: ["1a", "1b", "a"],
+    });
   });
 
   it("returns empty on garbage", () => {
@@ -46,21 +57,21 @@ describe("groupPagesByAdmission", () => {
           fileName: "c.jpg",
           uploadIndex: 0,
           admissionNumber: "A002",
-          questionNumbers: [2],
+          questionNumbers: ["2"],
         },
         {
           storagePath: "p1",
           fileName: "a.jpg",
           uploadIndex: 1,
           admissionNumber: "A001",
-          questionNumbers: [3],
+          questionNumbers: ["3"],
         },
         {
           storagePath: "p2",
           fileName: "b.jpg",
           uploadIndex: 2,
           admissionNumber: "a001",
-          questionNumbers: [1],
+          questionNumbers: ["1"],
         },
       ],
       roster
@@ -86,14 +97,14 @@ describe("groupPagesByAdmission", () => {
           fileName: "x.jpg",
           uploadIndex: 0,
           admissionNumber: null,
-          questionNumbers: [1],
+          questionNumbers: ["1"],
         },
         {
           storagePath: "y",
           fileName: "y.jpg",
           uploadIndex: 1,
           admissionNumber: "Z999",
-          questionNumbers: [1],
+          questionNumbers: ["1"],
         },
       ],
       roster
@@ -113,14 +124,14 @@ describe("groupPagesByAdmission", () => {
           fileName: "a.jpg",
           uploadIndex: 0,
           admissionNumber: "A001",
-          questionNumbers: [1],
+          questionNumbers: ["1"],
         },
         {
           storagePath: "b",
           fileName: "b.jpg",
           uploadIndex: 1,
           admissionNumber: "A001",
-          questionNumbers: [1],
+          questionNumbers: ["1"],
         },
       ],
       roster
@@ -144,14 +155,14 @@ describe("groupPagesByAdmission", () => {
           fileName: "a.jpg",
           uploadIndex: 0,
           admissionNumber: "A001",
-          questionNumbers: [1],
+          questionNumbers: ["1"],
         },
         {
           storagePath: "b",
           fileName: "b.jpg",
           uploadIndex: 1,
           admissionNumber: "A001",
-          questionNumbers: [3],
+          questionNumbers: ["3"],
         },
       ],
       roster
@@ -202,7 +213,7 @@ describe("groupPagesByAdmission", () => {
           fileName: "with-id.jpg",
           uploadIndex: 0,
           admissionNumber: "A001",
-          questionNumbers: [1],
+          questionNumbers: ["1"],
           contentHash: "samehash",
         },
         {

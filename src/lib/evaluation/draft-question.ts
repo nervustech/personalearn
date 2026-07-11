@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { getEvalVisionModel, requireGoogleGenerativeAiApiKey } from "@/lib/ai/vision-model";
+import { parseQuestionLabels } from "@/lib/evaluation/normalize-question";
 import type { QuestionEvaluationStatus } from "@/types/database";
 
 export type DraftPageImage = {
@@ -55,32 +56,14 @@ export function parseDraftQuestionJson(text: string): DraftQuestionResult {
   }
 }
 
-function parseQuestionListJson(text: string): number[] {
-  const trimmed = text.trim();
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return [];
-  try {
-    const parsed = JSON.parse(jsonMatch[0]) as { question_numbers?: unknown };
-    if (!Array.isArray(parsed.question_numbers)) return [];
-    const nums = parsed.question_numbers
-      .map((n) =>
-        typeof n === "number" ? n : Number.parseInt(String(n), 10)
-      )
-      .filter((n) => Number.isFinite(n) && n > 0);
-    return [...new Set(nums)].sort((a, b) => a - b);
-  } catch {
-    return [];
-  }
-}
-
 function buildGradePrompt(
-  questionNumber: number,
+  questionLabel: string,
   schemeText: string | null
 ): string {
   if (schemeText) {
     return `You are grading one question from a scanned Kenyan classroom exam/assignment script.
 
-Grade ONLY question ${questionNumber} using the marking scheme below.
+Grade ONLY question "${questionLabel}" (this may be a part such as 1a, a letter such as b, or a section label) using the marking scheme below.
 
 Marking scheme:
 ---
@@ -97,7 +80,7 @@ No markdown.`;
 
   return `You are estimating marks for one question from a scanned Kenyan classroom exam/assignment script.
 
-There is NO marking scheme. Use best judgment for question ${questionNumber}. Marks are lower confidence (AI estimate).
+There is NO marking scheme. Use best judgment for question "${questionLabel}". Marks are lower confidence (AI estimate).
 
 Return ONLY valid JSON with keys:
 - awarded (number — estimated marks awarded)
@@ -109,7 +92,7 @@ No markdown.`;
 
 export async function draftQuestionFromImages(input: {
   pages: DraftPageImage[];
-  questionNumber: number;
+  questionLabel: string;
   schemeText: string | null;
 }): Promise<DraftQuestionResult> {
   requireGoogleGenerativeAiApiKey();
@@ -134,7 +117,7 @@ export async function draftQuestionFromImages(input: {
           })),
           {
             type: "text" as const,
-            text: buildGradePrompt(input.questionNumber, input.schemeText),
+            text: buildGradePrompt(input.questionLabel, input.schemeText),
           },
         ],
       },
@@ -144,10 +127,10 @@ export async function draftQuestionFromImages(input: {
   return parseDraftQuestionJson(text);
 }
 
-/** When identity left no question numbers, ask vision to list them from all pages. */
+/** When identity left no question labels, ask vision to list them from all pages. */
 export async function listQuestionsFromImages(
   pages: DraftPageImage[]
-): Promise<number[]> {
+): Promise<string[]> {
   requireGoogleGenerativeAiApiKey();
   if (pages.length === 0) return [];
 
@@ -164,8 +147,9 @@ export async function listQuestionsFromImages(
           })),
           {
             type: "text" as const,
-            text: `List every question number visible across these scanned script pages.
-Return ONLY valid JSON: { "question_numbers": [1, 2, ...] }
+            text: `List every question label visible across these scanned script pages.
+Include parts and letters when present (e.g. "1", "1a", "1.b", "a", "b", "sectiona").
+Return ONLY valid JSON: { "question_numbers": ["1a", "1b", ...] }
 Empty array if none found. No markdown.`,
           },
         ],
@@ -173,5 +157,13 @@ Empty array if none found. No markdown.`,
     ],
   });
 
-  return parseQuestionListJson(text);
+  const trimmed = text.trim();
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return [];
+  try {
+    const parsed = JSON.parse(jsonMatch[0]) as { question_numbers?: unknown };
+    return parseQuestionLabels(parsed.question_numbers);
+  } catch {
+    return [];
+  }
 }

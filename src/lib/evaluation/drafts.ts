@@ -6,6 +6,10 @@ import {
   type DraftPageImage,
 } from "@/lib/evaluation/draft-question";
 import { loadMarkingSchemeText } from "@/lib/evaluation/load-marking-scheme";
+import {
+  compareQuestionLabels,
+  normalizeQuestionLabel,
+} from "@/lib/evaluation/normalize-question";
 import type {
   EvaluatedScript,
   EvaluatedScriptPage,
@@ -30,14 +34,21 @@ function asPages(pageOrder: unknown): EvaluatedScriptPage[] {
   return pageOrder as EvaluatedScriptPage[];
 }
 
-function uniqueQuestionNumbers(pages: EvaluatedScriptPage[]): number[] {
-  const set = new Set<number>();
+function coerceLabels(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => normalizeQuestionLabel(item))
+    .filter((x): x is string => Boolean(x));
+}
+
+function uniqueQuestionLabels(pages: EvaluatedScriptPage[]): string[] {
+  const set = new Set<string>();
   for (const page of pages) {
-    for (const q of page.questionNumbers ?? []) {
-      if (Number.isFinite(q) && q > 0) set.add(q);
+    for (const q of coerceLabels(page.questionNumbers)) {
+      set.add(q);
     }
   }
-  return [...set].sort((a, b) => a - b);
+  return [...set].sort(compareQuestionLabels);
 }
 
 async function downloadPageBytes(
@@ -67,10 +78,10 @@ async function downloadPageBytes(
 
 function pagesForQuestion(
   pages: EvaluatedScriptPage[],
-  questionNumber: number
+  questionLabel: string
 ): EvaluatedScriptPage[] {
   const matched = pages.filter((p) =>
-    (p.questionNumbers ?? []).includes(questionNumber)
+    coerceLabels(p.questionNumbers).includes(questionLabel)
   );
   return matched.length > 0 ? matched : pages;
 }
@@ -102,14 +113,14 @@ export async function processScriptDraft(
     allImages.push(await downloadPageBytes(supabase, page.storagePath, cache));
   }
 
-  let questionNumbers = uniqueQuestionNumbers(pages);
-  if (questionNumbers.length === 0 && allImages.length > 0) {
-    questionNumbers = await listQuestionsFromImages(allImages);
+  let questionLabels = uniqueQuestionLabels(pages);
+  if (questionLabels.length === 0 && allImages.length > 0) {
+    questionLabels = await listQuestionsFromImages(allImages);
   }
 
-  if (questionNumbers.length === 0) {
+  if (questionLabels.length === 0) {
     throw new Error(
-      `No question numbers found on script ${script.id}; cannot draft marks`
+      `No question labels found on script ${script.id}; cannot draft marks`
     );
   }
 
@@ -122,8 +133,8 @@ export async function processScriptDraft(
     status: typeof status;
   }[] = [];
 
-  for (const q of questionNumbers) {
-    const qPages = pagesForQuestion(pages, q);
+  for (const label of questionLabels) {
+    const qPages = pagesForQuestion(pages, label);
     const images: DraftPageImage[] = [];
     const qSeen = new Set<string>();
     for (const page of qPages) {
@@ -134,13 +145,13 @@ export async function processScriptDraft(
 
     const draft = await draftQuestionFromImages({
       pages: images,
-      questionNumber: q,
+      questionLabel: label,
       schemeText,
     });
 
     rows.push({
       script_id: script.id,
-      question_number: String(q),
+      question_number: label,
       awarded: draft.awarded,
       max: draft.max,
       feedback: draft.feedback,

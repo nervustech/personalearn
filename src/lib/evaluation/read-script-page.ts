@@ -1,27 +1,22 @@
 import { generateText } from "ai";
 import { getEvalVisionModel, requireGoogleGenerativeAiApiKey } from "@/lib/ai/vision-model";
 import { normalizeAdmissionNumber } from "@/lib/evaluation/normalize-admission";
+import { parseQuestionLabels } from "@/lib/evaluation/normalize-question";
 
 const PAGE_READ_PROMPT = `You are reading a scanned student exam/assignment page (Kenyan classroom handwriting).
 
 Extract:
 1. admission_number — the student admission/registration number written on the page (null if missing or unreadable)
-2. question_numbers — array of question numbers visible on this page (integers). If a range like "Q3–Q5" appears, include 3,4,5. Empty array if none found.
+2. question_numbers — array of question labels visible on this page as strings.
+   Include parts and letters when present, e.g. "1", "1a", "1.b", "2(i)", "a", "b".
+   If a range like "Q3–Q5" appears, include "3","4","5". Empty array if none found.
 
 Return ONLY valid JSON with keys admission_number and question_numbers. No markdown.`;
 
 export type ScriptPageRead = {
   admissionNumber: string | null;
-  questionNumbers: number[];
+  questionNumbers: string[];
 };
-
-function parseQuestionNumbers(raw: unknown): number[] {
-  if (!Array.isArray(raw)) return [];
-  const nums = raw
-    .map((n) => (typeof n === "number" ? n : Number.parseInt(String(n), 10)))
-    .filter((n) => Number.isFinite(n) && n > 0);
-  return [...new Set(nums)].sort((a, b) => a - b);
-}
 
 export function parseScriptPageReadJson(text: string): ScriptPageRead {
   const trimmed = text.trim();
@@ -42,7 +37,7 @@ export function parseScriptPageReadJson(text: string): ScriptPageRead {
           : normalizeAdmissionNumber(String(parsed.admission_number));
     return {
       admissionNumber: admission,
-      questionNumbers: parseQuestionNumbers(parsed.question_numbers),
+      questionNumbers: parseQuestionLabels(parsed.question_numbers),
     };
   } catch {
     return { admissionNumber: null, questionNumbers: [] };

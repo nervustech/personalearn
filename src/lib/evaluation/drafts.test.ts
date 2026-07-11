@@ -109,7 +109,7 @@ describe("processBatchDrafts", () => {
             storagePath: "c/b/p1.jpg",
             fileName: "p1.jpg",
             uploadIndex: 0,
-            questionNumbers: [1],
+            questionNumbers: ["1"],
           },
         ],
       },
@@ -132,7 +132,7 @@ describe("processBatchDrafts", () => {
     expect(summary.errors).toEqual([]);
     expect(mockDraftQuestion).toHaveBeenCalledWith(
       expect.objectContaining({
-        questionNumber: 1,
+        questionLabel: "1",
         schemeText: null,
       })
     );
@@ -147,6 +147,40 @@ describe("processBatchDrafts", () => {
     ]);
   });
 
+  it("drafts part labels like 1a", async () => {
+    const supabase = mockSupabase([
+      {
+        id: "cleared-1",
+        batch_id: "batch-1",
+        status: "identity_cleared",
+        page_order: [
+          {
+            storagePath: "c/b/p1.jpg",
+            fileName: "p1.jpg",
+            uploadIndex: 0,
+            questionNumbers: ["1.a", "1b"],
+          },
+        ],
+      },
+    ]);
+
+    const summary = await processBatchDrafts(supabase as never, "batch-1");
+
+    expect(summary.drafted).toBe(1);
+    expect(mockDraftQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ questionLabel: "1a" })
+    );
+    expect(mockDraftQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ questionLabel: "1b" })
+    );
+    expect(supabase._insert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ question_number: "1a" }),
+        expect.objectContaining({ question_number: "1b" }),
+      ])
+    );
+  });
+
   it("uses ai_draft when scheme text is present", async () => {
     mockLoadScheme.mockResolvedValue("Q1: award 5 marks for correct answer");
     const supabase = mockSupabase([
@@ -159,7 +193,7 @@ describe("processBatchDrafts", () => {
             storagePath: "c/b/p1.jpg",
             fileName: "p1.jpg",
             uploadIndex: 0,
-            questionNumbers: [1],
+            questionNumbers: ["1"],
           },
         ],
       },

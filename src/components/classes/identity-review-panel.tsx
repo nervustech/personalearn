@@ -317,7 +317,12 @@ export function IdentityReviewPanel({
         (summary.skippedAlreadyDrafted > 0
           ? ` · ${summary.skippedAlreadyDrafted} already drafted`
           : "") +
-        errorNote
+        errorNote +
+        (summary.errors[0]
+          ? ` — ${summary.errors[0].message}${
+              summary.errors.length > 1 ? " (and more)" : ""
+            }`
+          : "")
     );
   }
 

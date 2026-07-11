@@ -6,6 +6,10 @@ import {
   scriptHasMissingPageWarning,
   type RosterStudent,
 } from "@/lib/evaluation/group-pages";
+import {
+  compareQuestionLabels,
+  normalizeQuestionLabel,
+} from "@/lib/evaluation/normalize-question";
 import { readScriptPageFromImage } from "@/lib/evaluation/read-script-page";
 import type {
   EvaluatedScript,
@@ -24,6 +28,27 @@ export type ScriptReviewDto = EvaluatedScript & {
     url: string | null;
   }[];
 };
+
+function pageSortKey(page: EvaluatedScriptPage): string | null {
+  const labels = (page.questionNumbers ?? [])
+    .map((q) => normalizeQuestionLabel(q))
+    .filter((x): x is string => Boolean(x))
+    .sort(compareQuestionLabels);
+  return labels[0] ?? null;
+}
+
+function sortPagesByQuestion(pages: EvaluatedScriptPage[]): EvaluatedScriptPage[] {
+  return [...pages].sort((a, b) => {
+    const qa = pageSortKey(a);
+    const qb = pageSortKey(b);
+    if (qa == null && qb == null) return a.uploadIndex - b.uploadIndex;
+    if (qa == null) return 1;
+    if (qb == null) return -1;
+    const cmp = compareQuestionLabels(qa, qb);
+    if (cmp !== 0) return cmp;
+    return a.uploadIndex - b.uploadIndex;
+  });
+}
 
 function mimeFromPath(storagePath: string): string {
   return storagePath.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
@@ -294,16 +319,7 @@ export async function assignScriptStudent(
       if (overlaps) page.conflict = true;
     }
     // Always mark at least the incoming pages as conflict when merging.
-    const merged = [...existingPages, ...incoming].sort((a, b) => {
-      const qa = Math.min(
-        ...(a.questionNumbers?.length ? a.questionNumbers : [Number.POSITIVE_INFINITY])
-      );
-      const qb = Math.min(
-        ...(b.questionNumbers?.length ? b.questionNumbers : [Number.POSITIVE_INFINITY])
-      );
-      if (qa !== qb) return qa - qb;
-      return a.uploadIndex - b.uploadIndex;
-    });
+    const merged = sortPagesByQuestion([...existingPages, ...incoming]);
 
     const { error: mergeError } = await supabase
       .from("evaluated_scripts")

@@ -115,7 +115,8 @@ export type EvaluatedScriptPage = {
   contentHash?: string;
   /** True when this entry reused an earlier page's blob in the same batch. */
   duplicate?: boolean;
-  questionNumbers?: number[];
+  /** Normalized labels e.g. "1", "1a", "a" (legacy number[] coerced on read). */
+  questionNumbers?: string[];
   readAdmissionNumber?: string | null;
   conflict?: boolean;
 };

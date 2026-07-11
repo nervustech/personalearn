@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import type { Assessment, EvaluationBatch } from "@/types/database";
 
 export const assessmentsQueryKey = (classId: string) =>
@@ -8,6 +9,9 @@ export const assessmentsQueryKey = (classId: string) =>
 
 export const evaluationBatchesQueryKey = (classId: string) =>
   ["evaluation-batches", classId] as const;
+
+export const evaluationScriptsQueryKey = (batchId: string) =>
+  ["evaluation-scripts", batchId] as const;
 
 async function fetchAssessments(classId: string) {
   const response = await fetch(
@@ -50,6 +54,30 @@ export function useEvaluationBatches(classId: string | undefined) {
     queryKey: evaluationBatchesQueryKey(classId ?? ""),
     enabled: Boolean(classId),
     queryFn: () => fetchBatches(classId!),
+  });
+}
+
+export function useEvaluationScripts(batchId: string | undefined) {
+  return useQuery({
+    queryKey: evaluationScriptsQueryKey(batchId ?? ""),
+    enabled: Boolean(batchId),
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/scripts`
+      );
+      const payload = (await response.json()) as {
+        scripts?: ScriptReviewDto[];
+        batch?: EvaluationBatch;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to load scripts");
+      }
+      return {
+        scripts: payload.scripts ?? [],
+        batch: payload.batch,
+      };
+    },
   });
 }
 
@@ -102,6 +130,11 @@ export function useUploadEvaluationPages(classId: string) {
       const payload = (await response.json()) as {
         pageCount?: number;
         queued?: boolean;
+        warnings?: {
+          fileName: string;
+          duplicateOfFileName: string;
+          message: string;
+        }[];
         error?: string;
       };
       if (!response.ok) {
@@ -110,6 +143,68 @@ export function useUploadEvaluationPages(classId: string) {
       return payload;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationBatchesQueryKey(classId),
+      });
+    },
+  });
+}
+
+export function useProcessEvaluationIdentity(classId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (batchId: string) => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/process-identity`,
+        { method: "POST" }
+      );
+      const payload = (await response.json()) as {
+        scripts?: ScriptReviewDto[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Identity processing failed");
+      }
+      return payload.scripts ?? [];
+    },
+    onSuccess: (_data, batchId) => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationBatchesQueryKey(classId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: evaluationScriptsQueryKey(batchId),
+      });
+    },
+  });
+}
+
+export function useAssignEvaluationScript(classId: string, batchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { scriptId: string; studentId: string }) => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/scripts/${input.scriptId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studentId: input.studentId }),
+        }
+      );
+      const payload = (await response.json()) as {
+        script?: ScriptReviewDto;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Could not assign student");
+      }
+      return payload.script!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationScriptsQueryKey(batchId),
+      });
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });

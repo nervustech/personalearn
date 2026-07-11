@@ -1,13 +1,16 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { useResources } from "@/lib/hooks/use-resources";
 import {
   useAssessments,
   useCreateEvaluationBatch,
+  useProcessEvaluationIdentity,
   useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
+import { compressEvalScanImages } from "@/lib/evaluation/compress-eval-image";
 import { isGradableResourceType } from "@/lib/evaluation/gradable";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resources/format";
 import { Button } from "@/components/ui/button";
@@ -22,6 +25,7 @@ type StartEvaluationDialogProps = {
 type SchemeMode = "attach" | "generate" | "none";
 
 export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [assessmentId, setAssessmentId] = useState("");
@@ -31,12 +35,16 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [compressing, setCompressing] = useState(false);
 
   const { data: assessments } = useAssessments(classId);
   const { data: resources } = useResources(classId);
   const createBatch = useCreateEvaluationBatch(classId);
   const uploadPages = useUploadEvaluationPages(classId);
+  const processIdentity = useProcessEvaluationIdentity(classId);
 
   const markingSchemes = useMemo(
     () =>
@@ -55,7 +63,11 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     [resources, assessments]
   );
 
-  const pending = createBatch.isPending || uploadPages.isPending;
+  const pending =
+    createBatch.isPending ||
+    uploadPages.isPending ||
+    processIdentity.isPending ||
+    compressing;
 
   function resetForm() {
     setStep(0);
@@ -66,8 +78,10 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     setSelectedFiles([]);
     setCreatedBatchId(null);
     setFormError(null);
+    setUploadWarnings([]);
     createBatch.reset();
     uploadPages.reset();
+    processIdentity.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -112,19 +126,32 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
 
   async function handleUpload() {
     setFormError(null);
+    setUploadWarnings([]);
     if (!createdBatchId || !selectedFiles.length) {
       setFormError("Choose at least one scan image.");
       return;
     }
 
     try {
-      await uploadPages.mutateAsync({
+      setCompressing(true);
+      const files = await compressEvalScanImages(selectedFiles);
+      setCompressing(false);
+      const uploadResult = await uploadPages.mutateAsync({
         batchId: createdBatchId,
-        files: selectedFiles,
+        files,
       });
+      const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
+      if (warnings.length) setUploadWarnings(warnings);
+
+      await processIdentity.mutateAsync(createdBatchId);
+      const batchId = createdBatchId;
       handleOpenChange(false);
+      router.push(`/classes/${classId}/evaluations/${batchId}`);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Upload failed");
+      setCompressing(false);
+      setFormError(
+        error instanceof Error ? error.message : "Upload or identity failed"
+      );
     }
   }
 
@@ -279,8 +306,10 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Upload scanned script pages as JPEG or PNG (any order, max 5 MB
-                each). Identity grouping runs in a later step.
+                Upload scanned script pages as JPEG or PNG (any order). Large
+                phone photos are resized in the browser first so handwriting
+                stays readable. After upload we read admission numbers and open
+                identity review.
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>
@@ -295,6 +324,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                   onChange={(event) => {
                     setSelectedFiles(Array.from(event.target.files ?? []));
                     setFormError(null);
+                    setUploadWarnings([]);
                   }}
                 />
                 {selectedFiles.length > 0 ? (
@@ -304,6 +334,14 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                   </p>
                 ) : null}
               </div>
+
+              {uploadWarnings.length > 0 ? (
+                <ul className="space-y-1 text-sm text-amber-900 dark:text-amber-100">
+                  {uploadWarnings.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              ) : null}
 
               {formError ? (
                 <p className="text-sm text-destructive">{formError}</p>
@@ -323,7 +361,11 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                   disabled={pending || selectedFiles.length === 0}
                   onClick={handleUpload}
                 >
-                  {uploadPages.isPending ? "Uploading…" : "Upload & queue"}
+                  {compressing
+                    ? "Preparing images…"
+                    : uploadPages.isPending || processIdentity.isPending
+                      ? "Uploading & reading…"
+                      : "Upload & review identity"}
                 </Button>
               </div>
             </>

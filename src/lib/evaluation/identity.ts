@@ -183,7 +183,7 @@ export async function processBatchIdentity(
   // One vision call per unique storage blob (byte-deduped uploads share a path).
   const readByPath = new Map<
     string,
-    { admissionNumber: string | null; questionNumbers: number[] }
+    { admissionNumber: string | null; questionNumbers: string[] }
   >();
 
   for (const page of pendingPages) {

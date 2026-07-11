@@ -130,6 +130,11 @@ export function useUploadEvaluationPages(classId: string) {
       const payload = (await response.json()) as {
         pageCount?: number;
         queued?: boolean;
+        warnings?: {
+          fileName: string;
+          duplicateOfFileName: string;
+          message: string;
+        }[];
         error?: string;
       };
       if (!response.ok) {

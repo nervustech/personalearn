@@ -111,6 +111,10 @@ export type EvaluatedScriptPage = {
   storagePath: string;
   fileName: string;
   uploadIndex: number;
+  /** Hex SHA-256 of uploaded bytes (batch-scoped dedupe). */
+  contentHash?: string;
+  /** True when this entry reused an earlier page's blob in the same batch. */
+  duplicate?: boolean;
   questionNumbers?: number[];
   readAdmissionNumber?: string | null;
   conflict?: boolean;

@@ -35,6 +35,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [compressing, setCompressing] = useState(false);
@@ -77,6 +78,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     setSelectedFiles([]);
     setCreatedBatchId(null);
     setFormError(null);
+    setUploadWarnings([]);
     createBatch.reset();
     uploadPages.reset();
     processIdentity.reset();
@@ -124,6 +126,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
 
   async function handleUpload() {
     setFormError(null);
+    setUploadWarnings([]);
     if (!createdBatchId || !selectedFiles.length) {
       setFormError("Choose at least one scan image.");
       return;
@@ -133,10 +136,13 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
       setCompressing(true);
       const files = await compressEvalScanImages(selectedFiles);
       setCompressing(false);
-      await uploadPages.mutateAsync({
+      const uploadResult = await uploadPages.mutateAsync({
         batchId: createdBatchId,
         files,
       });
+      const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
+      if (warnings.length) setUploadWarnings(warnings);
+
       await processIdentity.mutateAsync(createdBatchId);
       const batchId = createdBatchId;
       handleOpenChange(false);
@@ -318,6 +324,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                   onChange={(event) => {
                     setSelectedFiles(Array.from(event.target.files ?? []));
                     setFormError(null);
+                    setUploadWarnings([]);
                   }}
                 />
                 {selectedFiles.length > 0 ? (
@@ -327,6 +334,14 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                   </p>
                 ) : null}
               </div>
+
+              {uploadWarnings.length > 0 ? (
+                <ul className="space-y-1 text-sm text-amber-900 dark:text-amber-100">
+                  {uploadWarnings.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </ul>
+              ) : null}
 
               {formError ? (
                 <p className="text-sm text-destructive">{formError}</p>

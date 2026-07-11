@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { requireTeacherEvaluationBatch } from "@/lib/evaluation/batches";
+import { sha256Hex } from "@/lib/evaluation/content-hash";
 import { createClient } from "@/lib/supabase/server";
+import type { EvaluatedScriptPage } from "@/types/database";
 
 /** Safety net after client compress; phone originals may still arrive briefly. */
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/jpg"]);
+
+export type UploadDuplicateWarning = {
+  fileName: string;
+  duplicateOfFileName: string;
+  message: string;
+};
 
 function authStatus(message: string) {
   if (message === "Not authenticated") return 401;
@@ -63,7 +71,11 @@ export async function POST(
       );
     }
 
-    const uploaded: { storagePath: string; fileName: string }[] = [];
+    const hashToPath = new Map<string, string>();
+    const hashToFirstFileName = new Map<string, string>();
+    const pageOrder: EvaluatedScriptPage[] = [];
+    const pagesMeta: { storagePath: string; fileName: string; contentHash: string; duplicate?: boolean }[] = [];
+    const warnings: UploadDuplicateWarning[] = [];
 
     for (const file of files) {
       if (!isAllowedImage(file)) {
@@ -79,10 +91,38 @@ export async function POST(
         );
       }
 
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const contentHash = await sha256Hex(bytes);
+      const uploadIndex = pageOrder.length;
+      const existingPath = hashToPath.get(contentHash);
+
+      if (existingPath) {
+        const duplicateOfFileName =
+          hashToFirstFileName.get(contentHash) ?? "earlier page";
+        pageOrder.push({
+          storagePath: existingPath,
+          fileName: file.name,
+          uploadIndex,
+          contentHash,
+          duplicate: true,
+        });
+        pagesMeta.push({
+          storagePath: existingPath,
+          fileName: file.name,
+          contentHash,
+          duplicate: true,
+        });
+        warnings.push({
+          fileName: file.name,
+          duplicateOfFileName,
+          message: `Duplicate of ${duplicateOfFileName} — stored once, flagged for review`,
+        });
+        continue;
+      }
+
       const extension = file.name.toLowerCase().endsWith(".png") ? "png" : "jpg";
       const pageId = crypto.randomUUID();
       const storagePath = `${batch.class_id}/${batchId}/${pageId}.${extension}`;
-      const bytes = new Uint8Array(await file.arrayBuffer());
 
       const { error: uploadError } = await supabase.storage
         .from("student_submissions")
@@ -98,16 +138,18 @@ export async function POST(
         );
       }
 
-      uploaded.push({ storagePath, fileName: file.name });
+      hashToPath.set(contentHash, storagePath);
+      hashToFirstFileName.set(contentHash, file.name);
+      pageOrder.push({
+        storagePath,
+        fileName: file.name,
+        uploadIndex,
+        contentHash,
+      });
+      pagesMeta.push({ storagePath, fileName: file.name, contentHash });
     }
 
     // Queue placeholder: one pending script row holding all page paths (grouping in PSL-45).
-    const pageOrder = uploaded.map((page, index) => ({
-      storagePath: page.storagePath,
-      fileName: page.fileName,
-      uploadIndex: index,
-    }));
-
     const { data: script, error: scriptError } = await supabase
       .from("evaluated_scripts")
       .insert({
@@ -128,8 +170,9 @@ export async function POST(
     return NextResponse.json({
       batchId,
       scriptId: script.id,
-      pageCount: uploaded.length,
-      pages: uploaded,
+      pageCount: pageOrder.length,
+      pages: pagesMeta,
+      warnings,
       queued: true,
     });
   } catch (error) {

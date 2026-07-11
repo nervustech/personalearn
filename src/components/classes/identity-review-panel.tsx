@@ -6,6 +6,7 @@ import { useStudents } from "@/lib/hooks/use-classes";
 import {
   useAssignEvaluationScript,
   useEvaluationScripts,
+  useProcessDrafts,
   useProcessEvaluationIdentity,
 } from "@/lib/hooks/use-evaluation";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
@@ -24,22 +25,42 @@ type PreviewState = {
   index: number;
 };
 
+function scriptStatusLabel(status: ScriptReviewDto["status"]) {
+  switch (status) {
+    case "pending":
+      return "Pending processing";
+    case "identity_amber":
+      return "Needs confirm";
+    case "identity_cleared":
+      return "Identity cleared";
+    case "drafted":
+      return "Drafted";
+    case "signed_off":
+      return "Signed off";
+    default:
+      return status;
+  }
+}
+
 function ScriptRow({
   classId,
   batchId,
   script,
   students,
+  onIdentityCleared,
 }: {
   classId: string;
   batchId: string;
   script: ScriptReviewDto;
   students: { id: string; full_name: string; admission_number: string | null }[];
+  onIdentityCleared: () => void;
 }) {
   const assign = useAssignEvaluationScript(classId, batchId);
   const [studentId, setStudentId] = useState(script.student_id ?? "");
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const isAmber = script.status === "identity_amber";
   const isPending = script.status === "pending";
+  const isDrafted = script.status === "drafted";
 
   const previewPage =
     preview != null ? script.pageUrls[preview.index] : undefined;
@@ -52,7 +73,13 @@ function ScriptRow({
 
   async function handleAssign() {
     if (!studentId) return;
-    await assign.mutateAsync({ scriptId: script.id, studentId });
+    const updated = await assign.mutateAsync({
+      scriptId: script.id,
+      studentId,
+    });
+    if (updated.status === "identity_cleared") {
+      onIdentityCleared();
+    }
   }
 
   return (
@@ -79,14 +106,12 @@ function ScriptRow({
               ? "text-sm font-medium text-amber-800 dark:text-amber-200"
               : isPending
                 ? "text-sm text-muted-foreground"
-                : "text-sm font-medium text-emerald-800 dark:text-emerald-200"
+                : isDrafted
+                  ? "text-sm font-medium text-sky-800 dark:text-sky-200"
+                  : "text-sm font-medium text-emerald-800 dark:text-emerald-200"
           }
         >
-          {isPending
-            ? "Pending processing"
-            : isAmber
-              ? "Needs confirm"
-              : "Identity cleared"}
+          {scriptStatusLabel(script.status)}
         </span>
       </div>
 
@@ -263,6 +288,8 @@ export function IdentityReviewPanel({
   const { data, isLoading, error, refetch } = useEvaluationScripts(batchId);
   const { data: students } = useStudents(classId);
   const processIdentity = useProcessEvaluationIdentity(classId);
+  const processDrafts = useProcessDrafts(classId, batchId);
+  const [draftSummary, setDraftSummary] = useState<string | null>(null);
 
   const scripts = data?.scripts ?? [];
   const hasPending = scripts.some((s) => s.status === "pending");
@@ -270,12 +297,40 @@ export function IdentityReviewPanel({
   const clearedCount = scripts.filter(
     (s) => s.status === "identity_cleared"
   ).length;
+  const draftedCount = scripts.filter((s) => s.status === "drafted").length;
 
   const roster = useMemo(() => students ?? [], [students]);
 
-  async function handleProcess() {
-    await processIdentity.mutateAsync(batchId);
+  async function runDrafts() {
+    setDraftSummary(null);
+    const summary = await processDrafts.mutateAsync();
     await refetch();
+    const errorNote =
+      summary.errors.length > 0
+        ? ` · ${summary.errors.length} error${summary.errors.length === 1 ? "" : "s"}`
+        : "";
+    setDraftSummary(
+      `Drafted ${summary.drafted} script${summary.drafted === 1 ? "" : "s"}` +
+        (summary.skippedAmber > 0
+          ? ` · skipped ${summary.skippedAmber} amber`
+          : "") +
+        (summary.skippedAlreadyDrafted > 0
+          ? ` · ${summary.skippedAlreadyDrafted} already drafted`
+          : "") +
+        errorNote
+    );
+  }
+
+  async function handleProcess() {
+    const result = await processIdentity.mutateAsync(batchId);
+    await refetch();
+    if (result.some((s) => s.status === "identity_cleared")) {
+      await runDrafts();
+    }
+  }
+
+  async function handleDraftMarks() {
+    await runDrafts();
   }
 
   if (isLoading) {
@@ -301,24 +356,38 @@ export function IdentityReviewPanel({
         <div>
           <p className="text-sm text-muted-foreground">
             Confirm who each script belongs to before grading. Cleared:{" "}
-            {clearedCount} · Needs confirm: {amberCount}
+            {clearedCount} · Needs confirm: {amberCount} · Drafted:{" "}
+            {draftedCount}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Per-question drafts arrive in a later step — this screen only fixes
-            identity. Click a thumbnail for a full-size preview.
+            Draft marks run for identity-cleared scripts only. Full per-question
+            review and sign-off come next. Click a thumbnail for a full-size
+            preview.
           </p>
         </div>
-        {hasPending || scripts.length === 0 ? (
-          <Button
-            type="button"
-            disabled={processIdentity.isPending}
-            onClick={handleProcess}
-          >
-            {processIdentity.isPending
-              ? "Reading pages…"
-              : "Process identity"}
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {hasPending || scripts.length === 0 ? (
+            <Button
+              type="button"
+              disabled={processIdentity.isPending || processDrafts.isPending}
+              onClick={handleProcess}
+            >
+              {processIdentity.isPending
+                ? "Reading pages…"
+                : "Process identity"}
+            </Button>
+          ) : null}
+          {clearedCount > 0 ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={processDrafts.isPending || processIdentity.isPending}
+              onClick={handleDraftMarks}
+            >
+              {processDrafts.isPending ? "Drafting marks…" : "Draft marks"}
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {processIdentity.isError ? (
@@ -327,6 +396,18 @@ export function IdentityReviewPanel({
             ? processIdentity.error.message
             : "Processing failed"}
         </p>
+      ) : null}
+
+      {processDrafts.isError ? (
+        <p className="text-sm text-destructive">
+          {processDrafts.error instanceof Error
+            ? processDrafts.error.message
+            : "Drafting failed"}
+        </p>
+      ) : null}
+
+      {draftSummary ? (
+        <p className="text-sm text-muted-foreground">{draftSummary}</p>
       ) : null}
 
       {scripts.length === 0 ? (
@@ -346,6 +427,9 @@ export function IdentityReviewPanel({
               batchId={batchId}
               script={script}
               students={roster}
+              onIdentityCleared={() => {
+                void runDrafts();
+              }}
             />
           ))}
         </ul>

@@ -211,3 +211,41 @@ export function useAssignEvaluationScript(classId: string, batchId: string) {
     },
   });
 }
+
+export type ProcessDraftsSummary = {
+  drafted: number;
+  skippedAmber: number;
+  skippedPending: number;
+  skippedAlreadyDrafted: number;
+  skippedOther: number;
+  errors: { scriptId: string; message: string }[];
+};
+
+export function useProcessDrafts(classId: string, batchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/process-drafts`,
+        { method: "POST" }
+      );
+      const payload = (await response.json()) as {
+        summary?: ProcessDraftsSummary;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Draft processing failed");
+      }
+      return payload.summary!;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationScriptsQueryKey(batchId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: evaluationBatchesQueryKey(classId),
+      });
+    },
+  });
+}

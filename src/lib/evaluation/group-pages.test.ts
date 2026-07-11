@@ -159,4 +159,102 @@ describe("groupPagesByAdmission", () => {
     expect(drafts[0]!.missingPageWarning).toBe(true);
     expect(scriptHasMissingPageWarning(drafts[0]!.page_order)).toBe(true);
   });
+
+  it("flags byte-duplicate pages as conflict even with empty question numbers", () => {
+    const drafts = groupPagesByAdmission(
+      [
+        {
+          storagePath: "same/path.jpg",
+          fileName: "a.jpg",
+          uploadIndex: 0,
+          admissionNumber: "A001",
+          questionNumbers: [],
+          contentHash: "abc123",
+        },
+        {
+          storagePath: "same/path.jpg",
+          fileName: "a-copy.jpg",
+          uploadIndex: 1,
+          admissionNumber: "A001",
+          questionNumbers: [],
+          contentHash: "abc123",
+          duplicate: true,
+        },
+      ],
+      roster
+    );
+
+    expect(drafts).toHaveLength(1);
+    const script = drafts[0]!;
+    expect(script.page_order).toHaveLength(2);
+    expect(script.hasConflict).toBe(true);
+    expect(script.status).toBe("identity_amber");
+    expect(script.student_id).toBeNull();
+    expect(script.page_order.every((p) => p.conflict)).toBe(true);
+    expect(script.page_order[1]!.duplicate).toBe(true);
+  });
+
+  it("links byte-duplicates when one page lacks admission into one amber conflict group", () => {
+    const drafts = groupPagesByAdmission(
+      [
+        {
+          storagePath: "same/path.jpg",
+          fileName: "with-id.jpg",
+          uploadIndex: 0,
+          admissionNumber: "A001",
+          questionNumbers: [1],
+          contentHash: "samehash",
+        },
+        {
+          storagePath: "same/path.jpg",
+          fileName: "no-id.jpg",
+          uploadIndex: 1,
+          admissionNumber: null,
+          questionNumbers: [],
+          contentHash: "samehash",
+          duplicate: true,
+        },
+      ],
+      roster
+    );
+
+    expect(drafts).toHaveLength(1);
+    const script = drafts[0]!;
+    expect(script.read_admission_number).toBe("A001");
+    expect(script.page_order).toHaveLength(2);
+    expect(script.hasConflict).toBe(true);
+    expect(script.status).toBe("identity_amber");
+    expect(script.student_id).toBeNull();
+    expect(script.page_order.every((p) => p.conflict)).toBe(true);
+  });
+
+  it("groups two unmatched byte-duplicates together with conflict", () => {
+    const drafts = groupPagesByAdmission(
+      [
+        {
+          storagePath: "x.jpg",
+          fileName: "a.jpg",
+          uploadIndex: 0,
+          admissionNumber: null,
+          questionNumbers: [],
+          contentHash: "orphanhash",
+        },
+        {
+          storagePath: "x.jpg",
+          fileName: "b.jpg",
+          uploadIndex: 1,
+          admissionNumber: null,
+          questionNumbers: [],
+          contentHash: "orphanhash",
+          duplicate: true,
+        },
+      ],
+      roster
+    );
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]!.hasConflict).toBe(true);
+    expect(drafts[0]!.status).toBe("identity_amber");
+    expect(drafts[0]!.page_order).toHaveLength(2);
+  });
 });

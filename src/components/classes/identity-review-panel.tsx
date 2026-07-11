@@ -10,6 +10,7 @@ import {
 } from "@/lib/hooks/use-evaluation";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +18,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 type IdentityReviewPanelProps = {
   classId: string;
   batchId: string;
+};
+
+type PreviewState = {
+  index: number;
 };
 
 function ScriptRow({
@@ -32,8 +37,18 @@ function ScriptRow({
 }) {
   const assign = useAssignEvaluationScript(classId, batchId);
   const [studentId, setStudentId] = useState(script.student_id ?? "");
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const isAmber = script.status === "identity_amber";
   const isPending = script.status === "pending";
+
+  const previewPage =
+    preview != null ? script.pageUrls[preview.index] : undefined;
+  const previewMeta =
+    preview != null
+      ? script.page_order.find(
+          (p) => p.uploadIndex === script.pageUrls[preview.index]?.uploadIndex
+        )
+      : undefined;
 
   async function handleAssign() {
     if (!studentId) return;
@@ -75,11 +90,24 @@ function ScriptRow({
         </span>
       </div>
 
-      {script.hasConflict ? (
+      {script.hasByteDuplicate ? (
+        <p className="text-sm text-amber-900 dark:text-amber-100">
+          Duplicate scan (same file stored once) — confirm identity before
+          grading.
+        </p>
+      ) : null}
+
+      {script.hasConflict && !script.hasByteDuplicate ? (
         <p className="text-sm text-amber-900 dark:text-amber-100">
           Conflict: two pages share the same admission number and question
           number. Both pages are kept — confirm the correct student before
           grading.
+        </p>
+      ) : null}
+
+      {script.hasConflict && script.hasByteDuplicate ? (
+        <p className="text-sm text-muted-foreground">
+          Both pages are kept in the script for review; only one copy is stored.
         </p>
       ) : null}
 
@@ -91,19 +119,26 @@ function ScriptRow({
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {script.pageUrls.map((page) => {
+        {script.pageUrls.map((page, index) => {
           const meta = script.page_order.find(
-            (p) => p.storagePath === page.storagePath
+            (p) => p.uploadIndex === page.uploadIndex
           );
           return (
-            <figure key={page.storagePath} className="w-28 space-y-1">
+            <figure key={`${page.uploadIndex}-${page.storagePath}`} className="w-28 space-y-1">
               {page.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={page.url}
-                  alt={meta?.fileName ?? "Script page"}
-                  className="h-36 w-28 object-cover"
-                />
+                <button
+                  type="button"
+                  className="block overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => setPreview({ index })}
+                  aria-label={`Open full size: ${page.fileName}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={page.url}
+                    alt={meta?.fileName ?? "Script page"}
+                    className="h-36 w-28 object-cover"
+                  />
+                </button>
               ) : (
                 <div className="flex h-36 w-28 items-center justify-center bg-muted text-xs text-muted-foreground">
                   No preview
@@ -112,11 +147,74 @@ function ScriptRow({
               <figcaption className="text-xs text-muted-foreground">
                 Q{(meta?.questionNumbers ?? []).join(",") || "?"}
                 {meta?.conflict ? " · conflict" : ""}
+                {meta?.duplicate ? " · duplicate" : ""}
               </figcaption>
             </figure>
           );
         })}
       </div>
+
+      <Dialog
+        open={preview != null}
+        onOpenChange={(open) => {
+          if (!open) setPreview(null);
+        }}
+        title={previewMeta?.fileName ?? previewPage?.fileName ?? "Page preview"}
+        description={
+          previewMeta
+            ? `Q${(previewMeta.questionNumbers ?? []).join(",") || "?"} · page ${(preview?.index ?? 0) + 1} of ${script.pageUrls.length}`
+            : undefined
+        }
+        className="max-h-[min(94vh,60rem)] max-w-4xl"
+      >
+        {previewPage?.url ? (
+          <div className="space-y-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewPage.url}
+              alt={previewPage.fileName}
+              className="mx-auto max-h-[min(70vh,48rem)] w-full object-contain"
+            />
+            {script.pageUrls.length > 1 ? (
+              <div className="flex justify-between gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={preview == null || preview.index <= 0}
+                  onClick={() =>
+                    setPreview((p) =>
+                      p && p.index > 0 ? { index: p.index - 1 } : p
+                    )
+                  }
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={
+                    preview == null ||
+                    preview.index >= script.pageUrls.length - 1
+                  }
+                  onClick={() =>
+                    setPreview((p) =>
+                      p && p.index < script.pageUrls.length - 1
+                        ? { index: p.index + 1 }
+                        : p
+                    )
+                  }
+                >
+                  Next
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No preview available.</p>
+        )}
+      </Dialog>
 
       {isAmber ? (
         <div className="flex flex-wrap items-end gap-2">
@@ -207,7 +305,7 @@ export function IdentityReviewPanel({
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Per-question drafts arrive in a later step — this screen only fixes
-            identity.
+            identity. Click a thumbnail for a full-size preview.
           </p>
         </div>
         {hasPending || scripts.length === 0 ? (

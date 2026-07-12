@@ -58,13 +58,19 @@ export function parseDraftQuestionJson(text: string): DraftQuestionResult {
 
 function buildGradePrompt(
   questionLabel: string,
-  schemeText: string | null
+  schemeText: string | null,
+  instruction?: string | null
 ): string {
+  const instructionBlock =
+    instruction && instruction.trim().length > 0
+      ? `\n\nTeacher instruction for this re-evaluation (follow carefully):\n---\n${instruction.trim()}\n---\n`
+      : "";
+
   if (schemeText) {
     return `You are grading one question from a scanned Kenyan classroom exam/assignment script.
 
 Grade ONLY question "${questionLabel}" (this may be a part such as 1a, a letter such as b, or a section label) using the marking scheme below.
-
+${instructionBlock}
 Marking scheme:
 ---
 ${schemeText}
@@ -81,7 +87,7 @@ No markdown.`;
   return `You are estimating marks for one question from a scanned Kenyan classroom exam/assignment script.
 
 There is NO marking scheme. Use best judgment for question "${questionLabel}". Marks are lower confidence (AI estimate).
-
+${instructionBlock}
 Return ONLY valid JSON with keys:
 - awarded (number — estimated marks awarded)
 - max (number — estimated maximum for this question)
@@ -94,6 +100,7 @@ export async function draftQuestionFromImages(input: {
   pages: DraftPageImage[];
   questionLabel: string;
   schemeText: string | null;
+  instruction?: string | null;
 }): Promise<DraftQuestionResult> {
   requireGoogleGenerativeAiApiKey();
   if (input.pages.length === 0) {
@@ -117,7 +124,11 @@ export async function draftQuestionFromImages(input: {
           })),
           {
             type: "text" as const,
-            text: buildGradePrompt(input.questionLabel, input.schemeText),
+            text: buildGradePrompt(
+              input.questionLabel,
+              input.schemeText,
+              input.instruction
+            ),
           },
         ],
       },

@@ -365,8 +365,8 @@ export function IdentityReviewPanel({
             {draftedCount}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Draft marks run for identity-cleared scripts only. Full per-question
-            review and sign-off come next. Click a thumbnail for a full-size
+            Draft marks run for identity-cleared scripts only. Per-question
+            review and sign-off are below. Click a thumbnail for a full-size
             preview.
           </p>
         </div>

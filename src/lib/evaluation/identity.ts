@@ -11,9 +11,11 @@ import {
   normalizeQuestionLabel,
 } from "@/lib/evaluation/normalize-question";
 import { readScriptPageFromImage } from "@/lib/evaluation/read-script-page";
+import { computeScriptTotal, type ScriptTotal } from "@/lib/evaluation/script-totals";
 import type {
   EvaluatedScript,
   EvaluatedScriptPage,
+  QuestionEvaluation,
 } from "@/types/database";
 
 export type ScriptReviewDto = EvaluatedScript & {
@@ -27,6 +29,8 @@ export type ScriptReviewDto = EvaluatedScript & {
     fileName: string;
     url: string | null;
   }[];
+  questions: QuestionEvaluation[];
+  totals: ScriptTotal;
 };
 
 function pageSortKey(page: EvaluatedScriptPage): string | null {
@@ -83,6 +87,30 @@ export async function listBatchScriptsForReview(
   );
 
   const rows = (scripts ?? []) as EvaluatedScript[];
+  const scriptIds = rows.map((s) => s.id);
+  const questionsByScript = new Map<string, QuestionEvaluation[]>();
+
+  if (scriptIds.length > 0) {
+    const { data: questionRows, error: questionsError } = await supabase
+      .from("question_evaluations")
+      .select("*")
+      .in("script_id", scriptIds);
+
+    if (questionsError) throw new Error(questionsError.message);
+
+    for (const row of (questionRows ?? []) as QuestionEvaluation[]) {
+      const list = questionsByScript.get(row.script_id) ?? [];
+      list.push(row);
+      questionsByScript.set(row.script_id, list);
+    }
+
+    for (const [, list] of questionsByScript) {
+      list.sort((a, b) =>
+        compareQuestionLabels(a.question_number, b.question_number)
+      );
+    }
+  }
+
   const result: ScriptReviewDto[] = [];
   const signedUrlCache = new Map<string, string | null>();
 
@@ -108,6 +136,7 @@ export async function listBatchScriptsForReview(
       });
     }
 
+    const questions = questionsByScript.get(script.id) ?? [];
     result.push({
       ...script,
       page_order: pages,
@@ -118,6 +147,8 @@ export async function listBatchScriptsForReview(
       hasConflict: scriptHasConflict(pages),
       hasByteDuplicate: scriptHasByteDuplicate(pages),
       pageUrls,
+      questions,
+      totals: computeScriptTotal(questions),
     });
   }
 

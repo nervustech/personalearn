@@ -249,3 +249,143 @@ export function useProcessDrafts(classId: string, batchId: string) {
     },
   });
 }
+
+export const competencyProgressQueryKey = (classId: string) =>
+  ["competency-progress", classId] as const;
+
+export function useCompetencyProgress(classId: string | undefined) {
+  return useQuery({
+    queryKey: competencyProgressQueryKey(classId ?? ""),
+    enabled: Boolean(classId),
+    queryFn: async () => {
+      const response = await fetch(`/api/classes/${classId}/competency`);
+      const payload = (await response.json()) as {
+        competency?: import("@/types/database").CompetencyProgress[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to load competency");
+      }
+      return payload.competency ?? [];
+    },
+  });
+}
+
+export function useUpdateQuestionEvaluation(classId: string, batchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: {
+      scriptId: string;
+      questionId: string;
+      awarded?: number | null;
+      max?: number | null;
+      feedback?: string | null;
+    }) => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/scripts/${input.scriptId}/questions/${input.questionId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            awarded: input.awarded,
+            max: input.max,
+            feedback: input.feedback,
+          }),
+        }
+      );
+      const payload = (await response.json()) as {
+        question?: import("@/types/database").QuestionEvaluation;
+        totals?: { awarded: number | null; max: number | null };
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Could not update question");
+      }
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationScriptsQueryKey(batchId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: evaluationBatchesQueryKey(classId),
+      });
+    },
+  });
+}
+
+export function useReevaluateQuestion(classId: string, batchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: {
+      scriptId: string;
+      questionId: string;
+      instruction?: string;
+    }) => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/scripts/${input.scriptId}/questions/${input.questionId}/re-evaluate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instruction: input.instruction ?? null }),
+        }
+      );
+      const payload = (await response.json()) as {
+        question?: import("@/types/database").QuestionEvaluation;
+        totals?: { awarded: number | null; max: number | null };
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Re-evaluation failed");
+      }
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationScriptsQueryKey(batchId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: evaluationBatchesQueryKey(classId),
+      });
+    },
+  });
+}
+
+export function useSignOffScript(classId: string, batchId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (scriptId: string) => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/scripts/${scriptId}/sign-off`,
+        { method: "POST" }
+      );
+      const payload = (await response.json()) as {
+        submission?: import("@/types/database").StudentSubmission;
+        competency?: import("@/types/database").CompetencyProgress;
+        alreadySignedOff?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Sign-off failed");
+      }
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationScriptsQueryKey(batchId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: evaluationBatchesQueryKey(classId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: competencyProgressQueryKey(classId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: assessmentsQueryKey(classId),
+      });
+    },
+  });
+}

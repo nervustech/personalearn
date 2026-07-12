@@ -148,3 +148,29 @@ export type QuestionEvaluation = {
   status: QuestionEvaluationStatus;
   created_at: string;
 };
+
+export type StudentSubmission = {
+  id: string;
+  assessment_id: string;
+  student_id: string;
+  content: string | null;
+  file_url: string | null;
+  submitted_at: string;
+  ai_feedback: string | null;
+  teacher_feedback: string | null;
+  competency_flags: Record<string, unknown>;
+  created_at: string;
+};
+
+export type CompetencyProgress = {
+  id: string;
+  student_id: string;
+  class_id: string;
+  strand: string;
+  sub_strand: string | null;
+  competency_code: string | null;
+  status: "mastered" | "developing" | "not_yet";
+  last_evidence_at: string | null;
+  evidence_count: number;
+  updated_at: string;
+};

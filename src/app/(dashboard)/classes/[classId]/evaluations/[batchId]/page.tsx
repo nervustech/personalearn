@@ -27,13 +27,17 @@ export default function EvaluationBatchReviewPage({
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">
           Evaluation review
         </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Review drafted marks first. Identity exceptions (missing or unclear
+          admission numbers) stay below — they are uncommon.
+        </p>
       </div>
-      <IdentityReviewPanel classId={classId} batchId={batchId} />
       <ReviewQueuePanel
         classId={classId}
         batchId={batchId}
         classSubject={classSubject}
       />
+      <IdentityReviewPanel classId={classId} batchId={batchId} />
     </div>
   );
 }

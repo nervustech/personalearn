@@ -382,8 +382,9 @@ export function ReviewQueuePanel({
       <section className="space-y-2">
         <h2 className="text-lg font-semibold tracking-tight">Review queue</h2>
         <p className="text-sm text-muted-foreground">
-          Draft marks for identity-cleared scripts to open the review queue.
-          Edit, re-evaluate, and sign off appear here.
+          No drafted scripts yet. Process identity and draft marks in the
+          section below — then scripts appear here for edit, re-eval, and
+          sign-off.
         </p>
       </section>
     );

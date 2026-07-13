@@ -8,8 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { previewCompetency } from "@/lib/evaluation/competency-map";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
+import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reevaluate-question";
 import { computeScriptTotal } from "@/lib/evaluation/script-totals";
 import {
+  useAssessments,
   useEvaluationScripts,
   useReevaluateQuestion,
   useSignOffScript,
@@ -17,12 +19,35 @@ import {
 } from "@/lib/hooks/use-evaluation";
 import type { QuestionEvaluation } from "@/types/database";
 import { cn } from "@/lib/utils";
+import type { UseMutationResult } from "@tanstack/react-query";
 
 type ReviewQueuePanelProps = {
   classId: string;
   batchId: string;
   classSubject?: string;
 };
+
+type UpdateMutation = UseMutationResult<
+  unknown,
+  Error,
+  {
+    scriptId: string;
+    questionId: string;
+    awarded?: number | null;
+    max?: number | null;
+    feedback?: string | null;
+  }
+>;
+
+type ReevaluateMutation = UseMutationResult<
+  unknown,
+  Error,
+  {
+    scriptId: string;
+    questionId: string;
+    instruction?: string;
+  }
+>;
 
 function statusLabel(status: QuestionEvaluation["status"]) {
   switch (status) {
@@ -37,21 +62,41 @@ function statusLabel(status: QuestionEvaluation["status"]) {
   }
 }
 
+function parseMarkInput(
+  raw: string,
+  original: number | null
+):
+  | { ok: true; value: number | null; changed: boolean }
+  | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  // Empty field keeps the stored mark — never clear on blur.
+  if (trimmed === "") {
+    return { ok: true, value: original, changed: false };
+  }
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) {
+    return { ok: false, error: "Enter a valid number for marks" };
+  }
+  return {
+    ok: true,
+    value: n,
+    changed: original === null ? true : original !== n,
+  };
+}
+
 function QuestionRow({
   script,
   question,
   readOnly,
-  classId,
-  batchId,
+  updateQuestion,
+  reevaluate,
 }: {
   script: ScriptReviewDto;
   question: QuestionEvaluation;
   readOnly: boolean;
-  classId: string;
-  batchId: string;
+  updateQuestion: UpdateMutation;
+  reevaluate: ReevaluateMutation;
 }) {
-  const updateQuestion = useUpdateQuestionEvaluation(classId, batchId);
-  const reevaluate = useReevaluateQuestion(classId, batchId);
   const [awarded, setAwarded] = useState(
     question.awarded != null ? String(question.awarded) : ""
   );
@@ -65,13 +110,42 @@ function QuestionRow({
 
   async function saveEdits() {
     setLocalError(null);
+
+    const awardedParsed = parseMarkInput(awarded, question.awarded);
+    if (!awardedParsed.ok) {
+      setLocalError(awardedParsed.error);
+      setAwarded(question.awarded != null ? String(question.awarded) : "");
+      return;
+    }
+    const maxParsed = parseMarkInput(max, question.max);
+    if (!maxParsed.ok) {
+      setLocalError(maxParsed.error);
+      setMax(question.max != null ? String(question.max) : "");
+      return;
+    }
+
+    const nextFeedback = feedback.trim() || null;
+    const originalFeedback = question.feedback ?? null;
+    const feedbackChanged = nextFeedback !== originalFeedback;
+
+    if (
+      !awardedParsed.changed &&
+      !maxParsed.changed &&
+      !feedbackChanged
+    ) {
+      // Restore empty fields to stored values so UI matches DB.
+      setAwarded(question.awarded != null ? String(question.awarded) : "");
+      setMax(question.max != null ? String(question.max) : "");
+      return;
+    }
+
     try {
       await updateQuestion.mutateAsync({
         scriptId: script.id,
         questionId: question.id,
-        awarded: awarded === "" ? null : Number(awarded),
-        max: max === "" ? null : Number(max),
-        feedback,
+        ...(awardedParsed.changed ? { awarded: awardedParsed.value } : {}),
+        ...(maxParsed.changed ? { max: maxParsed.value } : {}),
+        ...(feedbackChanged ? { feedback: nextFeedback } : {}),
       });
     } catch (error) {
       setLocalError(
@@ -82,11 +156,18 @@ function QuestionRow({
 
   async function runReeval() {
     setLocalError(null);
+    const trimmed = instruction.trim();
+    if (trimmed.length > MAX_REEVAL_INSTRUCTION_CHARS) {
+      setLocalError(
+        `Instruction must be at most ${MAX_REEVAL_INSTRUCTION_CHARS} characters`
+      );
+      return;
+    }
     try {
       await reevaluate.mutateAsync({
         scriptId: script.id,
         questionId: question.id,
-        instruction: instruction.trim() || undefined,
+        instruction: trimmed || undefined,
       });
       setReevalOpen(false);
       setInstruction("");
@@ -191,6 +272,7 @@ function QuestionRow({
           <textarea
             className="min-h-24 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm"
             placeholder="Instruction (optional)"
+            maxLength={MAX_REEVAL_INSTRUCTION_CHARS}
             value={instruction}
             onChange={(e) => setInstruction(e.target.value)}
           />
@@ -234,6 +316,8 @@ function ScriptReviewCard({
   const [open, setOpen] = useState(script.status === "drafted");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const signOff = useSignOffScript(classId, batchId);
+  const updateQuestion = useUpdateQuestionEvaluation(classId, batchId);
+  const reevaluate = useReevaluateQuestion(classId, batchId);
   const readOnly = script.status === "signed_off";
   const totals = script.totals ?? computeScriptTotal(script.questions ?? []);
   const competency = previewCompetency({
@@ -302,8 +386,8 @@ function ScriptReviewCard({
               script={script}
               question={q}
               readOnly={readOnly}
-              classId={classId}
-              batchId={batchId}
+              updateQuestion={updateQuestion}
+              reevaluate={reevaluate}
             />
           ))}
           {(script.questions ?? []).length === 0 ? (
@@ -352,6 +436,24 @@ export function ReviewQueuePanel({
   classSubject = "General",
 }: ReviewQueuePanelProps) {
   const { data, isLoading, error } = useEvaluationScripts(batchId);
+  const { data: assessments } = useAssessments(classId);
+
+  const assessmentMeta = useMemo(() => {
+    const assessmentId = data?.batch?.assessment_id;
+    if (!assessmentId || !assessments?.length) {
+      return {
+        strand: classSubject,
+        subStrand: null as string | null,
+      };
+    }
+    const assessment = assessments.find((a) => a.id === assessmentId);
+    const strand =
+      assessment?.linked_strand?.trim() || classSubject || "General";
+    return {
+      strand,
+      subStrand: assessment?.linked_sub_strand ?? null,
+    };
+  }, [assessments, classSubject, data?.batch?.assessment_id]);
 
   const reviewScripts = useMemo(() => {
     const scripts = data?.scripts ?? [];
@@ -407,8 +509,8 @@ export function ReviewQueuePanel({
             script={script}
             classId={classId}
             batchId={batchId}
-            strand={classSubject}
-            subStrand={null}
+            strand={assessmentMeta.strand}
+            subStrand={assessmentMeta.subStrand}
           />
         ))}
       </div>

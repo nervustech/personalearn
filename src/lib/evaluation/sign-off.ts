@@ -192,6 +192,18 @@ export async function signOffScript(
 
   const now = new Date().toISOString();
 
+  // Detect prior submission so retries after a partial failure do not
+  // double-increment competency evidence_count.
+  const { data: priorSubmission } = await supabase
+    .from("student_submissions")
+    .select("id")
+    .eq("assessment_id", batch.assessment_id)
+    .eq("student_id", script.student_id)
+    .maybeSingle();
+  const bumpEvidence = !priorSubmission;
+
+  // Write durable results before flipping script status so a failed status
+  // update can be retried (upserts are idempotent).
   const { data: submission, error: submissionError } = await supabase
     .from("student_submissions")
     .upsert(
@@ -220,41 +232,31 @@ export async function signOffScript(
     .eq("strand", strand)
     .maybeSingle();
 
-  let competency: CompetencyProgress;
-  if (existingComp) {
-    const { data: updatedComp, error: compError } = await supabase
-      .from("competency_progress")
-      .update({
-        sub_strand: subStrand,
-        status: competencyStatus,
-        last_evidence_at: now,
-        evidence_count: (existingComp.evidence_count ?? 0) + 1,
-        updated_at: now,
-      })
-      .eq("id", existingComp.id)
-      .select("*")
-      .single();
-    if (compError) throw new Error(compError.message);
-    competency = updatedComp as CompetencyProgress;
-  } else {
-    const { data: insertedComp, error: compError } = await supabase
-      .from("competency_progress")
-      .insert({
+  const nextEvidence = bumpEvidence
+    ? (existingComp?.evidence_count ?? 0) + 1
+    : (existingComp?.evidence_count ?? 1);
+
+  const { data: competencyRow, error: compError } = await supabase
+    .from("competency_progress")
+    .upsert(
+      {
         student_id: script.student_id,
         class_id: batch.class_id,
         strand,
         sub_strand: subStrand,
-        competency_code: null,
+        competency_code: existingComp?.competency_code ?? null,
         status: competencyStatus,
         last_evidence_at: now,
-        evidence_count: 1,
+        evidence_count: nextEvidence,
         updated_at: now,
-      })
-      .select("*")
-      .single();
-    if (compError) throw new Error(compError.message);
-    competency = insertedComp as CompetencyProgress;
-  }
+      },
+      { onConflict: "student_id,class_id,strand" }
+    )
+    .select("*")
+    .single();
+
+  if (compError) throw new Error(compError.message);
+  const competency = competencyRow as CompetencyProgress;
 
   const { error: scriptUpdateError } = await supabase
     .from("evaluated_scripts")
@@ -280,10 +282,12 @@ export async function signOffScript(
     reviewable.length > 0 &&
     reviewable.every((s) => s.status === "signed_off");
 
-  await supabase
+  const { error: batchStatusError } = await supabase
     .from("evaluation_batches")
     .update({ status: allSigned ? "signed_off" : "in_review" })
     .eq("id", input.batchId);
+
+  if (batchStatusError) throw new Error(batchStatusError.message);
 
   return {
     scriptId: input.scriptId,

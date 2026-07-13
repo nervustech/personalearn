@@ -23,6 +23,23 @@ export type ReevaluateQuestionResult = {
   competencyPreview: CompetencyPreview | null;
 };
 
+/** Cap teacher re-eval instructions before they enter the vision prompt. */
+export const MAX_REEVAL_INSTRUCTION_CHARS = 2000;
+
+export function normalizeReevalInstruction(
+  instruction?: string | null
+): string | null {
+  if (instruction == null) return null;
+  const trimmed = String(instruction).trim();
+  if (!trimmed) return null;
+  if (trimmed.length > MAX_REEVAL_INSTRUCTION_CHARS) {
+    throw new Error(
+      `Instruction must be at most ${MAX_REEVAL_INSTRUCTION_CHARS} characters`
+    );
+  }
+  return trimmed;
+}
+
 async function loadCompetencyPreview(
   supabase: SupabaseClient,
   batchId: string,
@@ -125,11 +142,13 @@ export async function reevaluateScriptQuestion(
     images.push(await downloadPageBytes(supabase, page.storagePath, cache));
   }
 
+  const instruction = normalizeReevalInstruction(input.instruction);
+
   const draft = await draftQuestionFromImages({
     pages: images,
     questionLabel: existing.question_number as string,
     schemeText,
-    instruction: input.instruction,
+    instruction,
   });
 
   const { data: updated, error: updateError } = await supabase

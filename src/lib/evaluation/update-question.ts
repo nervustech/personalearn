@@ -20,6 +20,7 @@ export type UpdateQuestionResult = {
   questions: QuestionEvaluation[];
   totals: ScriptTotal;
   competencyPreview: CompetencyPreview | null;
+  unchanged: boolean;
 };
 
 function parseOptionalNumber(
@@ -66,35 +67,49 @@ export async function updateQuestionEvaluation(
   if (existingError) throw new Error(existingError.message);
   if (!existing) throw new Error("Question evaluation not found");
 
+  const current = existing as QuestionEvaluation;
   const patch: {
     awarded?: number | null;
     max?: number | null;
     feedback?: string | null;
-    status: "teacher_edited";
-  } = { status: "teacher_edited" };
+    status?: "teacher_edited";
+  } = {};
 
   if (input.awarded !== undefined) {
-    patch.awarded = parseOptionalNumber(input.awarded, "awarded") ?? null;
+    const awarded = parseOptionalNumber(input.awarded, "awarded") ?? null;
+    if (awarded !== current.awarded) patch.awarded = awarded;
   }
   if (input.max !== undefined) {
-    patch.max = parseOptionalNumber(input.max, "max") ?? null;
+    const max = parseOptionalNumber(input.max, "max") ?? null;
+    if (max !== current.max) patch.max = max;
   }
   if (input.feedback !== undefined) {
-    patch.feedback =
+    const feedback =
       input.feedback === null
         ? null
         : String(input.feedback).trim() || null;
+    if (feedback !== current.feedback) patch.feedback = feedback;
   }
 
-  const { data: updated, error: updateError } = await supabase
-    .from("question_evaluations")
-    .update(patch)
-    .eq("id", input.questionId)
-    .eq("script_id", input.scriptId)
-    .select("*")
-    .single();
+  const hasFieldChange =
+    patch.awarded !== undefined ||
+    patch.max !== undefined ||
+    patch.feedback !== undefined;
 
-  if (updateError) throw new Error(updateError.message);
+  let updated = current;
+  if (hasFieldChange) {
+    patch.status = "teacher_edited";
+    const { data, error: updateError } = await supabase
+      .from("question_evaluations")
+      .update(patch)
+      .eq("id", input.questionId)
+      .eq("script_id", input.scriptId)
+      .select("*")
+      .single();
+
+    if (updateError) throw new Error(updateError.message);
+    updated = data as QuestionEvaluation;
+  }
 
   const { data: allQuestions, error: listError } = await supabase
     .from("question_evaluations")
@@ -143,9 +158,10 @@ export async function updateQuestionEvaluation(
   }
 
   return {
-    question: updated as QuestionEvaluation,
+    question: updated,
     questions,
     totals,
     competencyPreview,
+    unchanged: !hasFieldChange,
   };
 }

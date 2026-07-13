@@ -288,9 +288,11 @@ export function useUpdateQuestionEvaluation(classId: string, batchId: string) {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            awarded: input.awarded,
-            max: input.max,
-            feedback: input.feedback,
+            ...(input.awarded !== undefined ? { awarded: input.awarded } : {}),
+            ...(input.max !== undefined ? { max: input.max } : {}),
+            ...(input.feedback !== undefined
+              ? { feedback: input.feedback }
+              : {}),
           }),
         }
       );

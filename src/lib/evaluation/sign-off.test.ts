@@ -119,6 +119,24 @@ describe("signOffScript", () => {
 
         api.upsert = (payload: unknown) => {
           upserts.push({ table, payload });
+          if (table === "competency_progress") {
+            return {
+              select: () => ({
+                single: async () => ({
+                  data: {
+                    id: "comp-1",
+                    student_id: "stu-1",
+                    class_id: "class-1",
+                    strand: "Mathematics",
+                    status: "mastered",
+                    evidence_count: 1,
+                    ...(payload as object),
+                  },
+                  error: null,
+                }),
+              }),
+            };
+          }
           return {
             select: () => ({
               single: async () => ({
@@ -181,7 +199,8 @@ describe("signOffScript", () => {
     });
 
     expect(upserts.some((u) => u.table === "student_submissions")).toBe(true);
-    expect(inserts.some((i) => i.table === "competency_progress")).toBe(true);
+    expect(upserts.some((u) => u.table === "competency_progress")).toBe(true);
+    expect(inserts.some((i) => i.table === "competency_progress")).toBe(false);
     expect(result.submission.student_id).toBe("stu-1");
     expect(result.competency.status).toBe("mastered");
     expect(result.alreadySignedOff).toBe(false);

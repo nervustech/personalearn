@@ -20,7 +20,8 @@ function authStatus(message: string) {
   }
   if (
     message === "Script is already signed off" ||
-    message === "Script must be drafted before re-evaluation"
+    message === "Script must be drafted before re-evaluation" ||
+    message.startsWith("Instruction must be at most")
   ) {
     return 400;
   }

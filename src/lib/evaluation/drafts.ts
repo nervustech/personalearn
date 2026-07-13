@@ -7,14 +7,12 @@ import {
 } from "@/lib/evaluation/draft-question";
 import { loadMarkingSchemeText } from "@/lib/evaluation/load-marking-scheme";
 import {
-  compareQuestionLabels,
-  normalizeQuestionLabel,
-} from "@/lib/evaluation/normalize-question";
-import type {
-  EvaluatedScript,
-  EvaluatedScriptPage,
-  EvaluationBatch,
-} from "@/types/database";
+  asScriptPages,
+  downloadPageBytes,
+  pagesForQuestion,
+  uniqueQuestionLabelsFromPages,
+} from "@/lib/evaluation/page-images";
+import type { EvaluatedScript, EvaluationBatch } from "@/types/database";
 
 export type ProcessDraftsSummary = {
   drafted: number;
@@ -24,67 +22,6 @@ export type ProcessDraftsSummary = {
   skippedOther: number;
   errors: { scriptId: string; message: string }[];
 };
-
-function mimeFromPath(storagePath: string): string {
-  return storagePath.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
-}
-
-function asPages(pageOrder: unknown): EvaluatedScriptPage[] {
-  if (!Array.isArray(pageOrder)) return [];
-  return pageOrder as EvaluatedScriptPage[];
-}
-
-function coerceLabels(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => normalizeQuestionLabel(item))
-    .filter((x): x is string => Boolean(x));
-}
-
-function uniqueQuestionLabels(pages: EvaluatedScriptPage[]): string[] {
-  const set = new Set<string>();
-  for (const page of pages) {
-    for (const q of coerceLabels(page.questionNumbers)) {
-      set.add(q);
-    }
-  }
-  return [...set].sort(compareQuestionLabels);
-}
-
-async function downloadPageBytes(
-  supabase: SupabaseClient,
-  storagePath: string,
-  cache: Map<string, DraftPageImage>
-): Promise<DraftPageImage> {
-  const cached = cache.get(storagePath);
-  if (cached) return cached;
-
-  const { data: blob, error } = await supabase.storage
-    .from("student_submissions")
-    .download(storagePath);
-
-  if (error || !blob) {
-    throw new Error(error?.message ?? `Could not download ${storagePath}`);
-  }
-
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  const image: DraftPageImage = {
-    bytes,
-    mimeType: mimeFromPath(storagePath),
-  };
-  cache.set(storagePath, image);
-  return image;
-}
-
-function pagesForQuestion(
-  pages: EvaluatedScriptPage[],
-  questionLabel: string
-): EvaluatedScriptPage[] {
-  const matched = pages.filter((p) =>
-    coerceLabels(p.questionNumbers).includes(questionLabel)
-  );
-  return matched.length > 0 ? matched : pages;
-}
 
 export async function processScriptDraft(
   supabase: SupabaseClient,
@@ -101,7 +38,7 @@ export async function processScriptDraft(
     );
   }
 
-  const pages = asPages(script.page_order);
+  const pages = asScriptPages(script.page_order);
   const cache = input.pageCache ?? new Map<string, DraftPageImage>();
   const status = questionEvaluationStatusForScheme(schemeText);
 
@@ -113,7 +50,7 @@ export async function processScriptDraft(
     allImages.push(await downloadPageBytes(supabase, page.storagePath, cache));
   }
 
-  let questionLabels = uniqueQuestionLabels(pages);
+  let questionLabels = uniqueQuestionLabelsFromPages(pages);
   if (questionLabels.length === 0 && allImages.length > 0) {
     questionLabels = await listQuestionsFromImages(allImages);
   }
@@ -251,6 +188,15 @@ export async function processBatchDrafts(
           error instanceof Error ? error.message : "Draft processing failed",
       });
     }
+  }
+
+  // Move batch into in_review once any script is drafted.
+  if (summary.drafted > 0 && batch.status === "draft") {
+    await supabase
+      .from("evaluation_batches")
+      .update({ status: "in_review" })
+      .eq("id", batchId)
+      .eq("status", "draft");
   }
 
   return summary;

@@ -298,8 +298,30 @@ export function IdentityReviewPanel({
     (s) => s.status === "identity_cleared"
   ).length;
   const draftedCount = scripts.filter((s) => s.status === "drafted").length;
+  const signedOffCount = scripts.filter((s) => s.status === "signed_off").length;
 
   const roster = useMemo(() => students ?? [], [students]);
+
+  /** Amber + pending need teacher attention; cleared still need draft. */
+  const identityFocusScripts = useMemo(() => {
+    const priority = (status: string) => {
+      if (status === "identity_amber") return 0;
+      if (status === "pending") return 1;
+      if (status === "identity_cleared") return 2;
+      return 3;
+    };
+    return [...scripts]
+      .filter(
+        (s) =>
+          s.status === "identity_amber" ||
+          s.status === "pending" ||
+          s.status === "identity_cleared"
+      )
+      .sort((a, b) => priority(a.status) - priority(b.status));
+  }, [scripts]);
+
+  const allIdentitiesSettled =
+    !hasPending && amberCount === 0 && clearedCount === 0;
 
   async function runDrafts() {
     setDraftSummary(null);
@@ -356,18 +378,27 @@ export function IdentityReviewPanel({
   }
 
   return (
-    <div className="space-y-6">
+    <section className="space-y-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">
-            Confirm who each script belongs to before grading. Cleared:{" "}
-            {clearedCount} · Needs confirm: {amberCount} · Drafted:{" "}
-            {draftedCount}
-          </p>
+          <h2 className="text-lg font-semibold tracking-tight">
+            {amberCount > 0 || hasPending
+              ? "Identity exceptions"
+              : "Identity & draft setup"}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Draft marks run for identity-cleared scripts only. Full per-question
-            review and sign-off come next. Click a thumbnail for a full-size
-            preview.
+            {amberCount > 0
+              ? `${amberCount} script${amberCount === 1 ? "" : "s"} need identity confirm before drafting. Cleared scripts draft automatically; review marks above.`
+              : hasPending || scripts.length === 0
+                ? "Process uploaded pages to match admission numbers, then draft marks for cleared scripts."
+                : clearedCount > 0
+                  ? `${clearedCount} cleared script${clearedCount === 1 ? "" : "s"} ready to draft. Review queue is above.`
+                  : `All identities settled · ${draftedCount + signedOffCount} in review queue above.`}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cleared: {clearedCount} · Needs confirm: {amberCount} · Drafted:{" "}
+            {draftedCount}
+            {signedOffCount > 0 ? ` · Signed off: ${signedOffCount}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -423,9 +454,13 @@ export function IdentityReviewPanel({
           </Link>{" "}
           to start an evaluation upload.
         </p>
+      ) : allIdentitiesSettled ? (
+        <p className="text-sm text-muted-foreground">
+          No identity exceptions. Continue with the review queue above.
+        </p>
       ) : (
         <ul className="divide-y-0">
-          {scripts.map((script) => (
+          {identityFocusScripts.map((script) => (
             <ScriptRow
               key={script.id}
               classId={classId}
@@ -439,6 +474,6 @@ export function IdentityReviewPanel({
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

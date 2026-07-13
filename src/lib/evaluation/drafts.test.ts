@@ -37,9 +37,15 @@ function mockSupabase(scripts: unknown[]) {
               data: {
                 id: "batch-1",
                 marking_scheme_resource_id: null,
+                status: "draft",
               },
               error: null,
             }),
+          }),
+        }),
+        update: () => ({
+          eq: () => ({
+            eq: vi.fn().mockResolvedValue({ error: null }),
           }),
         }),
       };

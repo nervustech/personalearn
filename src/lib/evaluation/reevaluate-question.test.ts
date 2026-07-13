@@ -31,6 +31,8 @@ describe("reevaluateScriptQuestion", () => {
       awarded: 4,
       max: 5,
       feedback: "revised",
+      student_answer: "student revised answer",
+      expected_answer: "correct answer",
     });
   });
 

@@ -18,19 +18,27 @@ describe("questionEvaluationStatusForScheme", () => {
 });
 
 describe("parseDraftQuestionJson", () => {
-  it("parses awarded, max, and feedback", () => {
+  it("parses awarded, max, feedback, and analysis fields", () => {
     expect(
       parseDraftQuestionJson(
-        '{"awarded": 3, "max": 5, "feedback": "Good method marks."}'
+        JSON.stringify({
+          awarded: 3,
+          max: 5,
+          feedback: "Good method marks.",
+          student_answer: "Student wrote 3/4",
+          expected_answer: "3/4 in simplest form",
+        })
       )
     ).toEqual({
       awarded: 3,
       max: 5,
       feedback: "Good method marks.",
+      student_answer: "Student wrote 3/4",
+      expected_answer: "3/4 in simplest form",
     });
   });
 
-  it("tolerates markdown fences and string numbers", () => {
+  it("tolerates markdown fences, string numbers, and missing analysis keys", () => {
     expect(
       parseDraftQuestionJson(
         '```json\n{"awarded": "2.5", "max": "4", "feedback": "Partial"}\n```'
@@ -39,6 +47,8 @@ describe("parseDraftQuestionJson", () => {
       awarded: 2.5,
       max: 4,
       feedback: "Partial",
+      student_answer: null,
+      expected_answer: null,
     });
   });
 
@@ -47,11 +57,15 @@ describe("parseDraftQuestionJson", () => {
       awarded: null,
       max: null,
       feedback: null,
+      student_answer: null,
+      expected_answer: null,
     });
     expect(parseDraftQuestionJson("{")).toEqual({
       awarded: null,
       max: null,
       feedback: null,
+      student_answer: null,
+      expected_answer: null,
     });
   });
 });

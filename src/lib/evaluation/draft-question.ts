@@ -12,6 +12,8 @@ export type DraftQuestionResult = {
   awarded: number | null;
   max: number | null;
   feedback: string | null;
+  student_answer: string | null;
+  expected_answer: string | null;
 };
 
 export function questionEvaluationStatusForScheme(
@@ -29,30 +31,47 @@ function parseFiniteNumber(raw: unknown): number | null {
   return null;
 }
 
+function parseOptionalText(raw: unknown): string | null {
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (raw == null) return null;
+  const asString = String(raw).trim();
+  return asString.length > 0 ? asString : null;
+}
+
+const EMPTY_DRAFT: DraftQuestionResult = {
+  awarded: null,
+  max: null,
+  feedback: null,
+  student_answer: null,
+  expected_answer: null,
+};
+
 export function parseDraftQuestionJson(text: string): DraftQuestionResult {
   const trimmed = text.trim();
   const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    return { awarded: null, max: null, feedback: null };
+    return { ...EMPTY_DRAFT };
   }
   try {
     const parsed = JSON.parse(jsonMatch[0]) as {
       awarded?: unknown;
       max?: unknown;
       feedback?: unknown;
+      student_answer?: unknown;
+      expected_answer?: unknown;
     };
     return {
       awarded: parseFiniteNumber(parsed.awarded),
       max: parseFiniteNumber(parsed.max),
-      feedback:
-        typeof parsed.feedback === "string"
-          ? parsed.feedback.trim() || null
-          : parsed.feedback == null
-            ? null
-            : String(parsed.feedback).trim() || null,
+      feedback: parseOptionalText(parsed.feedback),
+      student_answer: parseOptionalText(parsed.student_answer),
+      expected_answer: parseOptionalText(parsed.expected_answer),
     };
   } catch {
-    return { awarded: null, max: null, feedback: null };
+    return { ...EMPTY_DRAFT };
   }
 }
 
@@ -79,7 +98,9 @@ ${schemeText}
 Return ONLY valid JSON with keys:
 - awarded (number — marks awarded)
 - max (number — maximum marks for this question from the scheme)
-- feedback (string — brief feedback for the teacher/student)
+- feedback (string — brief rationale for the teacher/student)
+- student_answer (string — short excerpt of what the student wrote for this question)
+- expected_answer (string — what the marking scheme required for this question)
 
 No markdown.`;
   }
@@ -91,7 +112,9 @@ ${instructionBlock}
 Return ONLY valid JSON with keys:
 - awarded (number — estimated marks awarded)
 - max (number — estimated maximum for this question)
-- feedback (string — brief feedback noting this is an estimate without a scheme)
+- feedback (string — brief rationale noting this is an estimate without a scheme)
+- student_answer (string — short excerpt of what the student wrote for this question)
+- expected_answer (null — always null when there is no marking scheme)
 
 No markdown.`;
 }
@@ -105,8 +128,7 @@ export async function draftQuestionFromImages(input: {
   requireGoogleGenerativeAiApiKey();
   if (input.pages.length === 0) {
     return {
-      awarded: null,
-      max: null,
+      ...EMPTY_DRAFT,
       feedback: "No page images available for this question.",
     };
   }
@@ -135,7 +157,13 @@ export async function draftQuestionFromImages(input: {
     ],
   });
 
-  return parseDraftQuestionJson(text);
+  const parsed = parseDraftQuestionJson(text);
+  const hasScheme = Boolean(input.schemeText && input.schemeText.trim().length > 0);
+  return {
+    ...parsed,
+    // No scheme → never store an "expected" answer even if the model invents one.
+    expected_answer: hasScheme ? parsed.expected_answer : null,
+  };
 }
 
 /** When identity left no question labels, ask vision to list them from all pages. */

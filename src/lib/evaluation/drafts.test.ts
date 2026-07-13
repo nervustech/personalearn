@@ -94,6 +94,8 @@ describe("processBatchDrafts", () => {
       awarded: 2,
       max: 5,
       feedback: "Estimate",
+      student_answer: "wrote 2",
+      expected_answer: null,
     });
     mockListQuestions.mockResolvedValue([]);
   });

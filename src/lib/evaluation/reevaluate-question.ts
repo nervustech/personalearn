@@ -157,6 +157,8 @@ export async function reevaluateScriptQuestion(
       awarded: draft.awarded,
       max: draft.max,
       feedback: draft.feedback,
+      student_answer: draft.student_answer,
+      expected_answer: draft.expected_answer,
       status: "reevaluated",
     })
     .eq("id", input.questionId)

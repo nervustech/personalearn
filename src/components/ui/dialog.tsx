@@ -44,6 +44,11 @@ export function Dialog({
         className
       )}
       onClose={() => onOpenChange(false)}
+      // Light dismiss: a click on the dialog element itself is a backdrop
+      // click (content clicks land on child nodes), so close on the side.
+      onClick={(event) => {
+        if (event.target === dialogRef.current) onOpenChange(false);
+      }}
     >
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-6 py-4">
         <div className="min-w-0">

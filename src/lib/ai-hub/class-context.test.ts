@@ -21,5 +21,7 @@ describe("buildClassAssistantSystemPrompt", () => {
     expect(prompt).toContain("save_resource");
     expect(prompt).toContain("revise further");
     expect(prompt).toContain("explicitly confirms");
+    expect(prompt).toContain("$...$");
+    expect(prompt).toContain("$$...$$");
   });
 });

@@ -33,8 +33,8 @@ export function ResourceViewDialog({
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-xs transition-all hover:bg-muted hover:text-foreground"
-          aria-label="Download original"
-          title="Download original"
+          aria-label="Download"
+          title="Download"
         >
           <Download className="h-4 w-4" />
         </a>

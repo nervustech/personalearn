@@ -2,7 +2,10 @@
 
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import "katex/dist/katex.min.css";
 import { normalizeMarkdown } from "@/lib/ai-hub/normalize-markdown";
 
 export const markdownComponents: Components = {
@@ -91,7 +94,11 @@ type MarkdownContentProps = {
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
   return (
     <div className={className}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={markdownComponents}
+      >
         {normalizeMarkdown(content)}
       </ReactMarkdown>
     </div>

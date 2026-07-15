@@ -7,7 +7,6 @@ import { useResources } from "@/lib/hooks/use-resources";
 import {
   useAssessments,
   useCreateEvaluationBatch,
-  useProcessDrafts,
   useProcessEvaluationIdentity,
   useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
@@ -46,7 +45,6 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const createBatch = useCreateEvaluationBatch(classId);
   const uploadPages = useUploadEvaluationPages(classId);
   const processIdentity = useProcessEvaluationIdentity(classId);
-  const processDrafts = useProcessDrafts(classId, "");
 
   const markingSchemes = useMemo(
     () =>
@@ -69,7 +67,6 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     createBatch.isPending ||
     uploadPages.isPending ||
     processIdentity.isPending ||
-    processDrafts.isPending ||
     compressing;
 
   function resetForm() {
@@ -85,7 +82,6 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     createBatch.reset();
     uploadPages.reset();
     processIdentity.reset();
-    processDrafts.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -148,15 +144,8 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
       const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
       if (warnings.length) setUploadWarnings(warnings);
 
-      const scripts = await processIdentity.mutateAsync(batchId);
-      const hasCleared = scripts.some((s) => s.status === "identity_cleared");
-      if (hasCleared) {
-        try {
-          await processDrafts.mutateAsync(batchId);
-        } catch {
-          // Identity succeeded — land on review; Draft marks remains retry.
-        }
-      }
+      // Read admission numbers; cleared scripts auto-draft on the review page.
+      await processIdentity.mutateAsync(batchId);
 
       handleOpenChange(false);
       router.push(`/classes/${classId}/evaluations/${batchId}`);
@@ -380,9 +369,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                       ? "Uploading…"
                       : processIdentity.isPending
                         ? "Reading identity…"
-                        : processDrafts.isPending
-                          ? "Drafting marks…"
-                          : "Upload & open review"}
+                        : "Upload & open review"}
                 </Button>
               </div>
             </>

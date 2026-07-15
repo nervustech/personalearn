@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useStudents } from "@/lib/hooks/use-classes";
 import {
@@ -289,9 +289,10 @@ export function IdentityReviewPanel({
   const { data: students } = useStudents(classId);
   const processIdentity = useProcessEvaluationIdentity(classId);
   const processDrafts = useProcessDrafts(classId, batchId);
+  const draftMutateAsync = processDrafts.mutateAsync;
   const [draftSummary, setDraftSummary] = useState<string | null>(null);
 
-  const scripts = data?.scripts ?? [];
+  const scripts = useMemo(() => data?.scripts ?? [], [data?.scripts]);
   const hasPending = scripts.some((s) => s.status === "pending");
   const amberCount = scripts.filter((s) => s.status === "identity_amber").length;
   const clearedCount = scripts.filter(
@@ -323,9 +324,9 @@ export function IdentityReviewPanel({
   const allIdentitiesSettled =
     !hasPending && amberCount === 0 && clearedCount === 0;
 
-  async function runDrafts() {
+  const runDrafts = useCallback(async () => {
     setDraftSummary(null);
-    const summary = await processDrafts.mutateAsync(batchId);
+    const summary = await draftMutateAsync(batchId);
     await refetch();
     const errorNote =
       summary.errors.length > 0
@@ -346,7 +347,25 @@ export function IdentityReviewPanel({
             }`
           : "")
     );
-  }
+  }, [draftMutateAsync, batchId, refetch]);
+
+  // Auto-draft cleared scripts on load so teachers never hand-trigger the
+  // happy path. Each cleared id is attempted once; the Draft marks button
+  // stays as an explicit retry if a run errors.
+  const clearedIds = useMemo(
+    () =>
+      scripts.filter((s) => s.status === "identity_cleared").map((s) => s.id),
+    [scripts]
+  );
+  const autoDraftedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (processIdentity.isPending || processDrafts.isPending) return;
+    const toDraft = clearedIds.filter((id) => !autoDraftedRef.current.has(id));
+    if (toDraft.length === 0) return;
+    for (const id of toDraft) autoDraftedRef.current.add(id);
+    void runDrafts();
+  }, [clearedIds, processIdentity.isPending, processDrafts.isPending, runDrafts]);
 
   async function handleProcess() {
     const result = await processIdentity.mutateAsync(batchId);

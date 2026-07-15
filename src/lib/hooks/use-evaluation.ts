@@ -225,9 +225,13 @@ export function useProcessDrafts(classId: string, batchId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (overrideBatchId?: string) => {
+      const targetBatchId = overrideBatchId || batchId;
+      if (!targetBatchId) {
+        throw new Error("Batch id is required for draft processing");
+      }
       const response = await fetch(
-        `/api/evaluation-batches/${batchId}/process-drafts`,
+        `/api/evaluation-batches/${targetBatchId}/process-drafts`,
         { method: "POST" }
       );
       const payload = (await response.json()) as {
@@ -239,9 +243,10 @@ export function useProcessDrafts(classId: string, batchId: string) {
       }
       return payload.summary!;
     },
-    onSuccess: () => {
+    onSuccess: (_summary, overrideBatchId) => {
+      const targetBatchId = overrideBatchId || batchId;
       queryClient.invalidateQueries({
-        queryKey: evaluationScriptsQueryKey(batchId),
+        queryKey: evaluationScriptsQueryKey(targetBatchId),
       });
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),

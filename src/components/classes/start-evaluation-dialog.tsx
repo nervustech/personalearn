@@ -7,6 +7,7 @@ import { useResources } from "@/lib/hooks/use-resources";
 import {
   useAssessments,
   useCreateEvaluationBatch,
+  useProcessDrafts,
   useProcessEvaluationIdentity,
   useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
@@ -45,6 +46,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const createBatch = useCreateEvaluationBatch(classId);
   const uploadPages = useUploadEvaluationPages(classId);
   const processIdentity = useProcessEvaluationIdentity(classId);
+  const processDrafts = useProcessDrafts(classId, "");
 
   const markingSchemes = useMemo(
     () =>
@@ -67,6 +69,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     createBatch.isPending ||
     uploadPages.isPending ||
     processIdentity.isPending ||
+    processDrafts.isPending ||
     compressing;
 
   function resetForm() {
@@ -82,6 +85,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     createBatch.reset();
     uploadPages.reset();
     processIdentity.reset();
+    processDrafts.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -132,19 +136,28 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
       return;
     }
 
+    const batchId = createdBatchId;
     try {
       setCompressing(true);
       const files = await compressEvalScanImages(selectedFiles);
       setCompressing(false);
       const uploadResult = await uploadPages.mutateAsync({
-        batchId: createdBatchId,
+        batchId,
         files,
       });
       const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
       if (warnings.length) setUploadWarnings(warnings);
 
-      await processIdentity.mutateAsync(createdBatchId);
-      const batchId = createdBatchId;
+      const scripts = await processIdentity.mutateAsync(batchId);
+      const hasCleared = scripts.some((s) => s.status === "identity_cleared");
+      if (hasCleared) {
+        try {
+          await processDrafts.mutateAsync(batchId);
+        } catch {
+          // Identity succeeded — land on review; Draft marks remains retry.
+        }
+      }
+
       handleOpenChange(false);
       router.push(`/classes/${classId}/evaluations/${batchId}`);
     } catch (error) {
@@ -308,8 +321,8 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
               <p className="text-sm text-muted-foreground">
                 Upload scanned script pages as JPEG or PNG (any order). Large
                 phone photos are resized in the browser first so handwriting
-                stays readable. After upload we read admission numbers and open
-                identity review.
+                stays readable. After upload we read admission numbers, draft
+                cleared scripts, and open the review workspace.
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>
@@ -363,9 +376,13 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                 >
                   {compressing
                     ? "Preparing images…"
-                    : uploadPages.isPending || processIdentity.isPending
-                      ? "Uploading & reading…"
-                      : "Upload & review identity"}
+                    : uploadPages.isPending
+                      ? "Uploading…"
+                      : processIdentity.isPending
+                        ? "Reading identity…"
+                        : processDrafts.isPending
+                          ? "Drafting marks…"
+                          : "Upload & open review"}
                 </Button>
               </div>
             </>

@@ -388,11 +388,11 @@ export function IdentityReviewPanel({
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {amberCount > 0
-              ? `${amberCount} script${amberCount === 1 ? "" : "s"} need identity confirm before drafting. Cleared scripts draft automatically; review marks above.`
+              ? `${amberCount} script${amberCount === 1 ? "" : "s"} need identity confirm before drafting. Cleared scripts draft automatically after upload; use Draft marks only to retry.`
               : hasPending || scripts.length === 0
-                ? "Process uploaded pages to match admission numbers, then draft marks for cleared scripts."
+                ? "Process uploaded pages to match admission numbers. Cleared scripts draft automatically; amber stays the human gate."
                 : clearedCount > 0
-                  ? `${clearedCount} cleared script${clearedCount === 1 ? "" : "s"} ready to draft. Review queue is above.`
+                  ? `${clearedCount} cleared script${clearedCount === 1 ? "" : "s"} ready — Draft marks retries drafting if upload auto-draft missed them.`
                   : `All identities settled · ${draftedCount + signedOffCount} in review queue above.`}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -420,7 +420,7 @@ export function IdentityReviewPanel({
               disabled={processDrafts.isPending || processIdentity.isPending}
               onClick={handleDraftMarks}
             >
-              {processDrafts.isPending ? "Drafting marks…" : "Draft marks"}
+              {processDrafts.isPending ? "Retrying drafts…" : "Draft marks"}
             </Button>
           ) : null}
         </div>

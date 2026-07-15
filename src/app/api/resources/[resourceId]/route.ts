@@ -38,10 +38,27 @@ export async function GET(_request: Request, context: RouteContext) {
     const rawContent = resource.raw_content as {
       storagePath?: string;
       text?: string;
+      fileName?: string;
     };
 
-    // Every resource downloads as a clean, consistent PDF built from its
-    // extracted text — including uploaded originals.
+    // Prefer the original stored file — generated text→PDF loses layout,
+    // math, and scan fidelity. Only synthesize a PDF when there is no original
+    // (e.g. AI Hub–saved markdown with no upload).
+    if (rawContent.storagePath) {
+      const { data, error } = await supabase.storage
+        .from("resources")
+        .createSignedUrl(rawContent.storagePath, 3600);
+
+      if (error || !data?.signedUrl) {
+        return NextResponse.json(
+          { error: "Could not create download link" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.redirect(data.signedUrl);
+    }
+
     const text = typeof rawContent.text === "string" ? rawContent.text : "";
     if (text.trim()) {
       const pdf = await renderResourcePdf(resource.title, text);
@@ -57,26 +74,10 @@ export async function GET(_request: Request, context: RouteContext) {
       });
     }
 
-    // No extracted text (e.g. an image with no OCR) — fall back to original.
-    if (!rawContent.storagePath) {
-      return NextResponse.json(
-        { error: "No downloadable content for this resource" },
-        { status: 404 }
-      );
-    }
-
-    const { data, error } = await supabase.storage
-      .from("resources")
-      .createSignedUrl(rawContent.storagePath, 3600);
-
-    if (error || !data?.signedUrl) {
-      return NextResponse.json(
-        { error: "Could not create download link" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.redirect(data.signedUrl);
+    return NextResponse.json(
+      { error: "No downloadable content for this resource" },
+      { status: 404 }
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Download failed";

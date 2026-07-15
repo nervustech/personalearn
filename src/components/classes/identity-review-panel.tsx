@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useStudents } from "@/lib/hooks/use-classes";
 import {
@@ -289,9 +289,10 @@ export function IdentityReviewPanel({
   const { data: students } = useStudents(classId);
   const processIdentity = useProcessEvaluationIdentity(classId);
   const processDrafts = useProcessDrafts(classId, batchId);
+  const draftMutateAsync = processDrafts.mutateAsync;
   const [draftSummary, setDraftSummary] = useState<string | null>(null);
 
-  const scripts = data?.scripts ?? [];
+  const scripts = useMemo(() => data?.scripts ?? [], [data?.scripts]);
   const hasPending = scripts.some((s) => s.status === "pending");
   const amberCount = scripts.filter((s) => s.status === "identity_amber").length;
   const clearedCount = scripts.filter(
@@ -302,30 +303,25 @@ export function IdentityReviewPanel({
 
   const roster = useMemo(() => students ?? [], [students]);
 
-  /** Amber + pending need teacher attention; cleared still need draft. */
+  /** Only amber + pending need a visible panel; cleared drafts silently. */
   const identityFocusScripts = useMemo(() => {
     const priority = (status: string) => {
       if (status === "identity_amber") return 0;
       if (status === "pending") return 1;
-      if (status === "identity_cleared") return 2;
-      return 3;
+      return 2;
     };
     return [...scripts]
       .filter(
-        (s) =>
-          s.status === "identity_amber" ||
-          s.status === "pending" ||
-          s.status === "identity_cleared"
+        (s) => s.status === "identity_amber" || s.status === "pending"
       )
       .sort((a, b) => priority(a.status) - priority(b.status));
   }, [scripts]);
 
-  const allIdentitiesSettled =
-    !hasPending && amberCount === 0 && clearedCount === 0;
+  const needsTeacherAttention = hasPending || amberCount > 0;
 
-  async function runDrafts() {
+  const runDrafts = useCallback(async () => {
     setDraftSummary(null);
-    const summary = await processDrafts.mutateAsync();
+    const summary = await draftMutateAsync(batchId);
     await refetch();
     const errorNote =
       summary.errors.length > 0
@@ -346,7 +342,25 @@ export function IdentityReviewPanel({
             }`
           : "")
     );
-  }
+  }, [draftMutateAsync, batchId, refetch]);
+
+  // Auto-draft cleared scripts on load so teachers never hand-trigger the
+  // happy path. Each cleared id is attempted once; the Draft marks button
+  // stays as an explicit retry if a run errors.
+  const clearedIds = useMemo(
+    () =>
+      scripts.filter((s) => s.status === "identity_cleared").map((s) => s.id),
+    [scripts]
+  );
+  const autoDraftedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (processIdentity.isPending || processDrafts.isPending) return;
+    const toDraft = clearedIds.filter((id) => !autoDraftedRef.current.has(id));
+    if (toDraft.length === 0) return;
+    for (const id of toDraft) autoDraftedRef.current.add(id);
+    void runDrafts();
+  }, [clearedIds, processIdentity.isPending, processDrafts.isPending, runDrafts]);
 
   async function handleProcess() {
     const result = await processIdentity.mutateAsync(batchId);
@@ -377,34 +391,39 @@ export function IdentityReviewPanel({
     );
   }
 
+  // Happy path: cleared scripts draft in the background; don't surface a
+  // setup panel before review. Only interrupt when identity needs a human.
+  if (!needsTeacherAttention && !processDrafts.isError) {
+    return null;
+  }
+
   return (
-    <section className="space-y-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">
-            {amberCount > 0 || hasPending
-              ? "Identity exceptions"
-              : "Identity & draft setup"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+    <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-50/40 p-3 dark:bg-amber-950/20">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold tracking-tight">
             {amberCount > 0
-              ? `${amberCount} script${amberCount === 1 ? "" : "s"} need identity confirm before drafting. Cleared scripts draft automatically; review marks above.`
-              : hasPending || scripts.length === 0
-                ? "Process uploaded pages to match admission numbers, then draft marks for cleared scripts."
-                : clearedCount > 0
-                  ? `${clearedCount} cleared script${clearedCount === 1 ? "" : "s"} ready to draft. Review queue is above.`
-                  : `All identities settled · ${draftedCount + signedOffCount} in review queue above.`}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Cleared: {clearedCount} · Needs confirm: {amberCount} · Drafted:{" "}
-            {draftedCount}
-            {signedOffCount > 0 ? ` · Signed off: ${signedOffCount}` : ""}
+              ? `${amberCount} identity exception${amberCount === 1 ? "" : "s"}`
+              : hasPending
+                ? "Pages awaiting identity"
+                : "Drafting issue"}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {amberCount > 0
+              ? "Confirm the student before marks can draft."
+              : hasPending
+                ? "Process identity to match admission numbers."
+                : "Auto-draft failed — retry below."}
+            {draftedCount + signedOffCount > 0
+              ? ` · ${draftedCount + signedOffCount} already in review`
+              : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {hasPending || scripts.length === 0 ? (
             <Button
               type="button"
+              size="sm"
               disabled={processIdentity.isPending || processDrafts.isPending}
               onClick={handleProcess}
             >
@@ -413,14 +432,15 @@ export function IdentityReviewPanel({
                 : "Process identity"}
             </Button>
           ) : null}
-          {clearedCount > 0 ? (
+          {processDrafts.isError || clearedCount > 0 ? (
             <Button
               type="button"
+              size="sm"
               variant="secondary"
               disabled={processDrafts.isPending || processIdentity.isPending}
               onClick={handleDraftMarks}
             >
-              {processDrafts.isPending ? "Drafting marks…" : "Draft marks"}
+              {processDrafts.isPending ? "Retrying…" : "Retry draft"}
             </Button>
           ) : null}
         </div>
@@ -443,7 +463,7 @@ export function IdentityReviewPanel({
       ) : null}
 
       {draftSummary ? (
-        <p className="text-sm text-muted-foreground">{draftSummary}</p>
+        <p className="text-xs text-muted-foreground">{draftSummary}</p>
       ) : null}
 
       {scripts.length === 0 ? (
@@ -451,15 +471,11 @@ export function IdentityReviewPanel({
           No pages uploaded yet.{" "}
           <Link href={`/classes/${classId}`} className="underline">
             Back to class
-          </Link>{" "}
-          to start an evaluation upload.
+          </Link>
+          .
         </p>
-      ) : allIdentitiesSettled ? (
-        <p className="text-sm text-muted-foreground">
-          No identity exceptions. Continue with the review queue above.
-        </p>
-      ) : (
-        <ul className="divide-y-0">
+      ) : identityFocusScripts.length > 0 ? (
+        <ul>
           {identityFocusScripts.map((script) => (
             <ScriptRow
               key={script.id}
@@ -473,7 +489,7 @@ export function IdentityReviewPanel({
             />
           ))}
         </ul>
-      )}
+      ) : null}
     </section>
   );
 }

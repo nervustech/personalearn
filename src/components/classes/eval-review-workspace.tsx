@@ -198,29 +198,30 @@ function QuestionAnalysisPanel({
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card/60 p-4">
+    <div className="flex h-full flex-col gap-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">
-            Question {question.question_number}
-          </p>
-          <p
-            className={cn(
-              "text-xs",
-              question.status === "ai_estimate"
-                ? "text-amber-700"
-                : "text-muted-foreground"
-            )}
-          >
-            {statusLabel(question.status)} · {questionIndex + 1} of{" "}
-            {questionCount}
+        <div className="min-w-0">
+          <p className="text-sm font-medium leading-tight">
+            Q{question.question_number}
+            <span
+              className={cn(
+                "ml-2 text-xs font-normal",
+                question.status === "ai_estimate"
+                  ? "text-amber-700"
+                  : "text-muted-foreground"
+              )}
+            >
+              {statusLabel(question.status)} · {questionIndex + 1}/
+              {questionCount}
+            </span>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-1">
           <Button
             type="button"
             size="sm"
             variant="secondary"
+            className="h-7 px-2"
             disabled={questionIndex <= 0}
             onClick={onPrev}
           >
@@ -230,6 +231,7 @@ function QuestionAnalysisPanel({
             type="button"
             size="sm"
             variant="secondary"
+            className="h-7 px-2"
             disabled={questionIndex >= questionCount - 1}
             onClick={onNext}
           >
@@ -238,44 +240,16 @@ function QuestionAnalysisPanel({
         </div>
       </div>
 
-      {hasStructuredAnalysis ? (
-        <div className="space-y-3 rounded-xl border border-border/80 bg-background/60 p-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Student wrote
-            </p>
-            <p className="mt-1 text-sm whitespace-pre-wrap">
-              {question.student_answer?.trim() || "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Expected
-            </p>
-            <p className="mt-1 text-sm whitespace-pre-wrap">
-              {question.expected_answer?.trim() ||
-                (question.status === "ai_estimate"
-                  ? "No scheme — estimate only"
-                  : "—")}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-amber-700/30 bg-amber-50/60 p-3 text-sm text-amber-950">
-          Structured student vs scheme analysis is not on this draft yet.
-          {!readOnly
-            ? " Re-evaluate this question to refresh analysis fields."
-            : null}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label htmlFor={`awarded-${question.id}`}>Awarded</Label>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-1.5">
+        <div className="space-y-0.5">
+          <Label htmlFor={`awarded-${question.id}`} className="text-xs">
+            Awarded
+          </Label>
           <Input
             id={`awarded-${question.id}`}
             type="number"
             step="any"
+            className="h-8"
             value={awarded}
             disabled={readOnly || updateQuestion.isPending}
             onChange={(e) => setAwarded(e.target.value)}
@@ -284,12 +258,16 @@ function QuestionAnalysisPanel({
             }}
           />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor={`max-${question.id}`}>Max</Label>
+        <span className="pb-1.5 text-sm text-muted-foreground">/</span>
+        <div className="space-y-0.5">
+          <Label htmlFor={`max-${question.id}`} className="text-xs">
+            Max
+          </Label>
           <Input
             id={`max-${question.id}`}
             type="number"
             step="any"
+            className="h-8"
             value={max}
             disabled={readOnly || updateQuestion.isPending}
             onChange={(e) => setMax(e.target.value)}
@@ -300,11 +278,42 @@ function QuestionAnalysisPanel({
         </div>
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor={`feedback-${question.id}`}>Rationale</Label>
+      {hasStructuredAnalysis ? (
+        <div className="grid gap-2 text-sm sm:grid-cols-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Student
+            </p>
+            <p className="mt-0.5 max-h-28 overflow-y-auto whitespace-pre-wrap text-xs leading-snug">
+              {question.student_answer?.trim() || "—"}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Expected
+            </p>
+            <p className="mt-0.5 max-h-28 overflow-y-auto whitespace-pre-wrap text-xs leading-snug">
+              {question.expected_answer?.trim() ||
+                (question.status === "ai_estimate"
+                  ? "No scheme — estimate only"
+                  : "—")}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-amber-800 dark:text-amber-200">
+          No structured analysis yet.
+          {!readOnly ? " Re-evaluate to refresh." : null}
+        </p>
+      )}
+
+      <div className="space-y-0.5">
+        <Label htmlFor={`feedback-${question.id}`} className="text-xs">
+          Rationale
+        </Label>
         <textarea
           id={`feedback-${question.id}`}
-          className="min-h-24 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
+          className="min-h-16 w-full rounded-lg border border-input bg-card px-2.5 py-1.5 text-xs leading-snug shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
           value={feedback}
           disabled={readOnly || updateQuestion.isPending}
           onChange={(e) => setFeedback(e.target.value)}
@@ -315,11 +324,12 @@ function QuestionAnalysisPanel({
       </div>
 
       {!readOnly ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <Button
             type="button"
             size="sm"
             variant="secondary"
+            className="h-7"
             disabled={updateQuestion.isPending}
             onClick={() => void saveEdits()}
           >
@@ -329,6 +339,7 @@ function QuestionAnalysisPanel({
             type="button"
             size="sm"
             variant="secondary"
+            className="h-7"
             disabled={reevaluate.isPending}
             onClick={() => setReevalOpen(true)}
           >
@@ -338,7 +349,7 @@ function QuestionAnalysisPanel({
       ) : null}
 
       {localError ? (
-        <p className="text-sm text-destructive">{localError}</p>
+        <p className="text-xs text-destructive">{localError}</p>
       ) : null}
 
       <Dialog
@@ -432,40 +443,39 @@ function ScriptWorkspace({
   );
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-col gap-3 rounded-2xl border border-border bg-card/60 p-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold tracking-tight">
+    <div className="min-w-0 space-y-2">
+      <header className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold tracking-tight">
             {script.student_name ?? "Unassigned student"}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            Admission: {script.read_admission_number ?? "—"} · Status:{" "}
-            {script.status}
-          </p>
-          <p className="mt-1 text-sm">
-            Total:{" "}
-            <span className="font-medium">
-              {totals.awarded ?? "—"} / {totals.max ?? "—"}
-            </span>
-            <span className="ml-2 text-muted-foreground">
-              Competency preview: {competency.status}
-            </span>
+          <p className="truncate text-xs text-muted-foreground">
+            {script.read_admission_number ?? "—"} ·{" "}
+            <span className="font-medium text-foreground">
+              {totals.awarded ?? "—"}/{totals.max ?? "—"}
+            </span>{" "}
+            · {competency.status.replaceAll("_", " ")}
           </p>
         </div>
         {script.status === "drafted" ? (
           <Button
             type="button"
             size="sm"
+            className="h-7 shrink-0"
             disabled={!script.student_id || signOff.isPending}
             onClick={() => setConfirmOpen(true)}
           >
             Sign off
           </Button>
-        ) : null}
+        ) : (
+          <span className="shrink-0 text-xs capitalize text-muted-foreground">
+            {script.status.replaceAll("_", " ")}
+          </span>
+        )}
       </header>
 
       {signOff.isError ? (
-        <p className="text-sm text-destructive">
+        <p className="text-xs text-destructive">
           {signOff.error instanceof Error
             ? signOff.error.message
             : "Sign-off failed"}
@@ -473,26 +483,28 @@ function ScriptWorkspace({
       ) : null}
 
       {question ? (
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(16rem,1fr)] lg:items-start">
           <ScriptPageViewer
             pages={pages}
             markerKind={markerKind}
             markerStatus={question.status}
             questionLabel={question.question_number}
           />
-          <QuestionAnalysisPanel
-            script={script}
-            question={question}
-            questionIndex={safeIndex}
-            questionCount={questions.length}
-            readOnly={readOnly}
-            updateQuestion={updateQuestion}
-            reevaluate={reevaluate}
-            onPrev={() => setQuestionIndex((i) => Math.max(0, i - 1))}
-            onNext={() =>
-              setQuestionIndex((i) => Math.min(questions.length - 1, i + 1))
-            }
-          />
+          <aside className="rounded-2xl border border-border bg-card/80 p-3 lg:sticky lg:top-3">
+            <QuestionAnalysisPanel
+              script={script}
+              question={question}
+              questionIndex={safeIndex}
+              questionCount={questions.length}
+              readOnly={readOnly}
+              updateQuestion={updateQuestion}
+              reevaluate={reevaluate}
+              onPrev={() => setQuestionIndex((i) => Math.max(0, i - 1))}
+              onNext={() =>
+                setQuestionIndex((i) => Math.min(questions.length - 1, i + 1))
+              }
+            />
+          </aside>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
@@ -565,6 +577,18 @@ export function EvalReviewWorkspace({
     );
   }, [data?.scripts]);
 
+  const draftingInProgress = useMemo(() => {
+    const scripts = data?.scripts ?? [];
+    return scripts.some((s) => s.status === "identity_cleared");
+  }, [data?.scripts]);
+
+  const awaitingIdentity = useMemo(() => {
+    const scripts = data?.scripts ?? [];
+    return scripts.some(
+      (s) => s.status === "pending" || s.status === "identity_amber"
+    );
+  }, [data?.scripts]);
+
   useEffect(() => {
     if (reviewScripts.length === 0) {
       setSelectedScriptId(null);
@@ -602,58 +626,68 @@ export function EvalReviewWorkspace({
 
   if (reviewScripts.length === 0) {
     return (
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold tracking-tight">Review workspace</h2>
-        <p className="text-sm text-muted-foreground">
-          No drafted scripts yet. Process identity and draft marks in the
-          section below — then scripts appear here for edit, re-eval, and
-          sign-off.
+      <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+        <p className="text-sm font-medium">
+          {draftingInProgress
+            ? "Drafting marks…"
+            : awaitingIdentity
+              ? "Waiting on identity"
+              : "No scripts to review yet"}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {draftingInProgress
+            ? "Cleared scripts are drafting in the background — this page will fill as they finish."
+            : awaitingIdentity
+              ? "Confirm amber identities below, then drafting starts automatically."
+              : "Upload scans from the class page to begin."}
         </p>
       </section>
     );
   }
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">Review workspace</h2>
-        <p className="text-sm text-muted-foreground">
-          Scan pages beside AI analysis, verify comparison cards, then sign off.
-          Durable writes happen only on sign-off.
-        </p>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {reviewScripts.map((script) => {
-          const totals =
-            script.totals ?? computeScriptTotal(script.questions ?? []);
-          const selected = script.id === selectedScriptId;
-          return (
-            <button
-              key={script.id}
-              type="button"
-              onClick={() => setSelectedScriptId(script.id)}
-              className={cn(
-                "min-w-[10.5rem] shrink-0 rounded-xl border px-3 py-2 text-left transition-colors",
-                selected
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-card/60 hover:bg-muted/50"
-              )}
-            >
-              <p className="truncate text-sm font-medium">
-                {script.student_name ?? "Unassigned"}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {script.read_admission_number ?? "—"} · {totals.awarded ?? "—"}/
-                {totals.max ?? "—"}
-              </p>
-              <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-                {script.status.replaceAll("_", " ")}
-              </p>
-            </button>
-          );
-        })}
-      </div>
+    <section className="grid gap-3 lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start">
+      <nav
+        aria-label="Scripts"
+        className="max-h-48 overflow-y-auto rounded-xl border border-border bg-card lg:sticky lg:top-3 lg:max-h-[calc(100vh-5.5rem)]"
+      >
+        <div className="sticky top-0 z-10 border-b border-border bg-card px-2.5 py-1.5">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Students · {reviewScripts.length}
+          </p>
+        </div>
+        <ul className="divide-y divide-border/70">
+          {reviewScripts.map((script) => {
+            const totals =
+              script.totals ?? computeScriptTotal(script.questions ?? []);
+            const selected = script.id === selectedScriptId;
+            const signed = script.status === "signed_off";
+            return (
+              <li key={script.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedScriptId(script.id)}
+                  className={cn(
+                    "w-full px-2.5 py-1.5 text-left transition-colors",
+                    selected
+                      ? "bg-primary/10 ring-1 ring-inset ring-primary/35"
+                      : "hover:bg-muted/50"
+                  )}
+                >
+                  <p className="truncate text-xs font-medium leading-snug">
+                    {script.student_name ?? "Unassigned"}
+                  </p>
+                  <p className="truncate text-[11px] leading-snug text-muted-foreground">
+                    {script.read_admission_number ?? "—"} ·{" "}
+                    {totals.awarded ?? "—"}/{totals.max ?? "—"}
+                    {signed ? " · ✓" : ""}
+                  </p>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
 
       {selectedScript ? (
         <ScriptWorkspace

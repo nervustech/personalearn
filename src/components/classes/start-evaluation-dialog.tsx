@@ -132,19 +132,21 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
       return;
     }
 
+    const batchId = createdBatchId;
     try {
       setCompressing(true);
       const files = await compressEvalScanImages(selectedFiles);
       setCompressing(false);
       const uploadResult = await uploadPages.mutateAsync({
-        batchId: createdBatchId,
+        batchId,
         files,
       });
       const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
       if (warnings.length) setUploadWarnings(warnings);
 
-      await processIdentity.mutateAsync(createdBatchId);
-      const batchId = createdBatchId;
+      // Read admission numbers; cleared scripts auto-draft on the review page.
+      await processIdentity.mutateAsync(batchId);
+
       handleOpenChange(false);
       router.push(`/classes/${classId}/evaluations/${batchId}`);
     } catch (error) {
@@ -308,8 +310,8 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
               <p className="text-sm text-muted-foreground">
                 Upload scanned script pages as JPEG or PNG (any order). Large
                 phone photos are resized in the browser first so handwriting
-                stays readable. After upload we read admission numbers and open
-                identity review.
+                stays readable. After upload we read admission numbers, draft
+                cleared scripts, and open the review workspace.
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>
@@ -363,9 +365,11 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
                 >
                   {compressing
                     ? "Preparing images…"
-                    : uploadPages.isPending || processIdentity.isPending
-                      ? "Uploading & reading…"
-                      : "Upload & review identity"}
+                    : uploadPages.isPending
+                      ? "Uploading…"
+                      : processIdentity.isPending
+                        ? "Reading identity…"
+                        : "Upload & open review"}
                 </Button>
               </div>
             </>

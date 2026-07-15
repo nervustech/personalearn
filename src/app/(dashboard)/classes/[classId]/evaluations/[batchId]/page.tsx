@@ -17,20 +17,18 @@ export default function EvaluationBatchReviewPage({
     classes?.find((c) => c.id === classId)?.subject ?? "General";
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8">
-      <div>
-        <p className="text-sm text-muted-foreground">
-          <Link href={`/classes/${classId}`} className="hover:underline">
-            ← Class
-          </Link>
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          Evaluation review
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Review drafted marks beside the scan. Identity exceptions stay below —
-          they are uncommon.
-        </p>
+    <div className="mx-auto max-w-[90rem] space-y-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <p className="text-xs text-muted-foreground">
+            <Link href={`/classes/${classId}`} className="hover:underline">
+              ← Class
+            </Link>
+          </p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight">
+            Evaluation review
+          </h1>
+        </div>
       </div>
       <ReviewQueuePanel
         classId={classId}

@@ -40,27 +40,31 @@ export function ScriptPageViewer({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-border bg-card/60">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-        <p className="truncate text-sm text-muted-foreground">
-          {questionLabel ? `Q${questionLabel} · ` : ""}
-          {page.fileName}
+    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+        <p className="truncate text-xs text-muted-foreground">
+          {questionLabel ? `Q${questionLabel}` : "Scan"}
           {pages.length > 1
-            ? ` · page ${safeIndex + 1} of ${pages.length}`
+            ? ` · ${safeIndex + 1}/${pages.length}`
             : ""}
         </p>
         <ReviewMarkerBadge kind={markerKind} status={markerStatus} />
       </div>
-      <div className="bg-muted/20 p-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={page.url ?? undefined}
-          alt={page.fileName}
-          className="mx-auto max-h-[min(70vh,40rem)] w-full object-contain"
-        />
+
+      {/* Desk + paper frame — A4-friendly, tall without eating chrome */}
+      <div className="flex min-h-0 flex-1 justify-center overflow-auto bg-muted/40 px-3 py-4 sm:px-5 sm:py-5">
+        <div className="w-full max-w-[min(100%,48rem)] overflow-hidden rounded-sm bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={page.url ?? undefined}
+            alt={page.fileName}
+            className="mx-auto block max-h-[min(82vh,54rem)] w-full object-contain"
+          />
+        </div>
       </div>
+
       {pages.length > 1 ? (
-        <div className="flex justify-between gap-2 border-t border-border px-3 py-2">
+        <div className="flex shrink-0 justify-between gap-2 border-t border-border px-3 py-1.5">
           <Button
             type="button"
             size="sm"

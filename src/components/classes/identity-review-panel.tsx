@@ -303,26 +303,21 @@ export function IdentityReviewPanel({
 
   const roster = useMemo(() => students ?? [], [students]);
 
-  /** Amber + pending need teacher attention; cleared still need draft. */
+  /** Only amber + pending need a visible panel; cleared drafts silently. */
   const identityFocusScripts = useMemo(() => {
     const priority = (status: string) => {
       if (status === "identity_amber") return 0;
       if (status === "pending") return 1;
-      if (status === "identity_cleared") return 2;
-      return 3;
+      return 2;
     };
     return [...scripts]
       .filter(
-        (s) =>
-          s.status === "identity_amber" ||
-          s.status === "pending" ||
-          s.status === "identity_cleared"
+        (s) => s.status === "identity_amber" || s.status === "pending"
       )
       .sort((a, b) => priority(a.status) - priority(b.status));
   }, [scripts]);
 
-  const allIdentitiesSettled =
-    !hasPending && amberCount === 0 && clearedCount === 0;
+  const needsTeacherAttention = hasPending || amberCount > 0;
 
   const runDrafts = useCallback(async () => {
     setDraftSummary(null);
@@ -396,34 +391,39 @@ export function IdentityReviewPanel({
     );
   }
 
+  // Happy path: cleared scripts draft in the background; don't surface a
+  // setup panel before review. Only interrupt when identity needs a human.
+  if (!needsTeacherAttention && !processDrafts.isError) {
+    return null;
+  }
+
   return (
-    <section className="space-y-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">
-            {amberCount > 0 || hasPending
-              ? "Identity exceptions"
-              : "Identity & draft setup"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+    <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-50/40 p-3 dark:bg-amber-950/20">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold tracking-tight">
             {amberCount > 0
-              ? `${amberCount} script${amberCount === 1 ? "" : "s"} need identity confirm before drafting. Cleared scripts draft automatically after upload; use Draft marks only to retry.`
-              : hasPending || scripts.length === 0
-                ? "Process uploaded pages to match admission numbers. Cleared scripts draft automatically; amber stays the human gate."
-                : clearedCount > 0
-                  ? `${clearedCount} cleared script${clearedCount === 1 ? "" : "s"} ready — Draft marks retries drafting if upload auto-draft missed them.`
-                  : `All identities settled · ${draftedCount + signedOffCount} in review queue above.`}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Cleared: {clearedCount} · Needs confirm: {amberCount} · Drafted:{" "}
-            {draftedCount}
-            {signedOffCount > 0 ? ` · Signed off: ${signedOffCount}` : ""}
+              ? `${amberCount} identity exception${amberCount === 1 ? "" : "s"}`
+              : hasPending
+                ? "Pages awaiting identity"
+                : "Drafting issue"}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {amberCount > 0
+              ? "Confirm the student before marks can draft."
+              : hasPending
+                ? "Process identity to match admission numbers."
+                : "Auto-draft failed — retry below."}
+            {draftedCount + signedOffCount > 0
+              ? ` · ${draftedCount + signedOffCount} already in review`
+              : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {hasPending || scripts.length === 0 ? (
             <Button
               type="button"
+              size="sm"
               disabled={processIdentity.isPending || processDrafts.isPending}
               onClick={handleProcess}
             >
@@ -432,14 +432,15 @@ export function IdentityReviewPanel({
                 : "Process identity"}
             </Button>
           ) : null}
-          {clearedCount > 0 ? (
+          {processDrafts.isError || clearedCount > 0 ? (
             <Button
               type="button"
+              size="sm"
               variant="secondary"
               disabled={processDrafts.isPending || processIdentity.isPending}
               onClick={handleDraftMarks}
             >
-              {processDrafts.isPending ? "Retrying drafts…" : "Draft marks"}
+              {processDrafts.isPending ? "Retrying…" : "Retry draft"}
             </Button>
           ) : null}
         </div>
@@ -462,7 +463,7 @@ export function IdentityReviewPanel({
       ) : null}
 
       {draftSummary ? (
-        <p className="text-sm text-muted-foreground">{draftSummary}</p>
+        <p className="text-xs text-muted-foreground">{draftSummary}</p>
       ) : null}
 
       {scripts.length === 0 ? (
@@ -470,15 +471,11 @@ export function IdentityReviewPanel({
           No pages uploaded yet.{" "}
           <Link href={`/classes/${classId}`} className="underline">
             Back to class
-          </Link>{" "}
-          to start an evaluation upload.
+          </Link>
+          .
         </p>
-      ) : allIdentitiesSettled ? (
-        <p className="text-sm text-muted-foreground">
-          No identity exceptions. Continue with the review queue above.
-        </p>
-      ) : (
-        <ul className="divide-y-0">
+      ) : identityFocusScripts.length > 0 ? (
+        <ul>
           {identityFocusScripts.map((script) => (
             <ScriptRow
               key={script.id}
@@ -492,7 +489,7 @@ export function IdentityReviewPanel({
             />
           ))}
         </ul>
-      )}
+      ) : null}
     </section>
   );
 }

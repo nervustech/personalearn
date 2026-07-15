@@ -473,26 +473,30 @@ function ScriptWorkspace({
       ) : null}
 
       {question ? (
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-          <ScriptPageViewer
-            pages={pages}
-            markerKind={markerKind}
-            markerStatus={question.status}
-            questionLabel={question.question_number}
-          />
-          <QuestionAnalysisPanel
-            script={script}
-            question={question}
-            questionIndex={safeIndex}
-            questionCount={questions.length}
-            readOnly={readOnly}
-            updateQuestion={updateQuestion}
-            reevaluate={reevaluate}
-            onPrev={() => setQuestionIndex((i) => Math.max(0, i - 1))}
-            onNext={() =>
-              setQuestionIndex((i) => Math.min(questions.length - 1, i + 1))
-            }
-          />
+        <div className="grid gap-4 lg:grid-cols-5 lg:items-start">
+          <div className="lg:col-span-3">
+            <ScriptPageViewer
+              pages={pages}
+              markerKind={markerKind}
+              markerStatus={question.status}
+              questionLabel={question.question_number}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <QuestionAnalysisPanel
+              script={script}
+              question={question}
+              questionIndex={safeIndex}
+              questionCount={questions.length}
+              readOnly={readOnly}
+              updateQuestion={updateQuestion}
+              reevaluate={reevaluate}
+              onPrev={() => setQuestionIndex((i) => Math.max(0, i - 1))}
+              onNext={() =>
+                setQuestionIndex((i) => Math.min(questions.length - 1, i + 1))
+              }
+            />
+          </div>
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
@@ -605,8 +609,9 @@ export function EvalReviewWorkspace({
       <section className="space-y-2">
         <h2 className="text-lg font-semibold tracking-tight">Review workspace</h2>
         <p className="text-sm text-muted-foreground">
-          No drafted scripts yet. Process identity and draft marks in the
-          section below — then scripts appear here for edit, re-eval, and
+          No drafted scripts yet. After upload, cleared scripts draft
+          automatically. Confirm amber identities below, then use Draft marks
+          to retry if needed — scripts appear here for edit, re-eval, and
           sign-off.
         </p>
       </section>
@@ -623,47 +628,55 @@ export function EvalReviewWorkspace({
         </p>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {reviewScripts.map((script) => {
-          const totals =
-            script.totals ?? computeScriptTotal(script.questions ?? []);
-          const selected = script.id === selectedScriptId;
-          return (
-            <button
-              key={script.id}
-              type="button"
-              onClick={() => setSelectedScriptId(script.id)}
-              className={cn(
-                "min-w-[10.5rem] shrink-0 rounded-xl border px-3 py-2 text-left transition-colors",
-                selected
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-card/60 hover:bg-muted/50"
-              )}
-            >
-              <p className="truncate text-sm font-medium">
-                {script.student_name ?? "Unassigned"}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {script.read_admission_number ?? "—"} · {totals.awarded ?? "—"}/
-                {totals.max ?? "—"}
-              </p>
-              <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-                {script.status.replaceAll("_", " ")}
-              </p>
-            </button>
-          );
-        })}
-      </div>
+      <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">
+        <nav
+          aria-label="Scripts"
+          className="max-h-[min(40vh,20rem)] overflow-y-auto rounded-2xl border border-border bg-card/60 lg:max-h-[min(85vh,56rem)]"
+        >
+          <ul className="divide-y divide-border/80">
+            {reviewScripts.map((script) => {
+              const totals =
+                script.totals ?? computeScriptTotal(script.questions ?? []);
+              const selected = script.id === selectedScriptId;
+              return (
+                <li key={script.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedScriptId(script.id)}
+                    className={cn(
+                      "w-full px-3 py-2.5 text-left transition-colors",
+                      selected
+                        ? "bg-primary/5 ring-1 ring-inset ring-primary/40"
+                        : "hover:bg-muted/50"
+                    )}
+                  >
+                    <p className="truncate text-sm font-medium">
+                      {script.student_name ?? "Unassigned"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {script.read_admission_number ?? "—"} ·{" "}
+                      {totals.awarded ?? "—"}/{totals.max ?? "—"}
+                    </p>
+                    <p className="mt-0.5 text-xs capitalize text-muted-foreground">
+                      {script.status.replaceAll("_", " ")}
+                    </p>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-      {selectedScript ? (
-        <ScriptWorkspace
-          script={selectedScript}
-          classId={classId}
-          batchId={batchId}
-          strand={assessmentMeta.strand}
-          subStrand={assessmentMeta.subStrand}
-        />
-      ) : null}
+        {selectedScript ? (
+          <ScriptWorkspace
+            script={selectedScript}
+            classId={classId}
+            batchId={batchId}
+            strand={assessmentMeta.strand}
+            subStrand={assessmentMeta.subStrand}
+          />
+        ) : null}
+      </div>
     </section>
   );
 }

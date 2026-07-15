@@ -325,7 +325,7 @@ export function IdentityReviewPanel({
 
   async function runDrafts() {
     setDraftSummary(null);
-    const summary = await processDrafts.mutateAsync();
+    const summary = await processDrafts.mutateAsync(batchId);
     await refetch();
     const errorNote =
       summary.errors.length > 0

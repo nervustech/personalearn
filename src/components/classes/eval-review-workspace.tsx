@@ -198,7 +198,7 @@ function QuestionAnalysisPanel({
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 rounded-2xl border border-border bg-card/60 p-4">
+    <div className="flex h-full flex-col gap-3 rounded-2xl border border-border bg-card/60 p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium">
@@ -432,24 +432,18 @@ function ScriptWorkspace({
   );
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-col gap-3 rounded-2xl border border-border bg-card/60 p-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold tracking-tight">
+    <div className="space-y-3">
+      <header className="flex flex-col gap-2 rounded-2xl border border-border bg-card/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold tracking-tight">
             {script.student_name ?? "Unassigned student"}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            Admission: {script.read_admission_number ?? "—"} · Status:{" "}
-            {script.status}
-          </p>
-          <p className="mt-1 text-sm">
-            Total:{" "}
-            <span className="font-medium">
-              {totals.awarded ?? "—"} / {totals.max ?? "—"}
-            </span>
-            <span className="ml-2 text-muted-foreground">
-              Competency preview: {competency.status}
-            </span>
+          <p className="text-xs text-muted-foreground">
+            Adm {script.read_admission_number ?? "—"} · {script.status} · Total{" "}
+            <span className="font-medium text-foreground">
+              {totals.awarded ?? "—"}/{totals.max ?? "—"}
+            </span>{" "}
+            · {competency.status}
           </p>
         </div>
         {script.status === "drafted" ? (
@@ -473,7 +467,7 @@ function ScriptWorkspace({
       ) : null}
 
       {question ? (
-        <div className="grid gap-4 lg:grid-cols-5 lg:items-start">
+        <div className="grid gap-3 lg:grid-cols-5 lg:items-start">
           <div className="lg:col-span-3">
             <ScriptPageViewer
               pages={pages}
@@ -619,19 +613,21 @@ export function EvalReviewWorkspace({
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight">Review workspace</h2>
-        <p className="text-sm text-muted-foreground">
-          Scan pages beside AI analysis, verify comparison cards, then sign off.
-          Durable writes happen only on sign-off.
+        <h2 className="text-base font-semibold tracking-tight">
+          Review workspace
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Scan beside AI analysis, verify, then sign off — writes happen on
+          sign-off only.
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">
+      <div className="grid gap-3 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
         <nav
           aria-label="Scripts"
-          className="max-h-[min(40vh,20rem)] overflow-y-auto rounded-2xl border border-border bg-card/60 lg:max-h-[min(85vh,56rem)]"
+          className="max-h-[min(36vh,18rem)] overflow-y-auto rounded-2xl border border-border bg-card/60 lg:max-h-[min(68vh,40rem)]"
         >
           <ul className="divide-y divide-border/80">
             {reviewScripts.map((script) => {
@@ -644,7 +640,7 @@ export function EvalReviewWorkspace({
                     type="button"
                     onClick={() => setSelectedScriptId(script.id)}
                     className={cn(
-                      "w-full px-3 py-2.5 text-left transition-colors",
+                      "w-full px-3 py-2 text-left transition-colors",
                       selected
                         ? "bg-primary/5 ring-1 ring-inset ring-primary/40"
                         : "hover:bg-muted/50"

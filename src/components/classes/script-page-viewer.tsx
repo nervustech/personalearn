@@ -56,7 +56,7 @@ export function ScriptPageViewer({
         <img
           src={page.url ?? undefined}
           alt={page.fileName}
-          className="mx-auto max-h-[min(85vh,56rem)] w-full object-contain"
+          className="mx-auto max-h-[min(68vh,40rem)] w-full object-contain"
         />
       </div>
       {pages.length > 1 ? (

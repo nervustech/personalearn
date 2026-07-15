@@ -67,6 +67,8 @@ export async function processScriptDraft(
     awarded: number | null;
     max: number | null;
     feedback: string | null;
+    student_answer: string | null;
+    expected_answer: string | null;
     status: typeof status;
   }[] = [];
 
@@ -92,6 +94,8 @@ export async function processScriptDraft(
       awarded: draft.awarded,
       max: draft.max,
       feedback: draft.feedback,
+      student_answer: draft.student_answer,
+      expected_answer: draft.expected_answer,
       status,
     });
   }

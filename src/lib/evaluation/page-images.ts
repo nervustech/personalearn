@@ -69,3 +69,42 @@ export async function downloadPageBytes(
   cache.set(storagePath, image);
   return image;
 }
+
+export type ScriptPageUrl = {
+  storagePath: string;
+  uploadIndex: number;
+  fileName: string;
+  url: string | null;
+};
+
+/** Map pagesForQuestion results onto signed pageUrls for the review UI. */
+export function pageUrlsForQuestion(
+  pages: EvaluatedScriptPage[],
+  pageUrls: ScriptPageUrl[],
+  questionLabel: string
+): ScriptPageUrl[] {
+  const matchedPages = pagesForQuestion(pages, questionLabel);
+  const byPath = new Map(pageUrls.map((p) => [p.storagePath, p]));
+  const urls: ScriptPageUrl[] = [];
+  const seen = new Set<string>();
+  for (const page of matchedPages) {
+    if (seen.has(page.storagePath)) continue;
+    seen.add(page.storagePath);
+    const url = byPath.get(page.storagePath);
+    if (url) urls.push(url);
+  }
+  return urls.length > 0 ? urls : pageUrls;
+}
+
+export type ReviewMarkerKind = "correct" | "incorrect" | "partial" | "unknown";
+
+/** Option A grounded marker from awarded/max (not pixel bboxes). */
+export function reviewMarkerKind(
+  awarded: number | null,
+  max: number | null
+): ReviewMarkerKind {
+  if (awarded == null || max == null || max <= 0) return "unknown";
+  if (awarded <= 0) return "incorrect";
+  if (awarded >= max) return "correct";
+  return "partial";
+}

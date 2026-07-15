@@ -17,7 +17,7 @@ export default function EvaluationBatchReviewPage({
     classes?.find((c) => c.id === classId)?.subject ?? "General";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-7xl space-y-8">
       <div>
         <p className="text-sm text-muted-foreground">
           <Link href={`/classes/${classId}`} className="hover:underline">
@@ -28,8 +28,8 @@ export default function EvaluationBatchReviewPage({
           Evaluation review
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Review drafted marks first. Identity exceptions (missing or unclear
-          admission numbers) stay below — they are uncommon.
+          Review drafted marks beside the scan. Identity exceptions stay below —
+          they are uncommon.
         </p>
       </div>
       <ReviewQueuePanel

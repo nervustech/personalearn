@@ -145,6 +145,10 @@ export type QuestionEvaluation = {
   awarded: number | null;
   max: number | null;
   feedback: string | null;
+  /** Vision excerpt of what the student wrote (PSL-52). */
+  student_answer: string | null;
+  /** Scheme expectation for this Q; null when no scheme / ai_estimate. */
+  expected_answer: string | null;
   status: QuestionEvaluationStatus;
   created_at: string;
 };

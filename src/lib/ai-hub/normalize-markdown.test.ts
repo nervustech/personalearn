@@ -18,4 +18,22 @@ describe("normalizeMarkdown", () => {
     expect(result).toContain("|------|-------|");
     expect(result).not.toMatch(/\|\|------/);
   });
+
+  it("converts inline LaTeX bracket delimiters to dollar math", () => {
+    const input = "a) \\( \\frac{29}{6} = \\)";
+    const result = normalizeMarkdown(input);
+
+    expect(result).toContain("$\\frac{29}{6} =$");
+    expect(result).not.toContain("\\(");
+    expect(result).not.toContain("\\)");
+  });
+
+  it("converts block LaTeX bracket delimiters to dollar math", () => {
+    const input = "\\[ \\frac{53}{11} = 4\\frac{9}{11} \\]";
+    const result = normalizeMarkdown(input);
+
+    expect(result).toContain("$$\\frac{53}{11} = 4\\frac{9}{11}$$");
+    expect(result).not.toContain("\\[");
+    expect(result).not.toContain("\\]");
+  });
 });

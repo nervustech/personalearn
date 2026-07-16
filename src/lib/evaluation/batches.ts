@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Assessment, EvaluationBatch } from "@/types/database";
 import {
   ensureAssessmentForGradableResource,
+  ensureAssessmentsForClassGradableResources,
   shouldPublishAssessment,
 } from "@/lib/evaluation/create-assessment-from-resource";
 import type { GradableResourceType } from "@/lib/evaluation/gradable";
@@ -11,6 +12,9 @@ export async function listClassAssessments(
   supabase: SupabaseClient,
   classId: string
 ): Promise<Assessment[]> {
+  // Self-heal: gradable library items without assessments (pre–AC-5.16 / ingest).
+  await ensureAssessmentsForClassGradableResources(supabase, classId);
+
   const { data, error } = await supabase
     .from("assessments")
     .select("*")

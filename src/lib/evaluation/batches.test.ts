@@ -3,6 +3,7 @@ import { createEvaluationBatch } from "./batches";
 
 vi.mock("@/lib/evaluation/create-assessment-from-resource", () => ({
   ensureAssessmentForGradableResource: vi.fn(),
+  ensureAssessmentsForClassGradableResources: vi.fn().mockResolvedValue(0),
   shouldPublishAssessment: vi.fn((type: string) =>
     ["assignment", "quiz", "examination"].includes(type)
   ),

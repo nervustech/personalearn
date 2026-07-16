@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ensureAssessmentForGradableResource } from "./create-assessment-from-resource";
+import {
+  ensureAssessmentForGradableResource,
+  ensureAssessmentsForClassGradableResources,
+} from "./create-assessment-from-resource";
 
 describe("ensureAssessmentForGradableResource", () => {
   beforeEach(() => {
@@ -81,5 +84,69 @@ describe("ensureAssessmentForGradableResource", () => {
       type: "summative",
       resource_id: "res-2",
     });
+  });
+});
+
+describe("ensureAssessmentsForClassGradableResources", () => {
+  it("creates assessments for orphaned gradable resources only", async () => {
+    const insert = vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn().mockResolvedValue({
+          data: { id: "assess-new" },
+          error: null,
+        }),
+      })),
+    }));
+
+    let assessmentLookup = 0;
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "resources") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                in: vi.fn().mockResolvedValue({
+                  data: [
+                    {
+                      id: "res-orphan",
+                      title: "HW",
+                      resource_type: "assignment",
+                    },
+                    {
+                      id: "res-linked",
+                      title: "Quiz",
+                      resource_type: "quiz",
+                    },
+                  ],
+                  error: null,
+                }),
+              })),
+            })),
+          };
+        }
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn().mockImplementation(async () => {
+                assessmentLookup += 1;
+                if (assessmentLookup === 1) {
+                  return { data: null, error: null };
+                }
+                return { data: { id: "assess-existing" }, error: null };
+              }),
+            })),
+          })),
+          insert,
+        };
+      }),
+    };
+
+    const created = await ensureAssessmentsForClassGradableResources(
+      supabase as never,
+      "class-1"
+    );
+
+    expect(created).toBe(1);
+    expect(insert).toHaveBeenCalledTimes(1);
   });
 });

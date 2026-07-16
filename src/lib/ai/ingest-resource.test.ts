@@ -106,6 +106,14 @@ describe("ingestTxtResource", () => {
     const storageUpload = vi.fn().mockResolvedValue({ error: null });
     const resourceInsert = vi.fn().mockResolvedValue({ error: null });
     const chunksInsert = vi.fn().mockResolvedValue({ error: null });
+    const assessmentInsert = vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn().mockResolvedValue({
+          data: { id: "assess-1" },
+          error: null,
+        }),
+      })),
+    }));
 
     const supabase = {
       storage: {
@@ -120,6 +128,19 @@ describe("ingestTxtResource", () => {
         }
         if (table === "resource_chunks") {
           return { insert: chunksInsert };
+        }
+        if (table === "assessments") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: null,
+                }),
+              })),
+            })),
+            insert: assessmentInsert,
+          };
         }
         throw new Error(`Unexpected table ${table}`);
       },
@@ -140,6 +161,14 @@ describe("ingestTxtResource", () => {
         title: "Fractions Quiz",
         ai_generated: true,
         resource_type: "quiz",
+      })
+    );
+    expect(assessmentInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        class_id: "class-1",
+        title: "Fractions Quiz",
+        type: "formative",
+        resource_id: expect.any(String),
       })
     );
   });

@@ -2,24 +2,32 @@
 
 import Link from "next/link";
 import { Bot, Users } from "lucide-react";
-import { useActiveClassStore } from "@/lib/store/active-class";
-import { useStudents } from "@/lib/hooks/use-classes";
+import { CompetencySnapshot } from "@/components/dashboard/competency-snapshot";
 import { WelcomeTour } from "@/components/onboarding/welcome-tour";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useStudents } from "@/lib/hooks/use-classes";
+import { useCompetencyProgress } from "@/lib/hooks/use-evaluation";
+import { useActiveClassStore } from "@/lib/store/active-class";
 
 export default function DashboardPage() {
   const activeClass = useActiveClassStore((state) => state.activeClass);
-  const { data: students, isLoading } = useStudents(activeClass?.id);
+  const { data: students, isLoading: studentsLoading } = useStudents(
+    activeClass?.id
+  );
+  const { data: competency, isLoading: competencyLoading } =
+    useCompetencyProgress(activeClass?.id);
 
-  const studentCount = students?.length ?? 0;
   const topStudents = students?.slice(0, 5) ?? [];
+  const snapshotLoading = studentsLoading || competencyLoading;
 
   return (
     <>
       <WelcomeTour />
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
+            Dashboard
+          </h1>
           <p className="mt-1 text-muted-foreground">
             {activeClass
               ? `${activeClass.name} — Grade ${activeClass.grade_level} ${activeClass.subject}`
@@ -32,27 +40,28 @@ export default function DashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Performance</CardTitle>
-                <CardDescription>Class overview and competency progress</CardDescription>
+                <CardDescription>
+                  Class overview and competency progress
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {activeClass ? (
                   <>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Students enrolled</span>
-                      <span className="font-semibold">
-                        {isLoading ? "…" : studentCount}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Term</span>
                       <span className="font-medium">Term {activeClass.term}</span>
                     </div>
-                    <div className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-                      No assessments yet — competency tracking arrives in Sprint 3.
-                    </div>
+                    <CompetencySnapshot
+                      classId={activeClass.id}
+                      students={students ?? []}
+                      competency={competency ?? []}
+                      isLoading={snapshotLoading}
+                    />
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Select a class to see performance.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Select a class to see performance.
+                  </p>
                 )}
               </CardContent>
             </Card>
@@ -104,8 +113,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {!activeClass ? (
-                <p className="text-sm text-muted-foreground">No active class selected.</p>
-              ) : isLoading ? (
+                <p className="text-sm text-muted-foreground">
+                  No active class selected.
+                </p>
+              ) : studentsLoading ? (
                 <p className="text-sm text-muted-foreground">Loading students…</p>
               ) : !topStudents.length ? (
                 <div className="space-y-3">

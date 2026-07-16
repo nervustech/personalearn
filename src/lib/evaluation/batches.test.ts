@@ -90,8 +90,120 @@ describe("createEvaluationBatch", () => {
       class_id: "class-1",
       assessment_id: "assess-1",
       marking_scheme_resource_id: null,
+      scoped_student_id: null,
       status: "draft",
     });
     expect(mockEnsure).not.toHaveBeenCalled();
+  });
+
+  it("stores scoped_student_id when student belongs to the class", async () => {
+    const insert = vi.fn(() => ({
+      select: vi.fn(() => ({
+        single: vi.fn().mockResolvedValue({
+          data: {
+            id: "batch-2",
+            class_id: "class-1",
+            assessment_id: "assess-1",
+            marking_scheme_resource_id: null,
+            scoped_student_id: "stu-1",
+            status: "draft",
+            created_at: "2026-07-16T00:00:00Z",
+          },
+          error: null,
+        }),
+      })),
+    }));
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "assessments") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "assess-1" },
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          };
+        }
+        if (table === "students") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "stu-1" },
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          };
+        }
+        return { insert };
+      }),
+    };
+
+    const batch = await createEvaluationBatch(supabase as never, {
+      classId: "class-1",
+      assessmentId: "assess-1",
+      proceedWithoutScheme: true,
+      studentId: "stu-1",
+    });
+
+    expect(batch.scoped_student_id).toBe("stu-1");
+    expect(insert).toHaveBeenCalledWith({
+      class_id: "class-1",
+      assessment_id: "assess-1",
+      marking_scheme_resource_id: null,
+      scoped_student_id: "stu-1",
+      status: "draft",
+    });
+  });
+
+  it("rejects studentId from another class", async () => {
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === "assessments") {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: "assess-1" },
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          };
+        }
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: null,
+                }),
+              })),
+            })),
+          })),
+        };
+      }),
+    };
+
+    await expect(
+      createEvaluationBatch(supabase as never, {
+        classId: "class-1",
+        assessmentId: "assess-1",
+        proceedWithoutScheme: true,
+        studentId: "foreign-stu",
+      })
+    ).rejects.toThrow("Student not found in this class");
   });
 });

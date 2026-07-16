@@ -76,6 +76,7 @@ describe("/api/evaluation-batches", () => {
           classId,
           assessmentId: "assess-1",
           proceedWithoutScheme: true,
+          studentId: "stu-1",
         }),
       })
     );
@@ -83,5 +84,14 @@ describe("/api/evaluation-batches", () => {
 
     expect(response.status).toBe(201);
     expect(payload.batch.id).toBe("batch-1");
+    expect(mockCreateBatch).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        classId,
+        assessmentId: "assess-1",
+        studentId: "stu-1",
+        proceedWithoutScheme: true,
+      })
+    );
   });
 });

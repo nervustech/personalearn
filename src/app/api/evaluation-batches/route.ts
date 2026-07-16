@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       resourceId?: string | null;
       markingSchemeResourceId?: string | null;
       proceedWithoutScheme?: boolean;
+      studentId?: string | null;
     };
 
     if (!body.classId) {
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
       resourceId: body.resourceId,
       markingSchemeResourceId: body.markingSchemeResourceId,
       proceedWithoutScheme: body.proceedWithoutScheme === true,
+      studentId: body.studentId,
     });
 
     return NextResponse.json({ batch }, { status: 201 });
@@ -67,7 +69,8 @@ export async function POST(request: Request) {
               message.includes("not found") ||
               message.includes("not a marking") ||
               message.includes("Only assignment") ||
-              message.includes("proceedWithoutScheme")
+              message.includes("proceedWithoutScheme") ||
+              message.includes("Student not found")
             ? 400
             : 500;
     return NextResponse.json({ error: message }, { status });

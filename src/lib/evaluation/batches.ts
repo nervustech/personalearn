@@ -44,6 +44,8 @@ export type CreateEvaluationBatchInput = {
   markingSchemeResourceId?: string | null;
   /** Explicit proceed without a marking scheme. */
   proceedWithoutScheme?: boolean;
+  /** Optional N=1 scope — student must belong to classId (PSL-48). */
+  studentId?: string | null;
 };
 
 export async function createEvaluationBatch(
@@ -116,12 +118,27 @@ export async function createEvaluationBatch(
     );
   }
 
+  let scopedStudentId: string | null = input.studentId ?? null;
+  if (scopedStudentId) {
+    const { data: student, error: studentError } = await supabase
+      .from("students")
+      .select("id")
+      .eq("id", scopedStudentId)
+      .eq("class_id", input.classId)
+      .maybeSingle();
+
+    if (studentError || !student) {
+      throw new Error("Student not found in this class");
+    }
+  }
+
   const { data: batch, error: batchError } = await supabase
     .from("evaluation_batches")
     .insert({
       class_id: input.classId,
       assessment_id: assessmentId,
       marking_scheme_resource_id: markingSchemeResourceId,
+      scoped_student_id: scopedStudentId,
       status: "draft",
     })
     .select("*")

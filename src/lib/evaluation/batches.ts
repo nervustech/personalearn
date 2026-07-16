@@ -118,7 +118,7 @@ export async function createEvaluationBatch(
     );
   }
 
-  let scopedStudentId: string | null = input.studentId ?? null;
+  const scopedStudentId: string | null = input.studentId ?? null;
   if (scopedStudentId) {
     const { data: student, error: studentError } = await supabase
       .from("students")

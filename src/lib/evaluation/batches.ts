@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Assessment, EvaluationBatch } from "@/types/database";
 import {
   ensureAssessmentForGradableResource,
+  ensureAssessmentsForClassGradableResources,
   shouldPublishAssessment,
 } from "@/lib/evaluation/create-assessment-from-resource";
 import type { GradableResourceType } from "@/lib/evaluation/gradable";
@@ -11,6 +12,9 @@ export async function listClassAssessments(
   supabase: SupabaseClient,
   classId: string
 ): Promise<Assessment[]> {
+  // Self-heal: gradable library items without assessments (pre–AC-5.16 / ingest).
+  await ensureAssessmentsForClassGradableResources(supabase, classId);
+
   const { data, error } = await supabase
     .from("assessments")
     .select("*")
@@ -44,6 +48,8 @@ export type CreateEvaluationBatchInput = {
   markingSchemeResourceId?: string | null;
   /** Explicit proceed without a marking scheme. */
   proceedWithoutScheme?: boolean;
+  /** Optional N=1 scope — student must belong to classId (PSL-48). */
+  studentId?: string | null;
 };
 
 export async function createEvaluationBatch(
@@ -116,12 +122,27 @@ export async function createEvaluationBatch(
     );
   }
 
+  const scopedStudentId: string | null = input.studentId ?? null;
+  if (scopedStudentId) {
+    const { data: student, error: studentError } = await supabase
+      .from("students")
+      .select("id")
+      .eq("id", scopedStudentId)
+      .eq("class_id", input.classId)
+      .maybeSingle();
+
+    if (studentError || !student) {
+      throw new Error("Student not found in this class");
+    }
+  }
+
   const { data: batch, error: batchError } = await supabase
     .from("evaluation_batches")
     .insert({
       class_id: input.classId,
       assessment_id: assessmentId,
       marking_scheme_resource_id: markingSchemeResourceId,
+      scoped_student_id: scopedStudentId,
       status: "draft",
     })
     .select("*")

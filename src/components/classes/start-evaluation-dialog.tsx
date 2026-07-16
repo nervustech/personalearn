@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { useResources } from "@/lib/hooks/use-resources";
@@ -20,13 +20,39 @@ import { Select } from "@/components/ui/select";
 
 type StartEvaluationDialogProps = {
   classId: string;
+  /** N=1 scope (PSL-48). */
+  studentId?: string;
+  studentName?: string;
+  /** Lock assessment picker when starting from a profile row. */
+  preselectedAssessmentId?: string;
+  /** Controlled open (profile-driven). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the class-page trigger button. */
+  hideTrigger?: boolean;
 };
 
 type SchemeMode = "attach" | "generate" | "none";
 
-export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
+export function StartEvaluationDialog({
+  classId,
+  studentId,
+  studentName,
+  preselectedAssessmentId,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: StartEvaluationDialogProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+
+  function setOpen(next: boolean) {
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  }
+
   const [step, setStep] = useState(0);
   const [assessmentId, setAssessmentId] = useState("");
   const [resourceId, setResourceId] = useState("");
@@ -45,6 +71,9 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
   const createBatch = useCreateEvaluationBatch(classId);
   const uploadPages = useUploadEvaluationPages(classId);
   const processIdentity = useProcessEvaluationIdentity(classId);
+
+  const lockedAssessment = Boolean(preselectedAssessmentId);
+  const isN1 = Boolean(studentId);
 
   const markingSchemes = useMemo(
     () =>
@@ -71,7 +100,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
 
   function resetForm() {
     setStep(0);
-    setAssessmentId("");
+    setAssessmentId(preselectedAssessmentId ?? "");
     setResourceId("");
     setSchemeMode("attach");
     setMarkingSchemeResourceId("");
@@ -84,6 +113,13 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     processIdentity.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
+
+  useEffect(() => {
+    if (open && preselectedAssessmentId) {
+      setAssessmentId(preselectedAssessmentId);
+      setResourceId("");
+    }
+  }, [open, preselectedAssessmentId]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -114,6 +150,7 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
         markingSchemeResourceId:
           schemeMode === "attach" ? markingSchemeResourceId : null,
         proceedWithoutScheme: schemeMode === "none",
+        studentId: studentId ?? null,
       });
       setCreatedBatchId(batch.id);
       setStep(1);
@@ -157,23 +194,39 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
     }
   }
 
+  const dialogTitle =
+    isN1 && studentName
+      ? `Evaluate ${studentName}`
+      : isN1
+        ? "Evaluate student"
+        : "Start evaluation";
+
+  const dialogDescription = isN1
+    ? "Confirm the marking scheme, then upload this student’s scanned pages."
+    : "Pick an assessment and marking scheme, then upload scanned script images.";
+
+  const lockedAssessmentTitle =
+    assessments?.find((a) => a.id === assessmentId)?.title ?? "Assessment";
+
   return (
     <>
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen(true)}
-      >
-        <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
-        Start evaluation
-      </Button>
+      {!hideTrigger ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setOpen(true)}
+        >
+          <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
+          Start evaluation
+        </Button>
+      ) : null}
 
       <Dialog
         open={open}
         onOpenChange={handleOpenChange}
-        title="Start evaluation"
-        description="Pick an assessment and marking scheme, then upload scanned script images."
+        title={dialogTitle}
+        description={dialogDescription}
         className="max-w-md"
       >
         <div className="space-y-4">
@@ -185,24 +238,33 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-assessment">Assessment</Label>
-                <Select
-                  id="eval-assessment"
-                  value={assessmentId}
-                  onChange={(event) => {
-                    setAssessmentId(event.target.value);
-                    if (event.target.value) setResourceId("");
-                  }}
-                >
-                  <option value="">Select an assessment…</option>
-                  {(assessments ?? []).map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.title}
-                    </option>
-                  ))}
-                </Select>
+                {lockedAssessment ? (
+                  <p
+                    id="eval-assessment"
+                    className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+                  >
+                    {lockedAssessmentTitle}
+                  </p>
+                ) : (
+                  <Select
+                    id="eval-assessment"
+                    value={assessmentId}
+                    onChange={(event) => {
+                      setAssessmentId(event.target.value);
+                      if (event.target.value) setResourceId("");
+                    }}
+                  >
+                    <option value="">Select an assessment…</option>
+                    {(assessments ?? []).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.title}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </div>
 
-              {!assessmentId && gradableResources.length > 0 ? (
+              {!lockedAssessment && !assessmentId && gradableResources.length > 0 ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="eval-resource">
                     Or create from class resource
@@ -308,10 +370,9 @@ export function StartEvaluationDialog({ classId }: StartEvaluationDialogProps) {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Upload scanned script pages as JPEG or PNG (any order). Large
-                phone photos are resized in the browser first so handwriting
-                stays readable. After upload we read admission numbers, draft
-                cleared scripts, and open the review workspace.
+                {isN1
+                  ? "Upload this student’s scanned pages as JPEG or PNG (any order). Large phone photos are resized in the browser first."
+                  : "Upload scanned script pages as JPEG or PNG (any order). Large phone photos are resized in the browser first so handwriting stays readable. After upload we read admission numbers, draft cleared scripts, and open the review workspace."}
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>

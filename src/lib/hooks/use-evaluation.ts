@@ -2,10 +2,16 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
+import type { StudentEvalProfile } from "@/lib/evaluation/student-profile";
 import type { Assessment, EvaluationBatch } from "@/types/database";
 
 export const assessmentsQueryKey = (classId: string) =>
   ["assessments", classId] as const;
+
+export const studentEvalProfileQueryKey = (
+  classId: string,
+  studentId: string
+) => ["student-eval-profile", classId, studentId] as const;
 
 export const evaluationBatchesQueryKey = (classId: string) =>
   ["evaluation-batches", classId] as const;
@@ -81,6 +87,28 @@ export function useEvaluationScripts(batchId: string | undefined) {
   });
 }
 
+export function useStudentEvalProfile(
+  classId: string | undefined,
+  studentId: string | undefined
+) {
+  return useQuery({
+    queryKey: studentEvalProfileQueryKey(classId ?? "", studentId ?? ""),
+    enabled: Boolean(classId && studentId),
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/classes/${classId}/students/${studentId}/profile`
+      );
+      const payload = (await response.json()) as StudentEvalProfile & {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to load student profile");
+      }
+      return payload as StudentEvalProfile;
+    },
+  });
+}
+
 export function useCreateEvaluationBatch(classId: string) {
   const queryClient = useQueryClient();
 
@@ -90,6 +118,7 @@ export function useCreateEvaluationBatch(classId: string) {
       resourceId?: string | null;
       markingSchemeResourceId?: string | null;
       proceedWithoutScheme?: boolean;
+      studentId?: string | null;
     }) => {
       const response = await fetch("/api/evaluation-batches", {
         method: "POST",
@@ -105,11 +134,16 @@ export function useCreateEvaluationBatch(classId: string) {
       }
       return payload.batch!;
     },
-    onSuccess: () => {
+    onSuccess: (_batch, input) => {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });
       queryClient.invalidateQueries({ queryKey: assessmentsQueryKey(classId) });
+      if (input.studentId) {
+        queryClient.invalidateQueries({
+          queryKey: studentEvalProfileQueryKey(classId, input.studentId),
+        });
+      }
     },
   });
 }
@@ -392,6 +426,9 @@ export function useSignOffScript(classId: string, batchId: string) {
       });
       queryClient.invalidateQueries({
         queryKey: assessmentsQueryKey(classId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["student-eval-profile", classId],
       });
     },
   });

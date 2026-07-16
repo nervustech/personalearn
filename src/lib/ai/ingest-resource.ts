@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { chunkText } from "@/lib/ai/chunk-text";
 import { embedTexts } from "@/lib/ai/embeddings";
+import {
+  ensureAssessmentForGradableResource,
+  shouldPublishAssessment,
+} from "@/lib/evaluation/create-assessment-from-resource";
+import type { GradableResourceType } from "@/lib/evaluation/gradable";
 
 export const MAX_TXT_BYTES = 2 * 1024 * 1024;
 export const EMBED_BATCH_SIZE = 32;
@@ -133,6 +138,15 @@ export async function ingestResource(
     await supabase.from("resources").delete().eq("id", resourceId);
     await supabase.storage.from("resources").remove([storagePath]);
     throw new Error(`Chunk insert failed: ${chunksError.message}`);
+  }
+
+  if (resourceType && shouldPublishAssessment(resourceType)) {
+    await ensureAssessmentForGradableResource(supabase, {
+      classId,
+      resourceId,
+      title,
+      resourceType: resourceType as GradableResourceType,
+    });
   }
 
   return { resourceId, chunkCount: chunks.length, title };

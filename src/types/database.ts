@@ -95,9 +95,17 @@ export type EvaluationBatch = {
   class_id: string;
   assessment_id: string | null;
   marking_scheme_resource_id: string | null;
+  /** When set, batch was started for a single student (PSL-48 N=1). */
+  scoped_student_id: string | null;
   status: EvaluationBatchStatus;
   created_at: string;
 };
+
+/** Per-student assessment status on the roster profile (PSL-48). */
+export type StudentAssessmentStatus =
+  | "not_started"
+  | "in_review"
+  | "signed_off";
 
 export type EvaluatedScriptStatus =
   | "pending"

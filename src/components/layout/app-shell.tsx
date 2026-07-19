@@ -2,13 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Bot, Home, Menu, School, User, X } from "lucide-react";
-import { useState } from "react";
+import {
+  Bell,
+  BookOpen,
+  Bot,
+  Home,
+  Menu,
+  MoreHorizontal,
+  School,
+  Settings,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { ClassSelector } from "@/components/classes/class-selector";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { DropdownMenu } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useNotificationsStore } from "@/lib/store/notifications";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
@@ -16,99 +26,291 @@ const navItems = [
   { href: "/classes", label: "Classes", icon: School },
 ];
 
+function isActivePath(pathname: string, href: string) {
+  if (href === "/dashboard") {
+    return pathname === "/dashboard" || pathname === "/";
+  }
+  return pathname.startsWith(href);
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [railExpanded, setRailExpanded] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const notifications = useNotificationsStore((s) => s.items);
+  const markRead = useNotificationsStore((s) => s.markRead);
+  const markAllRead = useNotificationsStore((s) => s.markAllRead);
+  const unread = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
+
+  useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
+        setMoreOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setNotifOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/80 shadow-xs backdrop-blur-lg">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card shadow-xs transition-colors hover:bg-muted md:hidden"
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-label="Toggle menu"
-            >
-              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-            <Link href="/dashboard" className="flex items-center gap-2 font-display font-semibold">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                <BookOpen className="h-4 w-4 text-primary" />
-              </span>
-              <span className="hidden sm:inline">PersonaLearn</span>
-            </Link>
-          </div>
+    <div className="min-h-screen bg-background md:flex">
+      {/* Desktop left icon rail */}
+      <aside
+        className={cn(
+          "sticky top-0 z-40 hidden h-screen shrink-0 flex-col border-r border-transparent bg-background/80 py-3 backdrop-blur-xl transition-[width] duration-200 md:flex",
+          railExpanded ? "w-56" : "w-[4.5rem]"
+        )}
+        onMouseEnter={() => setRailExpanded(true)}
+        onMouseLeave={() => {
+          if (!moreOpen && !notifOpen) setRailExpanded(false);
+        }}
+      >
+        <Link
+          href="/dashboard"
+          className="mx-2 mb-4 flex h-11 items-center gap-3 rounded-xl px-2.5 font-display text-sm font-semibold"
+        >
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <BookOpen className="h-4 w-4" />
+          </span>
+          <span
+            className={cn(
+              "truncate transition-opacity",
+              railExpanded ? "opacity-100" : "opacity-0"
+            )}
+          >
+            PersonaLearn
+          </span>
+        </Link>
 
-          <nav className="hidden items-center gap-1 md:flex">
-            {navItems.map(({ href, label }) => {
-              const active = pathname.startsWith(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    "relative rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    active
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {label}
-                  {active ? (
-                    <span className="absolute inset-x-3 -bottom-[1.125rem] h-0.5 rounded-full bg-primary" />
-                  ) : null}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <ClassSelector />
-            <ThemeToggle />
-            <DropdownMenu
-              align="end"
-              trigger={
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-xs transition-colors hover:bg-muted hover:text-foreground"
-                  aria-label="Account menu"
-                >
-                  <User className="h-4 w-4" />
-                </button>
-              }
-            >
-              <SignOutButton />
-            </DropdownMenu>
-          </div>
+        <div
+          className={cn(
+            "mx-2 mb-3 transition-opacity",
+            railExpanded ? "opacity-100" : "pointer-events-none opacity-0"
+          )}
+        >
+          <ClassSelector />
         </div>
 
-        {menuOpen ? (
-          <nav className="border-t border-border px-4 py-3 md:hidden">
-            <div className="flex flex-col gap-1">
-              {navItems.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMenuOpen(false)}
+        <nav className="flex flex-1 flex-col gap-1 px-2">
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const active = isActivePath(pathname, href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                title={label}
+                className={cn(
+                  "flex h-11 items-center gap-3 rounded-xl px-2.5 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                <span
                   className={cn(
-                    "flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                    pathname.startsWith(href)
-                      ? "bg-primary/10 text-primary"
-                      : "text-foreground hover:bg-muted"
+                    "truncate transition-opacity",
+                    railExpanded ? "opacity-100" : "sr-only opacity-0"
                   )}
                 >
-                  <Icon className="h-4 w-4" />
                   {label}
-                </Link>
-              ))}
-            </div>
-          </nav>
-        ) : null}
-      </header>
+                </span>
+              </Link>
+            );
+          })}
 
-      <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
+          <div className="relative" ref={notifRef}>
+            <button
+              type="button"
+              title="Notifications"
+              onClick={() => {
+                setNotifOpen((v) => !v);
+                setRailExpanded(true);
+              }}
+              className={cn(
+                "flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-sm font-medium transition-colors",
+                notifOpen
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <span className="relative">
+                <Bell className="h-5 w-5 shrink-0" />
+                {unread > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold text-primary-foreground">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                ) : null}
+              </span>
+              <span
+                className={cn(
+                  "truncate transition-opacity",
+                  railExpanded ? "opacity-100" : "sr-only opacity-0"
+                )}
+              >
+                Notifications
+              </span>
+            </button>
+            {notifOpen ? (
+              <div className="absolute left-full top-0 z-50 ml-2 w-72 rounded-2xl bg-card/95 p-2 shadow-lg backdrop-blur-xl">
+                <div className="mb-1 flex items-center justify-between px-2 py-1">
+                  <p className="text-xs font-semibold">Notifications</p>
+                  {notifications.length > 0 ? (
+                    <button
+                      type="button"
+                      className="text-[11px] text-primary hover:underline"
+                      onClick={() => markAllRead()}
+                    >
+                      Mark all read
+                    </button>
+                  ) : null}
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="px-2 py-4 text-xs text-muted-foreground">
+                    No notifications yet.
+                  </p>
+                ) : (
+                  <ul className="max-h-72 space-y-1 overflow-y-auto">
+                    {notifications.map((n) => (
+                      <li key={n.id}>
+                        <Link
+                          href={n.href}
+                          onClick={() => {
+                            markRead(n.id);
+                            setNotifOpen(false);
+                          }}
+                          className={cn(
+                            "block rounded-xl px-2.5 py-2 transition-colors hover:bg-muted",
+                            !n.read && "bg-primary/5"
+                          )}
+                        >
+                          <p className="text-xs font-medium">{n.title}</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {n.body}
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </nav>
+
+        <div className="relative mt-auto px-2" ref={moreRef}>
+          <button
+            type="button"
+            title="More"
+            onClick={() => {
+              setMoreOpen((v) => !v);
+              setRailExpanded(true);
+            }}
+            className={cn(
+              "flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-sm font-medium transition-colors",
+              moreOpen
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <Menu className="h-5 w-5 shrink-0" />
+            <span
+              className={cn(
+                "truncate transition-opacity",
+                railExpanded ? "opacity-100" : "sr-only opacity-0"
+              )}
+            >
+              More
+            </span>
+          </button>
+          {moreOpen ? (
+            <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-2xl bg-card/95 p-1.5 shadow-lg backdrop-blur-xl">
+              <DropdownMenuItem className="gap-2 text-muted-foreground">
+                <Settings className="h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+              <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Appearance</span>
+                <ThemeToggle />
+              </div>
+              <div className="my-1 h-px bg-border/60" />
+              <SignOutButton />
+            </div>
+          ) : null}
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-20 md:pb-0">
+        {/* Mobile top strip: class selector only */}
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 font-display text-sm font-semibold"
+          >
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <BookOpen className="h-4 w-4" />
+            </span>
+            PersonaLearn
+          </Link>
+          <ClassSelector />
+        </header>
+
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8">
+          {children}
+        </main>
+      </div>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/40 bg-background/90 px-2 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur-xl md:hidden">
+        <div className="mx-auto flex max-w-lg items-stretch justify-around">
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const active = isActivePath(pathname, href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex min-w-[4.5rem] flex-col items-center gap-0.5 rounded-xl px-3 py-2 text-[11px] font-medium transition-colors",
+                  active ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {label}
+              </Link>
+            );
+          })}
+          <DropdownMenu
+            align="end"
+            trigger={
+              <button
+                type="button"
+                className="flex min-w-[4.5rem] flex-col items-center gap-0.5 rounded-xl px-3 py-2 text-[11px] font-medium text-muted-foreground"
+                aria-label="More"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+                More
+              </button>
+            }
+          >
+            <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Appearance</span>
+              <ThemeToggle />
+            </div>
+            <div className="my-1 h-px bg-border/60" />
+            <SignOutButton />
+          </DropdownMenu>
+        </div>
+      </nav>
     </div>
   );
 }

@@ -11,13 +11,6 @@ import {
 import type { CompetencyProgress, Student } from "@/types/database";
 import { cn } from "@/lib/utils";
 
-const MOSAIC_COLOR: Record<SnapshotDisplayStatus, string> = {
-  mastered: "bg-success",
-  developing: "bg-warning",
-  not_yet: "bg-muted-foreground/45",
-  no_evidence: "bg-muted-foreground/20",
-};
-
 const PULSE_ITEMS: {
   key: SnapshotDisplayStatus;
   label: string;
@@ -105,9 +98,18 @@ export function CompetencySnapshot({
 
   if (students.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Add students to this class to track competency.
-      </p>
+      <div className="space-y-3 rounded-xl bg-muted/40 p-4">
+        <p className="text-sm text-muted-foreground">
+          This class has no students yet. Add a roster on the class page to
+          track competency after you sign off evaluations.
+        </p>
+        <Link
+          href={`/classes/${classId}`}
+          className="inline-flex h-9 items-center rounded-xl bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Open class
+        </Link>
+      </div>
     );
   }
 
@@ -122,8 +124,14 @@ export function CompetencySnapshot({
         </div>
         <div className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
           No signed-off evaluations yet — competency appears after you sign off
-          scripts.
+          scripts. Start an evaluation from the class page.
         </div>
+        <Link
+          href={`/classes/${classId}`}
+          className="inline-flex h-9 items-center rounded-xl border border-border bg-card px-4 text-xs font-medium hover:bg-muted"
+        >
+          Go to class
+        </Link>
       </div>
     );
   }
@@ -171,30 +179,17 @@ export function CompetencySnapshot({
       ) : null}
 
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Class mosaic
-        </p>
-        <div className="flex flex-wrap gap-1.5" role="list">
-          {snapshot.roster.map((entry) => (
-            <Link
-              key={entry.student.id}
-              href={`/classes/${classId}`}
-              role="listitem"
-              title={`${entry.student.full_name} — ${entry.status.replaceAll("_", " ")}`}
-              aria-label={`${entry.student.full_name}, ${entry.status.replaceAll("_", " ")}`}
-              className={cn(
-                "h-3.5 w-3.5 rounded-sm transition-opacity hover:opacity-80",
-                MOSAIC_COLOR[entry.status]
-              )}
-            />
-          ))}
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Needs attention
+          </p>
+          <Link
+            href={`/classes/${classId}`}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Open class
+          </Link>
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Needs attention
-        </p>
         {snapshot.attention.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No students currently need attention on competency.
@@ -225,52 +220,6 @@ export function CompetencySnapshot({
             })}
           </ul>
         )}
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            All students
-          </p>
-          <Link
-            href={`/classes/${classId}`}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            Open class
-          </Link>
-        </div>
-        <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
-          {snapshot.roster.map((entry) => {
-            const hint = evidenceHint(entry);
-            return (
-              <li
-                key={entry.student.id}
-                className="flex items-center justify-between gap-2 rounded-xl border border-border px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <Link
-                    href={`/classes/${classId}`}
-                    className="font-medium hover:underline"
-                  >
-                    {entry.student.full_name}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">
-                    {entry.student.admission_number ?? "—"}
-                    {hint ? ` · ${hint}` : ""}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <CompetencyStatusBadge status={entry.status} />
-                  {entry.strandCount > 1 ? (
-                    <span className="text-xs text-muted-foreground">
-                      +{entry.strandCount - 1}
-                    </span>
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
       </div>
     </div>
   );

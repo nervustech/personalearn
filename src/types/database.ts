@@ -29,6 +29,7 @@ export type ResourceType =
   | "marking_scheme"
   | "quiz"
   | "examination"
+  | "teaching_aid"
   | "other";
 
 export type Resource = {
@@ -88,7 +89,12 @@ export type Assessment = {
   created_at: string;
 };
 
-export type EvaluationBatchStatus = "draft" | "in_review" | "signed_off";
+export type EvaluationBatchStatus =
+  | "draft"
+  | "processing"
+  | "drafted"
+  | "in_review"
+  | "signed_off";
 
 export type EvaluationBatch = {
   id: string;
@@ -99,6 +105,15 @@ export type EvaluationBatch = {
   scoped_student_id: string | null;
   status: EvaluationBatchStatus;
   created_at: string;
+};
+
+/** Vision answer region (0–1000 normalized). Multi-page answers use several entries. */
+export type QuestionBoundingBox = {
+  page: number;
+  ymin: number;
+  xmin: number;
+  ymax: number;
+  xmax: number;
 };
 
 /** Per-student assessment status on the roster profile (PSL-48). */
@@ -157,6 +172,8 @@ export type QuestionEvaluation = {
   student_answer: string | null;
   /** Scheme expectation for this Q; null when no scheme / ai_estimate. */
   expected_answer: string | null;
+  /** Answer regions for highlight + crop re-prompt (ADR-004 / F5). */
+  bounding_box: QuestionBoundingBox[] | null;
   status: QuestionEvaluationStatus;
   created_at: string;
 };

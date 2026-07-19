@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import type { Resource } from "@/types/database";
 import { useDeleteResource } from "@/lib/hooks/use-resources";
@@ -19,7 +20,6 @@ import {
   formatResourceDate,
   formatResourceType,
 } from "@/lib/resources/format";
-import { ResourceViewDialog } from "@/components/classes/resource-view-dialog";
 import { ResourceDeleteDialog } from "@/components/classes/resource-delete-dialog";
 
 type ResourceListTableProps = {
@@ -34,7 +34,6 @@ export function ResourceListTable({
   emptyMessage = "No resources yet. Upload a scheme, notes, or assignment to get started.",
 }: ResourceListTableProps) {
   const deleteResource = useDeleteResource(classId);
-  const [viewResource, setViewResource] = useState<Resource | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Resource | null>(null);
 
   function handleConfirmDelete() {
@@ -65,13 +64,12 @@ export function ResourceListTable({
             {resources.map((resource) => (
               <TableRow key={resource.id} className="group">
                 <TableCell>
-                  <button
-                    type="button"
-                    className="text-left font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={() => setViewResource(resource)}
+                  <Link
+                    href={`/classes/${classId}/resources/${resource.id}`}
+                    className="font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {resource.title}
-                  </button>
+                  </Link>
                 </TableCell>
                 <TableCell>{formatResourceType(resource.resource_type)}</TableCell>
                 <TableCell>
@@ -105,10 +103,9 @@ export function ResourceListTable({
         {resources.map((resource) => (
           <Card key={resource.id}>
             <CardContent className="flex items-start justify-between gap-3 p-4">
-              <button
-                type="button"
+              <Link
+                href={`/classes/${classId}/resources/${resource.id}`}
                 className="min-w-0 flex-1 text-left"
-                onClick={() => setViewResource(resource)}
               >
                 <p className="font-medium text-foreground underline-offset-4 hover:text-primary hover:underline">
                   {resource.title}
@@ -123,7 +120,7 @@ export function ResourceListTable({
                 >
                   {resource.ai_generated ? "AI" : "Upload"}
                 </Badge>
-              </button>
+              </Link>
               <Button
                 type="button"
                 variant="ghost"
@@ -139,14 +136,6 @@ export function ResourceListTable({
           </Card>
         ))}
       </div>
-
-      <ResourceViewDialog
-        resource={viewResource}
-        open={Boolean(viewResource)}
-        onOpenChange={(open) => {
-          if (!open) setViewResource(null);
-        }}
-      />
 
       <ResourceDeleteDialog
         resource={deleteTarget}

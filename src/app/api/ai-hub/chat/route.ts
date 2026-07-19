@@ -15,6 +15,7 @@ import {
 } from "@/lib/ai-hub/class-context";
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import { generateAiConversationTitle } from "@/lib/ai-hub/generate-conversation-title";
+import { materializeAttachmentText } from "@/lib/ai-hub/chat-attachments";
 import { getMessageText } from "@/lib/ai-hub/message-content";
 import { getChatModel } from "@/lib/ai/llm";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
@@ -49,8 +50,8 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { classId, conversationId, messages, truncateFromMessageIndex } =
-      parsed.data;
+    const { classId, conversationId, truncateFromMessageIndex } = parsed.data;
+    const messages = await materializeAttachmentText(parsed.data.messages);
     const user = await requireTeacherClass(supabase, classId);
     const classContext = await getClassContext(supabase, classId);
     const systemPrompt = buildClassAssistantSystemPrompt(classContext);
@@ -108,7 +109,12 @@ export async function POST(request: Request) {
       ]);
     }
 
-    const tools = createAgentTools({ supabase, classId, classContext });
+    const tools = createAgentTools({
+      supabase,
+      classId,
+      teacherId: user.id,
+      classContext,
+    });
 
     const result = streamText({
       model: getChatModel(),

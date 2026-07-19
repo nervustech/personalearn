@@ -100,5 +100,6 @@ describe("buildStudentAssessmentRows", () => {
       teacherFeedback: "Agreed",
     });
     expect(rows[0]?.markSummary).toBeNull();
+    expect(rows.every((r) => r.reviewBatchId === null)).toBe(true);
   });
 });

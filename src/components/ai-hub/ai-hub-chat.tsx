@@ -3,14 +3,37 @@
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { ArrowUp, RotateCcw, Sparkles, Square } from "lucide-react";
+import {
+  ArrowUp,
+  Paperclip,
+  RotateCcw,
+  Sparkles,
+  Square,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatMessage } from "@/components/ai-hub/chat-message";
-import { ConversationSidebar } from "@/components/ai-hub/conversation-sidebar";
+import {
+  ConversationSidebar,
+  readSidebarCollapsedPreference,
+  writeSidebarCollapsedPreference,
+} from "@/components/ai-hub/conversation-sidebar";
 import { ThinkingBubble } from "@/components/ai-hub/thinking-bubble";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { conversationMessagesQueryKey } from "@/lib/hooks/use-conversation-messages";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { ConversationRow } from "@/lib/ai-hub/conversations";
+import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
+import {
+  chatAttachmentAccept,
+  validateChatAttachments,
+  type PendingAttachment,
+} from "@/lib/ai-hub/chat-attachments";
+import {
+  CONVERSATION_MESSAGES_STALE_TIME,
+  conversationMessagesQueryKey,
+  fetchConversationMessages,
+} from "@/lib/hooks/use-conversation-messages";
 import {
   conversationsQueryKey,
   useConversations,
@@ -26,6 +49,14 @@ const SUGGESTED_PROMPTS = [
   "Suggest a practical CBC activity",
 ];
 
+function isMessagesQueryFresh(
+  dataUpdatedAt: number | undefined,
+  isInvalidated: boolean | undefined
+): boolean {
+  if (!dataUpdatedAt || isInvalidated) return false;
+  return Date.now() - dataUpdatedAt < CONVERSATION_MESSAGES_STALE_TIME;
+}
+
 export function AiHubChat() {
   const activeClass = useActiveClassStore((state) => state.activeClass);
   const queryClient = useQueryClient();
@@ -40,13 +71,29 @@ export function AiHubChat() {
   >(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    PendingAttachment[]
+  >([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const conversationIdRef = useRef<string | null>(null);
   const setSelectedConversationIdRef = useRef(setSelectedConversationId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef(draft);
   const prevStatusRef = useRef<string>("ready");
 
   setSelectedConversationIdRef.current = setSelectedConversationId;
+  draftRef.current = draft;
+
+  useEffect(() => {
+    setSidebarCollapsed(readSidebarCollapsedPreference());
+  }, []);
+
+  function handleSidebarCollapsedChange(collapsed: boolean) {
+    setSidebarCollapsed(collapsed);
+    writeSidebarCollapsedPreference(collapsed);
+  }
 
   const {
     data: conversations = [],
@@ -55,12 +102,61 @@ export function AiHubChat() {
 
   const chatInstanceId = activeClass?.id ?? "none";
 
+  const activeClassIdRef = useRef(activeClass?.id);
+  activeClassIdRef.current = activeClass?.id;
+
+  function patchConversationList(
+    conversationId: string,
+    options?: { title?: string; createIfMissing?: boolean }
+  ) {
+    const classId = activeClassIdRef.current;
+    if (!classId) return;
+
+    const now = new Date().toISOString();
+    queryClient.setQueryData<ConversationRow[]>(
+      conversationsQueryKey(classId),
+      (previous) => {
+        const list = previous ?? [];
+        const existing = list.find((row) => row.id === conversationId);
+
+        if (existing) {
+          const updated: ConversationRow = {
+            ...existing,
+            updated_at: now,
+            ...(options?.title ? { title: options.title } : {}),
+          };
+          return [
+            updated,
+            ...list.filter((row) => row.id !== conversationId),
+          ];
+        }
+
+        if (!options?.createIfMissing) {
+          return list;
+        }
+
+        const created: ConversationRow = {
+          id: conversationId,
+          class_id: classId,
+          teacher_id: "",
+          title: options.title ?? "New conversation",
+          created_at: now,
+          updated_at: now,
+        };
+        return [created, ...list];
+      }
+    );
+  }
+
+  const patchConversationListRef = useRef(patchConversationList);
+  patchConversationListRef.current = patchConversationList;
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/ai-hub/chat",
         body: () => ({
-          classId: activeClass?.id,
+          classId: activeClassIdRef.current,
           conversationId: conversationIdRef.current,
         }),
         fetch: async (input, init) => {
@@ -70,12 +166,15 @@ export function AiHubChat() {
           if (
             conversationId &&
             conversationId !== conversationIdRef.current &&
-            activeClass?.id
+            activeClassIdRef.current
           ) {
             conversationIdRef.current = conversationId;
             setSelectedConversationIdRef.current(conversationId);
-            void queryClient.invalidateQueries({
-              queryKey: conversationsQueryKey(activeClass.id),
+            patchConversationListRef.current(conversationId, {
+              createIfMissing: true,
+              title: generateConversationTitle(
+                draftRef.current || "New conversation"
+              ),
             });
           }
 
@@ -104,12 +203,10 @@ export function AiHubChat() {
           conversationMessagesQueryKey(conversationIdRef.current),
           finishedMessages
         );
+        patchConversationList(conversationIdRef.current);
       }
 
       if (activeClass?.id) {
-        void queryClient.invalidateQueries({
-          queryKey: conversationsQueryKey(activeClass.id),
-        });
         // Agent save_resource writes to class resources — keep the class page in sync.
         void queryClient.invalidateQueries({
           queryKey: resourcesQueryKey(activeClass.id),
@@ -131,6 +228,7 @@ export function AiHubChat() {
     conversationIdRef.current = null;
     setMessages([]);
     setDraft("");
+    setPendingAttachments([]);
     clearError();
     setActionError(null);
     setEditingMessageId(null);
@@ -156,35 +254,56 @@ export function AiHubChat() {
   async function handleSelectConversation(conversationId: string) {
     if (!activeClass) return;
 
-    setLoadingConversation(true);
     clearError();
     setActionError(null);
+    setEditingMessageId(null);
+    setPendingAttachments([]);
+
+    const queryKey = conversationMessagesQueryKey(conversationId);
+    const cached = queryClient.getQueryData<UIMessage[]>(queryKey);
+    const queryState = queryClient.getQueryState(queryKey);
+    const fresh = isMessagesQueryFresh(
+      queryState?.dataUpdatedAt,
+      queryState?.isInvalidated
+    );
+
+    setSelectedConversationId(conversationId);
+    conversationIdRef.current = conversationId;
+
+    if (cached) {
+      setMessages(cached);
+    }
+
+    if (cached && fresh) {
+      return;
+    }
+
+    if (!cached) {
+      setLoadingConversation(true);
+      setMessages([]);
+    }
 
     try {
-      const response = await fetch(`/api/ai-hub/conversations/${conversationId}`);
-      const payload = (await response.json()) as {
-        messages?: UIMessage[];
-        error?: string;
-      };
+      const loaded = await queryClient.fetchQuery({
+        queryKey,
+        queryFn: () => fetchConversationMessages(conversationId),
+        staleTime: CONVERSATION_MESSAGES_STALE_TIME,
+      });
 
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to load conversation");
+      if (conversationIdRef.current === conversationId) {
+        setMessages(loaded);
       }
-
-      setSelectedConversationId(conversationId);
-      conversationIdRef.current = conversationId;
-      setMessages(payload.messages ?? []);
-      queryClient.setQueryData(
-        conversationMessagesQueryKey(conversationId),
-        payload.messages ?? []
-      );
     } catch (loadError) {
-      setActionError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Failed to load conversation"
-      );
-      setMessages([]);
+      if (conversationIdRef.current === conversationId) {
+        setActionError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Failed to load conversation"
+        );
+        if (!cached) {
+          setMessages([]);
+        }
+      }
     } finally {
       setLoadingConversation(false);
     }
@@ -195,6 +314,7 @@ export function AiHubChat() {
     conversationIdRef.current = null;
     setMessages([]);
     setDraft("");
+    setPendingAttachments([]);
     clearError();
     setActionError(null);
     setEditingMessageId(null);
@@ -207,6 +327,7 @@ export function AiHubChat() {
 
     setEditingMessageId(messageId);
     setDraft(text);
+    setPendingAttachments([]);
     clearError();
     setActionError(null);
     requestAnimationFrame(() => {
@@ -227,15 +348,55 @@ export function AiHubChat() {
     });
   }
 
+  function handleFilesSelected(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+
+    const { accepted, error: validationError } = validateChatAttachments(
+      Array.from(fileList),
+      pendingAttachments.length
+    );
+
+    if (validationError) {
+      setActionError(validationError);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setActionError(null);
+    setPendingAttachments((current) => [
+      ...current,
+      ...accepted.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        file,
+      })),
+    ]);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removePendingAttachment(id: string) {
+    setPendingAttachments((current) =>
+      current.filter((attachment) => attachment.id !== id)
+    );
+  }
+
   async function submitMessage(text: string) {
-    if (!text.trim() || !activeClass || status === "streaming" || status === "submitted") {
+    const trimmed = text.trim();
+    const files = pendingAttachments.map((attachment) => attachment.file);
+    const hasFiles = files.length > 0;
+
+    if (
+      (!trimmed && !hasFiles) ||
+      !activeClass ||
+      status === "streaming" ||
+      status === "submitted"
+    ) {
       return;
     }
 
     clearError();
     setActionError(null);
 
-    const trimmed = text.trim();
     const editingId = editingMessageId;
 
     try {
@@ -244,6 +405,7 @@ export function AiHubChat() {
 
         setEditingMessageId(null);
         setDraft("");
+        setPendingAttachments([]);
 
         await sendMessage(
           { text: trimmed, messageId: editingId },
@@ -259,8 +421,18 @@ export function AiHubChat() {
       }
 
       setDraft("");
+      setPendingAttachments([]);
+
+      const dataTransfer = new DataTransfer();
+      for (const file of files) {
+        dataTransfer.items.add(file);
+      }
+
       await sendMessage(
-        { text: trimmed },
+        {
+          text: trimmed || "Please review the attached file(s).",
+          ...(hasFiles ? { files: dataTransfer.files } : {}),
+        },
         {
           body: {
             classId: activeClass.id,
@@ -268,6 +440,10 @@ export function AiHubChat() {
           },
         }
       );
+
+      if (conversationIdRef.current) {
+        patchConversationList(conversationIdRef.current);
+      }
     } catch (submitError) {
       setActionError(
         submitError instanceof Error
@@ -301,8 +477,13 @@ export function AiHubChat() {
       }
 
       if (activeClass?.id) {
-        await queryClient.invalidateQueries({
-          queryKey: conversationsQueryKey(activeClass.id),
+        queryClient.setQueryData<ConversationRow[]>(
+          conversationsQueryKey(activeClass.id),
+          (previous) =>
+            (previous ?? []).filter((row) => row.id !== conversationId)
+        );
+        queryClient.removeQueries({
+          queryKey: conversationMessagesQueryKey(conversationId),
         });
       }
     } catch (deleteError) {
@@ -319,6 +500,8 @@ export function AiHubChat() {
 
   const isBusy = status === "streaming" || status === "submitted" || loadingConversation;
   const isGenerating = status === "streaming" || status === "submitted";
+  const canSend =
+    (Boolean(draft.trim()) || pendingAttachments.length > 0) && !isBusy;
 
   const visibleMessages = useMemo(() => {
     if (!isGenerating) {
@@ -347,12 +530,21 @@ export function AiHubChat() {
 
   return (
     <>
-      <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)]">
+      <div
+        className={cn(
+          "grid h-full min-h-0 gap-3 sm:gap-4",
+          sidebarCollapsed
+            ? "grid-cols-[auto_minmax(0,1fr)]"
+            : "grid-cols-[minmax(11rem,17rem)_minmax(0,1fr)]"
+        )}
+      >
         <ConversationSidebar
           conversations={conversations}
           selectedConversationId={selectedConversationId}
           isLoading={conversationsLoading}
           deletingConversationId={deletingConversationId}
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={handleSidebarCollapsedChange}
           onSelect={(conversationId) => {
             void handleSelectConversation(conversationId);
           }}
@@ -379,7 +571,26 @@ export function AiHubChat() {
 
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              {messages.length === 0 ? (
+              {loadingConversation && messages.length === 0 ? (
+                <div
+                  className="space-y-4 py-2"
+                  aria-busy="true"
+                  aria-label="Loading conversation"
+                >
+                  <div className="flex gap-3">
+                    <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                    <Skeleton className="h-20 w-[min(85%,24rem)] rounded-2xl" />
+                  </div>
+                  <div className="flex flex-row-reverse gap-3">
+                    <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                    <Skeleton className="h-16 w-[min(70%,20rem)] rounded-2xl" />
+                  </div>
+                  <div className="flex gap-3">
+                    <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+                    <Skeleton className="h-28 w-[min(85%,28rem)] rounded-2xl" />
+                  </div>
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="flex h-full flex-col justify-center gap-4 py-6">
                   <div className="mx-auto max-w-md text-center">
                     <p className="text-base font-medium text-foreground">
@@ -446,7 +657,49 @@ export function AiHubChat() {
                 </div>
               ) : null}
 
-              <form onSubmit={handleSubmit} className="flex items-center gap-2">
+              {pendingAttachments.length > 0 ? (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {pendingAttachments.map((attachment) => (
+                    <span
+                      key={attachment.id}
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/60 py-1 pl-2.5 pr-1 text-xs text-foreground"
+                    >
+                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{attachment.file.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${attachment.file.name}`}
+                        disabled={isBusy}
+                        onClick={() => removePendingAttachment(attachment.id)}
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <form onSubmit={handleSubmit} className="flex items-end gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={chatAttachmentAccept()}
+                  multiple
+                  className="hidden"
+                  onChange={(event) => handleFilesSelected(event.target.files)}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={isBusy || editingMessageId !== null}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-11 w-11 shrink-0 rounded-full p-0 shadow-xs"
+                  title="Attach file"
+                  aria-label="Attach file"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
                 <textarea
                   ref={textareaRef}
                   value={draft}
@@ -484,7 +737,7 @@ export function AiHubChat() {
                 ) : (
                   <Button
                     type="submit"
-                    disabled={!draft.trim()}
+                    disabled={!canSend}
                     className="h-11 w-11 shrink-0 rounded-full p-0 shadow-sm"
                   >
                     <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
@@ -492,6 +745,10 @@ export function AiHubChat() {
                   </Button>
                 )}
               </form>
+              <p className="mt-2 px-1 text-[11px] text-muted-foreground">
+                Attachments (.txt 2 MB · .pdf/.jpg/.png 5 MB) stay in this chat
+                only — they are not saved to the class library.
+              </p>
             </div>
           </div>
         </section>

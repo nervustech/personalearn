@@ -1,7 +1,7 @@
 "use client";
 
-import type { UIMessage } from "ai";
-import { Pencil, Sparkles, User } from "lucide-react";
+import { isFileUIPart, type UIMessage } from "ai";
+import { Paperclip, Pencil, Sparkles, User } from "lucide-react";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { getMessageText } from "@/lib/ai-hub/message-content";
 import { cn } from "@/lib/utils";
@@ -18,9 +18,10 @@ export function ChatMessage({
   onEdit,
 }: ChatMessageProps) {
   const text = getMessageText(message);
+  const fileParts = message.parts.filter(isFileUIPart);
   const isUser = message.role === "user";
 
-  if (!text) {
+  if (!text && fileParts.length === 0) {
     return null;
   }
 
@@ -58,14 +59,39 @@ export function ChatMessage({
               : "border border-border/80 bg-card shadow-xs"
           )}
         >
-          {isUser ? (
-            <p className="whitespace-pre-wrap">{text}</p>
-          ) : (
-            <MarkdownContent content={text} />
-          )}
+          {fileParts.length > 0 ? (
+            <div
+              className={cn(
+                "mb-2 flex flex-wrap gap-1.5",
+                text ? "" : "mb-0"
+              )}
+            >
+              {fileParts.map((part, index) => (
+                <span
+                  key={`${part.filename ?? "file"}-${index}`}
+                  className={cn(
+                    "inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs",
+                    isUser
+                      ? "bg-primary-foreground/15 text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  <Paperclip className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{part.filename ?? "Attachment"}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {text ? (
+            isUser ? (
+              <p className="whitespace-pre-wrap">{text}</p>
+            ) : (
+              <MarkdownContent content={text} />
+            )
+          ) : null}
         </div>
 
-        {isUser && canEdit && onEdit ? (
+        {isUser && canEdit && onEdit && text ? (
           <button
             type="button"
             aria-label="Edit message"

@@ -20,13 +20,15 @@ Notion is **out of the official traceability chain**. Do not create SDLC artifac
 
 ## Golden thread
 
-Every unit of work traces to `PSL-N`:
+Every unit of work traces to `PSL-N` via mandatory GitHub Issue intake:
 
 ```
-Jira ticket → Confluence spec → GitHub branch/PR → Slack notification
+GitHub Issue → Jira ticket (PSL-N) → Confluence spec → GitHub branch/PR → Slack notification
 ```
 
-If it does not link to `PSL-N`, treat it as unofficial until triaged into Jira.
+A **GitHub Issue is REQUIRED** for every feature and bug **before** a Jira `PSL-N` is created, a branch is opened, or implementation begins. The Issue carries `needs-triage` + best-guess `type-*` until mirrored to `PSL-N` with `area-*` + `type-*` copied across.
+
+If work does not link to a GitHub Issue and `PSL-N`, treat it as unofficial until triaged.
 
 ## Jira workflow (PSL)
 
@@ -48,7 +50,7 @@ Labels are required on **every** tracked item. Use the same vocabulary on Jira t
 
 **Type (exactly one):** `type-feature`, `type-bug`, `type-chore`, `type-tech-debt`
 
-**Intake only (GitHub Issues):** `needs-triage` until a Jira `PSL-N` exists and labels are copied to the ticket.
+**GitHub Issue intake (mandatory):** Every feature and bug **must** start as a GitHub Issue with `needs-triage` + best-guess `type-*` (and best-guess `area-*` when known). A Jira `PSL-N` is created only after that Issue exists; labels are then copied to the ticket and the Issue is linked. No branch or implementation without Issue → `PSL-N`.
 
 **Sprint:** Jira **Sprint** field (primary). GitHub PR **milestone** = current sprint when in active sprint.
 
@@ -58,8 +60,8 @@ Reference vocabulary: Jira PSL-35 (do not delete).
 
 | Artifact | When | Labels |
 |----------|------|--------|
-| **Jira ticket** | On create or triage | `area-*` + `type-*` before leaving To Do |
-| **GitHub Issue** | On create | `needs-triage` + best-guess `type-*` |
+| **GitHub Issue** | On create (**mandatory**, precedes Jira) | `needs-triage` + best-guess `type-*` (+ `area-*` when known) |
+| **Jira ticket** | On create or triage (only after Issue exists) | `area-*` + `type-*` before leaving To Do; link Issue |
 | **GitHub PR** | Before review | Same `area-*` + `type-*` as `PSL-N`; sprint milestone |
 | **Jira ticket** | After PR review | Re-verify; add follow-up ticket with `type-tech-debt` if needed |
 
@@ -121,3 +123,4 @@ Agents must stop and ask for:
 - Commit (unless user explicitly requests)
 - Scope changes beyond ticket ACs
 - Creating new Jira tickets without triage (use `triage-issue` skill for bugs)
+- Creating a Jira ticket or branch **without a preceding GitHub Issue** (mandatory intake)

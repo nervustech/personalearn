@@ -22,7 +22,7 @@ async function fetchConversations(classId: string): Promise<ConversationRow[]> {
   return payload.conversations ?? [];
 }
 
-const FIVE_MINUTES = 5 * 60 * 1000;
+export const CONVERSATIONS_STALE_TIME = 5 * 60 * 1000;
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
 export function useConversations(classId: string | undefined) {
@@ -30,7 +30,7 @@ export function useConversations(classId: string | undefined) {
     queryKey: conversationsQueryKey(classId ?? ""),
     enabled: Boolean(classId),
     queryFn: () => fetchConversations(classId!),
-    staleTime: FIVE_MINUTES,
+    staleTime: CONVERSATIONS_STALE_TIME,
     gcTime: THIRTY_MINUTES,
   });
 }

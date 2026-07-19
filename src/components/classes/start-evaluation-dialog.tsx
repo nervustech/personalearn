@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { useResources } from "@/lib/hooks/use-resources";
 import {
   useAssessments,
   useCreateEvaluationBatch,
-  useProcessEvaluationIdentity,
+  useStartEvaluationProcessing,
   useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
 import { compressEvalScanImages } from "@/lib/evaluation/compress-eval-image";
 import { isGradableResourceType } from "@/lib/evaluation/gradable";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resources/format";
+import { useNotificationsStore } from "@/lib/store/notifications";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -43,7 +43,7 @@ export function StartEvaluationDialog({
   onOpenChange,
   hideTrigger = false,
 }: StartEvaluationDialogProps) {
-  const router = useRouter();
+  const addNotification = useNotificationsStore((s) => s.add);
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
@@ -70,7 +70,7 @@ export function StartEvaluationDialog({
   const { data: resources } = useResources(classId);
   const createBatch = useCreateEvaluationBatch(classId);
   const uploadPages = useUploadEvaluationPages(classId);
-  const processIdentity = useProcessEvaluationIdentity(classId);
+  const startProcessing = useStartEvaluationProcessing(classId);
 
   const lockedAssessment = Boolean(preselectedAssessmentId);
   const isN1 = Boolean(studentId);
@@ -95,7 +95,7 @@ export function StartEvaluationDialog({
   const pending =
     createBatch.isPending ||
     uploadPages.isPending ||
-    processIdentity.isPending ||
+    startProcessing.isPending ||
     compressing;
 
   function resetForm() {
@@ -110,7 +110,7 @@ export function StartEvaluationDialog({
     setUploadWarnings([]);
     createBatch.reset();
     uploadPages.reset();
-    processIdentity.reset();
+    startProcessing.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -170,6 +170,7 @@ export function StartEvaluationDialog({
     }
 
     const batchId = createdBatchId;
+    const reviewHref = `/classes/${classId}/evaluations/${batchId}`;
     try {
       setCompressing(true);
       const files = await compressEvalScanImages(selectedFiles);
@@ -181,15 +182,20 @@ export function StartEvaluationDialog({
       const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
       if (warnings.length) setUploadWarnings(warnings);
 
-      // Read admission numbers; cleared scripts auto-draft on the review page.
-      await processIdentity.mutateAsync(batchId);
+      // F3/F4: kick off async grading; do not auto-open review.
+      await startProcessing.mutateAsync(batchId);
+
+      addNotification({
+        title: "Grading started",
+        body: "You can keep working — we’ll notify you when drafts are ready to review.",
+        href: reviewHref,
+      });
 
       handleOpenChange(false);
-      router.push(`/classes/${classId}/evaluations/${batchId}`);
     } catch (error) {
       setCompressing(false);
       setFormError(
-        error instanceof Error ? error.message : "Upload or identity failed"
+        error instanceof Error ? error.message : "Upload or grading start failed"
       );
     }
   }
@@ -371,8 +377,8 @@ export function StartEvaluationDialog({
             <>
               <p className="text-sm text-muted-foreground">
                 {isN1
-                  ? "Upload this student’s scanned pages as JPEG or PNG (any order). Large phone photos are resized in the browser first."
-                  : "Upload scanned script pages as JPEG or PNG (any order). Large phone photos are resized in the browser first so handwriting stays readable. After upload we read admission numbers, draft cleared scripts, and open the review workspace."}
+                  ? "Upload this student’s scanned pages as JPEG or PNG (any order). Large phone photos are resized in the browser first, then uploaded directly to storage."
+                  : "Upload scanned script pages as JPEG or PNG (any order). Large photos are resized then uploaded directly to storage. Grading runs in the background — you won’t be taken to review automatically."}
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>
@@ -428,9 +434,9 @@ export function StartEvaluationDialog({
                     ? "Preparing images…"
                     : uploadPages.isPending
                       ? "Uploading…"
-                      : processIdentity.isPending
-                        ? "Reading identity…"
-                        : "Upload & open review"}
+                      : startProcessing.isPending
+                        ? "Starting grading…"
+                        : "Upload & start grading"}
                 </Button>
               </div>
             </>

@@ -44,9 +44,7 @@ function mockSupabase(scripts: unknown[]) {
           }),
         }),
         update: () => ({
-          eq: () => ({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
+          eq: vi.fn().mockResolvedValue({ error: null }),
         }),
       };
     }
@@ -96,6 +94,7 @@ describe("processBatchDrafts", () => {
       feedback: "Estimate",
       student_answer: "wrote 2",
       expected_answer: null,
+      bounding_box: null,
     });
     mockListQuestions.mockResolvedValue([]);
   });

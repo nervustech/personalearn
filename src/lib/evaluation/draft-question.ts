@@ -1,5 +1,9 @@
 import { generateText } from "ai";
 import { getEvalVisionModel, requireGoogleGenerativeAiApiKey } from "@/lib/ai/vision-model";
+import {
+  parseBoundingBoxJson,
+  type BoundingBoxRegion,
+} from "@/lib/evaluation/bounding-box";
 import { parseQuestionLabels } from "@/lib/evaluation/normalize-question";
 import type { QuestionEvaluationStatus } from "@/types/database";
 
@@ -14,6 +18,8 @@ export type DraftQuestionResult = {
   feedback: string | null;
   student_answer: string | null;
   expected_answer: string | null;
+  /** Answer regions when vision returns them (0–1000 normalized). */
+  bounding_box: BoundingBoxRegion[] | null;
 };
 
 export function questionEvaluationStatusForScheme(
@@ -47,6 +53,7 @@ const EMPTY_DRAFT: DraftQuestionResult = {
   feedback: null,
   student_answer: null,
   expected_answer: null,
+  bounding_box: null,
 };
 
 export function parseDraftQuestionJson(text: string): DraftQuestionResult {
@@ -62,6 +69,7 @@ export function parseDraftQuestionJson(text: string): DraftQuestionResult {
       feedback?: unknown;
       student_answer?: unknown;
       expected_answer?: unknown;
+      bounding_box?: unknown;
     };
     return {
       awarded: parseFiniteNumber(parsed.awarded),
@@ -69,6 +77,7 @@ export function parseDraftQuestionJson(text: string): DraftQuestionResult {
       feedback: parseOptionalText(parsed.feedback),
       student_answer: parseOptionalText(parsed.student_answer),
       expected_answer: parseOptionalText(parsed.expected_answer),
+      bounding_box: parseBoundingBoxJson(parsed.bounding_box),
     };
   } catch {
     return { ...EMPTY_DRAFT };
@@ -84,6 +93,12 @@ function buildGradePrompt(
     instruction && instruction.trim().length > 0
       ? `\n\nTeacher instruction for this re-evaluation (follow carefully):\n---\n${instruction.trim()}\n---\n`
       : "";
+
+  const bboxHint = `
+Also return bounding_box: an array of regions covering the student's answer for this question.
+Each region: { "page": 0-based index among the images you received, "ymin", "xmin", "ymax", "xmax" }
+with coordinates normalized 0–1000 (top-left origin). Use one region when the answer is on one page;
+multiple when it spans pages. Omit or use [] if you cannot locate the answer.`;
 
   if (schemeText) {
     return `You are grading one question from a scanned Kenyan classroom exam/assignment script.
@@ -101,6 +116,8 @@ Return ONLY valid JSON with keys:
 - feedback (string — brief rationale for the teacher/student)
 - student_answer (string — short excerpt of what the student wrote for this question)
 - expected_answer (string — what the marking scheme required for this question)
+- bounding_box (array — see below)
+${bboxHint}
 
 No markdown.`;
   }
@@ -115,6 +132,8 @@ Return ONLY valid JSON with keys:
 - feedback (string — brief rationale noting this is an estimate without a scheme)
 - student_answer (string — short excerpt of what the student wrote for this question)
 - expected_answer (null — always null when there is no marking scheme)
+- bounding_box (array — see below)
+${bboxHint}
 
 No markdown.`;
 }

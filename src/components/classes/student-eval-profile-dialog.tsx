@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Student, StudentAssessmentStatus } from "@/types/database";
 import { useStudentEvalProfile } from "@/lib/hooks/use-evaluation";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ export function StudentEvalProfileDialog({
   onOpenChange,
   onEvaluateAssessment,
 }: StudentEvalProfileDialogProps) {
+  const router = useRouter();
   const studentId = student?.id;
   const { data, isLoading, error } = useStudentEvalProfile(
     open ? classId : undefined,
@@ -140,6 +142,19 @@ export function StudentEvalProfileDialog({
                         }
                       >
                         {isExpanded ? "Hide feedback" : "View feedback"}
+                      </Button>
+                    ) : status === "in_review" && row.reviewBatchId ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          handleOpenChange(false);
+                          router.push(
+                            `/classes/${classId}/evaluations/${row.reviewBatchId}`
+                          );
+                        }}
+                      >
+                        Open review
                       </Button>
                     ) : (
                       <Button

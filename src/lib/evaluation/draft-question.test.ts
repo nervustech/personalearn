@@ -35,6 +35,29 @@ describe("parseDraftQuestionJson", () => {
       feedback: "Good method marks.",
       student_answer: "Student wrote 3/4",
       expected_answer: "3/4 in simplest form",
+      bounding_box: null,
+    });
+  });
+
+  it("parses bounding_box regions when present", () => {
+    expect(
+      parseDraftQuestionJson(
+        JSON.stringify({
+          awarded: 1,
+          max: 2,
+          feedback: "ok",
+          student_answer: "x",
+          expected_answer: "y",
+          bounding_box: [{ page: 0, ymin: 100, xmin: 50, ymax: 400, xmax: 900 }],
+        })
+      )
+    ).toEqual({
+      awarded: 1,
+      max: 2,
+      feedback: "ok",
+      student_answer: "x",
+      expected_answer: "y",
+      bounding_box: [{ page: 0, ymin: 100, xmin: 50, ymax: 400, xmax: 900 }],
     });
   });
 
@@ -49,6 +72,7 @@ describe("parseDraftQuestionJson", () => {
       feedback: "Partial",
       student_answer: null,
       expected_answer: null,
+      bounding_box: null,
     });
   });
 
@@ -59,6 +83,7 @@ describe("parseDraftQuestionJson", () => {
       feedback: null,
       student_answer: null,
       expected_answer: null,
+      bounding_box: null,
     });
     expect(parseDraftQuestionJson("{")).toEqual({
       awarded: null,
@@ -66,6 +91,7 @@ describe("parseDraftQuestionJson", () => {
       feedback: null,
       student_answer: null,
       expected_answer: null,
+      bounding_box: null,
     });
   });
 });

@@ -14,7 +14,7 @@ import {
   pageUrlsForQuestion,
   reviewMarkerKind,
 } from "@/lib/evaluation/page-images";
-import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reevaluate-question";
+import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reeval-instruction";
 import { computeScriptTotal } from "@/lib/evaluation/script-totals";
 import {
   useAssessments,
@@ -31,6 +31,8 @@ type EvalReviewWorkspaceProps = {
   classId: string;
   batchId: string;
   classSubject?: string;
+  /** Deep-link focus (F8 / F10). */
+  initialScriptId?: string;
 };
 
 type UpdateMutation = UseMutationResult<
@@ -117,7 +119,6 @@ function QuestionAnalysisPanel({
     question.max != null ? String(question.max) : ""
   );
   const [feedback, setFeedback] = useState(question.feedback ?? "");
-  const [reevalOpen, setReevalOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -176,6 +177,10 @@ function QuestionAnalysisPanel({
   async function runReeval() {
     setLocalError(null);
     const trimmed = instruction.trim();
+    if (!trimmed) {
+      setLocalError("Enter a natural-language instruction for re-grading.");
+      return;
+    }
     if (trimmed.length > MAX_REEVAL_INSTRUCTION_CHARS) {
       setLocalError(
         `Instruction must be at most ${MAX_REEVAL_INSTRUCTION_CHARS} characters`
@@ -186,9 +191,8 @@ function QuestionAnalysisPanel({
       await reevaluate.mutateAsync({
         scriptId: script.id,
         questionId: question.id,
-        instruction: trimmed || undefined,
+        instruction: trimmed,
       });
-      setReevalOpen(false);
       setInstruction("");
     } catch (error) {
       setLocalError(
@@ -324,68 +328,46 @@ function QuestionAnalysisPanel({
       </div>
 
       {!readOnly ? (
-        <div className="flex flex-wrap gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-7"
-            disabled={updateQuestion.isPending}
-            onClick={() => void saveEdits()}
-          >
-            {updateQuestion.isPending ? "Saving…" : "Save"}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="h-7"
+        <div className="space-y-1.5">
+          <Label htmlFor={`reeval-${question.id}`} className="text-xs">
+            Re-prompt (natural language)
+          </Label>
+          <textarea
+            id={`reeval-${question.id}`}
+            className="min-h-16 w-full rounded-lg border border-input bg-card px-2.5 py-1.5 text-xs leading-snug shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-50"
+            placeholder="e.g. Give method marks for the first two steps even if the final answer is wrong"
+            maxLength={MAX_REEVAL_INSTRUCTION_CHARS}
+            value={instruction}
             disabled={reevaluate.isPending}
-            onClick={() => setReevalOpen(true)}
-          >
-            Re-evaluate
-          </Button>
+            onChange={(e) => setInstruction(e.target.value)}
+          />
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-7"
+              disabled={updateQuestion.isPending}
+              onClick={() => void saveEdits()}
+            >
+              {updateQuestion.isPending ? "Saving…" : "Save"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7"
+              disabled={reevaluate.isPending || !instruction.trim()}
+              onClick={() => void runReeval()}
+            >
+              {reevaluate.isPending ? "Re-grading…" : "Re-grade question"}
+            </Button>
+          </div>
         </div>
       ) : null}
 
       {localError ? (
         <p className="text-xs text-destructive">{localError}</p>
       ) : null}
-
-      <Dialog
-        open={reevalOpen}
-        onOpenChange={setReevalOpen}
-        title={`Re-evaluate Q${question.question_number}`}
-        description="Optional instruction for the vision grader. Refreshes marks and comparison fields."
-      >
-        <div className="space-y-3">
-          <textarea
-            className="min-h-24 w-full rounded-xl border border-input bg-card px-3 py-2 text-sm"
-            placeholder="Instruction (optional)"
-            maxLength={MAX_REEVAL_INSTRUCTION_CHARS}
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-          />
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setReevalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={reevaluate.isPending}
-              onClick={() => void runReeval()}
-            >
-              {reevaluate.isPending ? "Re-evaluating…" : "Run re-evaluate"}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
     </div>
   );
 }
@@ -489,6 +471,7 @@ function ScriptWorkspace({
             markerKind={markerKind}
             markerStatus={question.status}
             questionLabel={question.question_number}
+            boundingBoxes={question.bounding_box}
           />
           <aside className="rounded-2xl border border-border bg-card/80 p-3 lg:sticky lg:top-3">
             <QuestionAnalysisPanel
@@ -548,10 +531,13 @@ export function EvalReviewWorkspace({
   classId,
   batchId,
   classSubject = "General",
+  initialScriptId,
 }: EvalReviewWorkspaceProps) {
   const { data, isLoading, error } = useEvaluationScripts(batchId);
   const { data: assessments } = useAssessments(classId);
-  const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null);
+  const [selectedScriptId, setSelectedScriptId] = useState<string | null>(
+    initialScriptId ?? null
+  );
 
   const assessmentMeta = useMemo(() => {
     const assessmentId = data?.batch?.assessment_id;
@@ -600,9 +586,16 @@ export function EvalReviewWorkspace({
     ) {
       return;
     }
+    if (
+      initialScriptId &&
+      reviewScripts.some((s) => s.id === initialScriptId)
+    ) {
+      setSelectedScriptId(initialScriptId);
+      return;
+    }
     const firstDrafted = reviewScripts.find((s) => s.status === "drafted");
     setSelectedScriptId((firstDrafted ?? reviewScripts[0]).id);
-  }, [reviewScripts, selectedScriptId]);
+  }, [reviewScripts, selectedScriptId, initialScriptId]);
 
   const selectedScript =
     reviewScripts.find((s) => s.id === selectedScriptId) ?? null;

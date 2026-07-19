@@ -284,7 +284,7 @@ export async function signOffScript(
 
   const { error: batchStatusError } = await supabase
     .from("evaluation_batches")
-    .update({ status: allSigned ? "signed_off" : "in_review" })
+    .update({ status: allSigned ? "signed_off" : "drafted" })
     .eq("id", input.batchId);
 
   if (batchStatusError) throw new Error(batchStatusError.message);

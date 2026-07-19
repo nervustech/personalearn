@@ -16,6 +16,8 @@ import { AddStudentDialog } from "@/components/classes/add-student-dialog";
 import { CsvImportDialog } from "@/components/classes/csv-import-dialog";
 import { ClassEditDialog } from "@/components/classes/class-edit-dialog";
 import { ClassResourcesSection } from "@/components/classes/class-resources-section";
+import { ClassAssessmentsSection } from "@/components/classes/class-assessments-section";
+import { EvaluationReadyNotifier } from "@/components/classes/evaluation-ready-notifier";
 import { ClassDetailSkeleton } from "@/components/classes/class-detail-skeleton";
 
 export default function ClassDetailPage({
@@ -65,6 +67,7 @@ export default function ClassDetailPage({
 
   return (
     <div className="space-y-6">
+      <EvaluationReadyNotifier classId={classId} />
       <div className="flex flex-col items-center text-center">
         {cls ? (
           <>
@@ -108,11 +111,14 @@ export default function ClassDetailPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        <ClassResourcesSection
-          classId={classId}
-          scrollable
-          searchQuery={searchQuery}
-        />
+        <div className="space-y-6">
+          <ClassResourcesSection
+            classId={classId}
+            scrollable
+            searchQuery={searchQuery}
+          />
+          <ClassAssessmentsSection classId={classId} />
+        </div>
 
         <Card className="flex min-h-0 flex-col lg:max-h-[min(70vh,40rem)]">
           <CardHeader className="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2">

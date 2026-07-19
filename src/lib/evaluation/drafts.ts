@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  createConcurrencyLimit,
+  EVAL_DRAFT_CONCURRENCY,
+} from "@/lib/evaluation/concurrency";
+import {
   draftQuestionFromImages,
   listQuestionsFromImages,
   questionEvaluationStatusForScheme,
@@ -69,6 +73,7 @@ export async function processScriptDraft(
     feedback: string | null;
     student_answer: string | null;
     expected_answer: string | null;
+    bounding_box: import("@/lib/evaluation/bounding-box").BoundingBoxRegion[] | null;
     status: typeof status;
   }[] = [];
 
@@ -96,6 +101,7 @@ export async function processScriptDraft(
       feedback: draft.feedback,
       student_answer: draft.student_answer,
       expected_answer: draft.expected_answer,
+      bounding_box: draft.bounding_box,
       status,
     });
   }
@@ -124,7 +130,8 @@ export async function processScriptDraft(
 
 export async function processBatchDrafts(
   supabase: SupabaseClient,
-  batchId: string
+  batchId: string,
+  options?: { concurrency?: number }
 ): Promise<ProcessDraftsSummary> {
   const { data: batch, error: batchError } = await supabase
     .from("evaluation_batches")
@@ -159,49 +166,90 @@ export async function processBatchDrafts(
 
   const pageCache = new Map<string, DraftPageImage>();
   const rows = (scripts ?? []) as EvaluatedScript[];
+  const limit = createConcurrencyLimit(
+    options?.concurrency ?? EVAL_DRAFT_CONCURRENCY
+  );
 
-  for (const script of rows) {
+  const cleared = rows.filter((script) => {
     if (script.status === "identity_amber") {
       summary.skippedAmber += 1;
-      continue;
+      return false;
     }
     if (script.status === "pending") {
       summary.skippedPending += 1;
-      continue;
+      return false;
     }
     if (script.status === "drafted" || script.status === "signed_off") {
       summary.skippedAlreadyDrafted += 1;
-      continue;
+      return false;
     }
     if (script.status !== "identity_cleared") {
       summary.skippedOther += 1;
-      continue;
+      return false;
     }
+    return true;
+  });
 
-    try {
-      await processScriptDraft(supabase, {
-        script,
-        schemeText,
-        pageCache,
-      });
-      summary.drafted += 1;
-    } catch (error) {
-      summary.errors.push({
-        scriptId: script.id,
-        message:
-          error instanceof Error ? error.message : "Draft processing failed",
-      });
+  await Promise.all(
+    cleared.map((script) =>
+      limit(async () => {
+        try {
+          await processScriptDraft(supabase, {
+            script,
+            schemeText,
+            pageCache,
+          });
+          summary.drafted += 1;
+        } catch (error) {
+          summary.errors.push({
+            scriptId: script.id,
+            message:
+              error instanceof Error
+                ? error.message
+                : "Draft processing failed",
+          });
+        }
+      })
+    )
+  );
+
+  // ADR-004: processing → drafted when any script drafts land.
+  if (summary.drafted > 0) {
+    const fromStatuses = new Set(["draft", "processing", "in_review"]);
+    if (fromStatuses.has(batch.status as string)) {
+      await supabase
+        .from("evaluation_batches")
+        .update({ status: "drafted" })
+        .eq("id", batchId);
     }
-  }
-
-  // Move batch into in_review once any script is drafted.
-  if (summary.drafted > 0 && batch.status === "draft") {
-    await supabase
-      .from("evaluation_batches")
-      .update({ status: "in_review" })
-      .eq("id", batchId)
-      .eq("status", "draft");
   }
 
   return summary;
+}
+
+/**
+ * Mark batch processing and run identity+drafts asynchronously.
+ * Caller should fire-and-forget (e.g. Next.js `after`) so the teacher can keep using the app.
+ */
+export async function runBatchProcessingPipeline(
+  supabase: SupabaseClient,
+  batchId: string,
+  options?: {
+    processIdentity: (
+      supabase: SupabaseClient,
+      batchId: string
+    ) => Promise<unknown>;
+  }
+): Promise<ProcessDraftsSummary> {
+  await supabase
+    .from("evaluation_batches")
+    .update({ status: "processing" })
+    .eq("id", batchId)
+    .in("status", ["draft", "processing"]);
+
+  if (options?.processIdentity) {
+    await options.processIdentity(supabase, batchId);
+  }
+
+  return processBatchDrafts(supabase, batchId);
 }

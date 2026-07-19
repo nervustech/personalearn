@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ReviewMarkerBadge } from "@/components/classes/review-marker-badge";
+import {
+  boundingBoxToCssPercent,
+  type BoundingBoxRegion,
+} from "@/lib/evaluation/bounding-box";
 import type { ReviewMarkerKind } from "@/lib/evaluation/page-images";
 import type { ScriptPageUrl } from "@/lib/evaluation/page-images";
 import type { QuestionEvaluationStatus } from "@/types/database";
@@ -13,6 +17,8 @@ type ScriptPageViewerProps = {
   markerStatus?: QuestionEvaluationStatus;
   questionLabel?: string;
   emptyMessage?: string;
+  /** Answer regions for the focused question (F5 / F8 highlight). */
+  boundingBoxes?: BoundingBoxRegion[] | null;
 };
 
 export function ScriptPageViewer({
@@ -21,6 +27,7 @@ export function ScriptPageViewer({
   markerStatus,
   questionLabel,
   emptyMessage = "No page images for this question.",
+  boundingBoxes,
 }: ScriptPageViewerProps) {
   const [index, setIndex] = useState(0);
 
@@ -30,6 +37,10 @@ export function ScriptPageViewer({
 
   const safeIndex = pages.length === 0 ? 0 : Math.min(index, pages.length - 1);
   const page = pages[safeIndex];
+  const overlays =
+    boundingBoxes?.filter((box) => box.page === safeIndex) ??
+    boundingBoxes?.filter((box) => box.page === 0) ??
+    [];
 
   if (pages.length === 0 || !page) {
     return (
@@ -51,15 +62,30 @@ export function ScriptPageViewer({
         <ReviewMarkerBadge kind={markerKind} status={markerStatus} />
       </div>
 
-      {/* Desk + paper frame — A4-friendly, tall without eating chrome */}
       <div className="flex min-h-0 flex-1 justify-center overflow-auto bg-muted/40 px-3 py-4 sm:px-5 sm:py-5">
-        <div className="w-full max-w-[min(100%,48rem)] overflow-hidden rounded-sm bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
+        <div className="relative w-full max-w-[min(100%,48rem)] overflow-hidden rounded-sm bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={page.url ?? undefined}
             alt={page.fileName}
             className="mx-auto block max-h-[min(82vh,54rem)] w-full object-contain"
           />
+          {overlays.map((box, i) => {
+            const css = boundingBoxToCssPercent(box);
+            return (
+              <div
+                key={`${box.ymin}-${box.xmin}-${i}`}
+                aria-hidden
+                className="pointer-events-none absolute border-2 border-primary/80 bg-primary/15"
+                style={{
+                  top: css.top,
+                  left: css.left,
+                  width: css.width,
+                  height: css.height,
+                }}
+              />
+            );
+          })}
         </div>
       </div>
 

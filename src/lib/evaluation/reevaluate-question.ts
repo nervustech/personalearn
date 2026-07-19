@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseBoundingBoxJson } from "@/lib/evaluation/bounding-box";
+import { cropPagesToBoundingBoxes } from "@/lib/evaluation/crop-eval-image";
 import {
   previewCompetency,
   type CompetencyPreview,
@@ -10,6 +12,9 @@ import {
   downloadPageBytes,
   pagesForQuestion,
 } from "@/lib/evaluation/page-images";
+import {
+  normalizeReevalInstruction,
+} from "@/lib/evaluation/reeval-instruction";
 import { computeScriptTotal, type ScriptTotal } from "@/lib/evaluation/script-totals";
 import type {
   EvaluationBatch,
@@ -23,22 +28,10 @@ export type ReevaluateQuestionResult = {
   competencyPreview: CompetencyPreview | null;
 };
 
-/** Cap teacher re-eval instructions before they enter the vision prompt. */
-export const MAX_REEVAL_INSTRUCTION_CHARS = 2000;
-
-export function normalizeReevalInstruction(
-  instruction?: string | null
-): string | null {
-  if (instruction == null) return null;
-  const trimmed = String(instruction).trim();
-  if (!trimmed) return null;
-  if (trimmed.length > MAX_REEVAL_INSTRUCTION_CHARS) {
-    throw new Error(
-      `Instruction must be at most ${MAX_REEVAL_INSTRUCTION_CHARS} characters`
-    );
-  }
-  return trimmed;
-}
+export {
+  MAX_REEVAL_INSTRUCTION_CHARS,
+  normalizeReevalInstruction,
+} from "@/lib/evaluation/reeval-instruction";
 
 async function loadCompetencyPreview(
   supabase: SupabaseClient,
@@ -142,10 +135,14 @@ export async function reevaluateScriptQuestion(
     images.push(await downloadPageBytes(supabase, page.storagePath, cache));
   }
 
+  // F6: crop to stored bbox when available so re-prompts stay atomic/cheap.
+  const boxes = parseBoundingBoxJson(existing.bounding_box);
+  const visionPages = await cropPagesToBoundingBoxes(images, boxes);
+
   const instruction = normalizeReevalInstruction(input.instruction);
 
   const draft = await draftQuestionFromImages({
-    pages: images,
+    pages: visionPages,
     questionLabel: existing.question_number as string,
     schemeText,
     instruction,
@@ -159,6 +156,8 @@ export async function reevaluateScriptQuestion(
       feedback: draft.feedback,
       student_answer: draft.student_answer,
       expected_answer: draft.expected_answer,
+      // Keep prior boxes if the re-prompt crop did not return new ones.
+      bounding_box: draft.bounding_box ?? existing.bounding_box ?? null,
       status: "reevaluated",
     })
     .eq("id", input.questionId)

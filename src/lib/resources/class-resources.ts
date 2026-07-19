@@ -13,6 +13,26 @@ export type TeacherResource = {
   updated_at: string;
 };
 
+/** List-row shape: metadata + slim raw_content (no extracted text body). */
+export type TeacherResourceListItem = Omit<TeacherResource, "raw_content"> & {
+  raw_content: {
+    fileName?: string;
+    mimeType?: string;
+    storagePath?: string;
+  };
+};
+
+function slimRawContent(
+  raw: Record<string, unknown> | null | undefined
+): TeacherResourceListItem["raw_content"] {
+  if (!raw || typeof raw !== "object") return {};
+  const slim: TeacherResourceListItem["raw_content"] = {};
+  if (typeof raw.fileName === "string") slim.fileName = raw.fileName;
+  if (typeof raw.mimeType === "string") slim.mimeType = raw.mimeType;
+  if (typeof raw.storagePath === "string") slim.storagePath = raw.storagePath;
+  return slim;
+}
+
 export async function requireTeacherResource(
   supabase: SupabaseClient,
   resourceId: string
@@ -34,7 +54,7 @@ export async function requireTeacherResource(
 export async function listClassResources(
   supabase: SupabaseClient,
   classId: string
-) {
+): Promise<TeacherResourceListItem[]> {
   const { data, error } = await supabase
     .from("resources")
     .select(
@@ -48,5 +68,10 @@ export async function listClassResources(
     throw new Error(`Resource list failed: ${error.message}`);
   }
 
-  return (data ?? []) as TeacherResource[];
+  return (data ?? []).map((row) => ({
+    ...(row as TeacherResource),
+    raw_content: slimRawContent(
+      row.raw_content as Record<string, unknown> | null | undefined
+    ),
+  }));
 }

@@ -7,6 +7,7 @@ export const RESOURCE_TYPE_OPTIONS = [
   "marking_scheme",
   "quiz",
   "examination",
+  "teaching_aid",
   "other",
 ] as const satisfies readonly ResourceType[];
 
@@ -17,6 +18,7 @@ export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   marking_scheme: "Marking scheme",
   quiz: "Quiz",
   examination: "Examination",
+  teaching_aid: "Teaching aid",
   other: "Other",
 };
 
@@ -43,4 +45,55 @@ export function resourcePreviewText(rawContent: Record<string, unknown>) {
 export function resourceFileName(rawContent: Record<string, unknown>) {
   const fileName = rawContent.fileName;
   return typeof fileName === "string" ? fileName : "resource";
+}
+
+export function resourceMimeType(rawContent: Record<string, unknown>) {
+  const mimeType = rawContent.mimeType;
+  return typeof mimeType === "string" ? mimeType.toLowerCase().split(";")[0]?.trim() ?? "" : "";
+}
+
+export function resourceStoragePath(rawContent: Record<string, unknown>) {
+  const storagePath = rawContent.storagePath;
+  return typeof storagePath === "string" ? storagePath : null;
+}
+
+/** Uploaded PDF or image whose original bytes should be shown/downloaded. */
+export function isBinaryOriginalResource(rawContent: Record<string, unknown>) {
+  const mime = resourceMimeType(rawContent);
+  return mime === "application/pdf" || mime.startsWith("image/");
+}
+
+/**
+ * Text/AI resources are editable (title + body). Binary PDF/image uploads are not.
+ */
+export function isEditableTextResource(resource: {
+  ai_generated: boolean;
+  raw_content: Record<string, unknown>;
+}) {
+  if (isBinaryOriginalResource(resource.raw_content)) return false;
+  const mime = resourceMimeType(resource.raw_content);
+  return (
+    resource.ai_generated ||
+    mime === "text/plain" ||
+    mime === "text/markdown" ||
+    mime === ""
+  );
+}
+
+/**
+ * Downloads: binary uploads → original file; AI/text → synthesized PDF
+ * (even when a .txt storagePath exists).
+ */
+export function shouldExportResourceAsPdf(resource: {
+  ai_generated: boolean;
+  raw_content: Record<string, unknown>;
+}) {
+  if (isBinaryOriginalResource(resource.raw_content)) return false;
+  const mime = resourceMimeType(resource.raw_content);
+  return (
+    resource.ai_generated ||
+    mime === "text/plain" ||
+    mime === "text/markdown" ||
+    Boolean(resourcePreviewText(resource.raw_content).trim())
+  );
 }

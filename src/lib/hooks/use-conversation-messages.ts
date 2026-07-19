@@ -6,7 +6,7 @@ import {
   fetchConversationMessages,
 } from "@/lib/ai-hub/fetch-conversation-messages";
 
-const FIVE_MINUTES = 5 * 60 * 1000;
+export const CONVERSATION_MESSAGES_STALE_TIME = 5 * 60 * 1000;
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
 export function useConversationMessages(conversationId: string | null) {
@@ -14,7 +14,7 @@ export function useConversationMessages(conversationId: string | null) {
     queryKey: conversationMessagesQueryKey(conversationId ?? ""),
     enabled: Boolean(conversationId),
     queryFn: () => fetchConversationMessages(conversationId!),
-    staleTime: FIVE_MINUTES,
+    staleTime: CONVERSATION_MESSAGES_STALE_TIME,
     gcTime: THIRTY_MINUTES,
   });
 }

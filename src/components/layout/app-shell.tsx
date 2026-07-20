@@ -152,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/40 bg-background/90 px-2 pb-[env(safe-area-inset-bottom)] pt-1 backdrop-blur-xl md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 bg-background/90 px-2 pb-[env(safe-area-inset-bottom)] pt-1 shadow-[0_-8px_24px_rgb(0_0_0_/0.06)] backdrop-blur-xl md:hidden">
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);

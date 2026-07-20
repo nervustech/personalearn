@@ -40,8 +40,8 @@ export function ScriptPageViewer({
   }
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl bg-card/95 shadow-sm backdrop-blur-sm">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-1.5">
         <p className="truncate text-xs text-muted-foreground">
           {questionLabel ? `Q${questionLabel}` : "Scan"}
           {pages.length > 1

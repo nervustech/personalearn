@@ -55,7 +55,7 @@ export function ChatMessage({
             "rounded-2xl px-4 py-3 text-[0.9375rem] leading-relaxed",
             isUser
               ? "bg-primary text-primary-foreground"
-              : "border border-border/80 bg-card shadow-xs"
+              : "bg-card/95 shadow-xs backdrop-blur-sm"
           )}
         >
           {isUser ? (

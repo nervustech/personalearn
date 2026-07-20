@@ -490,7 +490,7 @@ function ScriptWorkspace({
             markerStatus={question.status}
             questionLabel={question.question_number}
           />
-          <aside className="rounded-2xl border border-border bg-card/80 p-3 lg:sticky lg:top-3">
+          <aside className="rounded-2xl bg-card/90 p-3 shadow-sm backdrop-blur-sm lg:sticky lg:top-3">
             <QuestionAnalysisPanel
               script={script}
               question={question}
@@ -649,9 +649,9 @@ export function EvalReviewWorkspace({
     <section className="grid gap-3 lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start">
       <nav
         aria-label="Scripts"
-        className="max-h-48 overflow-y-auto rounded-xl border border-border bg-card lg:sticky lg:top-3 lg:max-h-[calc(100vh-5.5rem)]"
+        className="max-h-48 overflow-y-auto rounded-xl bg-card/95 shadow-sm backdrop-blur-sm lg:sticky lg:top-3 lg:max-h-[calc(100vh-5.5rem)]"
       >
-        <div className="sticky top-0 z-10 border-b border-border bg-card px-2.5 py-1.5">
+        <div className="sticky top-0 z-10 bg-card/95 px-2.5 py-1.5 backdrop-blur-sm">
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Students · {reviewScripts.length}
           </p>

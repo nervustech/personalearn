@@ -360,7 +360,7 @@ export function AiHubChat() {
           onDelete={setPendingDeleteId}
         />
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-xs">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-card/95 shadow-sm backdrop-blur-sm">
           <header className="flex shrink-0 items-center justify-between gap-3 bg-gradient-to-r from-primary/5 via-transparent to-transparent px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-xs">

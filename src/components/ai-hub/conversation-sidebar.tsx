@@ -26,7 +26,7 @@ export function ConversationSidebar({
   onDelete,
 }: ConversationSidebarProps) {
   return (
-    <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/50 shadow-xs backdrop-blur-sm">
+    <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-card/50 shadow-xs backdrop-blur-sm">
       <div className="flex shrink-0 items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <MessagesSquare className="h-4 w-4 text-primary" />

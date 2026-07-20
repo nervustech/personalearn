@@ -44,7 +44,7 @@ export function DropdownMenu({
         {open ? (
           <div
             className={cn(
-              "absolute z-50 w-max rounded-xl border border-border bg-card p-1 shadow-lg",
+              "absolute z-50 w-max rounded-xl bg-card/95 p-1 shadow-lg backdrop-blur-xl",
               side === "top" ? "bottom-full mb-2" : "top-full mt-2",
               align === "end" ? "right-0" : "left-0",
               contentClassName

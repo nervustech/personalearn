@@ -107,7 +107,7 @@ export default function HomePage() {
             {features.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
-                className="surface-elevated group rounded-2xl border border-border bg-card p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                className="surface-elevated group rounded-2xl p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
                   <Icon className="h-5 w-5" />

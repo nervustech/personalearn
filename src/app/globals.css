@@ -93,12 +93,16 @@
   --hero-surface: rgb(255 255 255 / 0.92);
   --hero-surface-border: rgb(0 0 0 / 0.08);
 
-  /* Soft floating elevation */
-  --shadow-xs-value: 0 1px 2px rgb(0 0 0 / 0.04);
-  --shadow-sm-value: 0 2px 8px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
-  --shadow-md-value: 0 8px 24px rgb(0 0 0 / 0.08), 0 2px 6px rgb(0 0 0 / 0.04);
-  --shadow-lg-value: 0 16px 40px rgb(0 0 0 / 0.1), 0 4px 12px rgb(0 0 0 / 0.05);
-  --shadow-card-value: 0 4px 16px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.04);
+  /* Soft floating elevation — hairline edge via 1px ring (not a hard border) */
+  --shadow-xs-value: 0 1px 2px rgb(0 0 0 / 0.04), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-sm-value: 0 2px 8px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04),
+    0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-md-value: 0 8px 24px rgb(0 0 0 / 0.08), 0 2px 6px rgb(0 0 0 / 0.04),
+    0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-lg-value: 0 16px 40px rgb(0 0 0 / 0.1), 0 4px 12px rgb(0 0 0 / 0.05),
+    0 0 0 1px rgb(0 0 0 / 0.05);
+  --shadow-card-value: 0 4px 16px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.04),
+    0 0 0 1px rgb(0 0 0 / 0.04);
 }
 
 .dark {
@@ -143,10 +147,13 @@
   --hero-surface: rgb(0 0 0 / 0.9);
   --hero-surface-border: rgb(255 255 255 / 0.08);
 
-  --shadow-xs-value: 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-sm-value: 0 2px 8px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-md-value: 0 8px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
-  --shadow-lg-value: 0 16px 40px rgb(0 0 0 / 0.55), 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-xs-value: 0 1px 2px rgb(0 0 0 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-sm-value: 0 2px 8px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3),
+    0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-md-value: 0 8px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3),
+    0 0 0 1px rgb(255 255 255 / 0.05);
+  --shadow-lg-value: 0 16px 40px rgb(0 0 0 / 0.55), 0 4px 12px rgb(0 0 0 / 0.35),
+    0 0 0 1px rgb(255 255 255 / 0.06);
   --shadow-card-value: 0 4px 20px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.04);
 }
 
@@ -228,11 +235,12 @@
   }
 
   .surface-elevated {
+    @apply bg-card/95 backdrop-blur-sm;
     box-shadow: var(--shadow-card-value);
   }
 
   .surface-float {
-    @apply rounded-2xl bg-card/90 shadow-card backdrop-blur-xl;
+    @apply rounded-2xl bg-card/95 backdrop-blur-xl;
     box-shadow: var(--shadow-card-value);
   }
 

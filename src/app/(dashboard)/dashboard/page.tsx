@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Bot, Users } from "lucide-react";
 import { CompetencySnapshot } from "@/components/dashboard/competency-snapshot";
+import { NotificationPreviews } from "@/components/dashboard/notification-previews";
 import { WelcomeTour } from "@/components/onboarding/welcome-tour";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useStudents } from "@/lib/hooks/use-classes";
@@ -34,6 +35,8 @@ export default function DashboardPage() {
               : "Your CBC teaching co-pilot"}
           </p>
         </div>
+
+        <NotificationPreviews />
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-4">

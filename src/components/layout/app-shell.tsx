@@ -2,22 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Bell,
-  Home,
-  Menu,
-  MoreHorizontal,
-  School,
-  WandSparkles,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Home, Menu, MoreHorizontal, School, WandSparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/layout/brand-mark";
 import { ClassSelector } from "@/components/classes/class-selector";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { useNotificationsStore } from "@/lib/store/notifications";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
@@ -36,24 +28,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [railExpanded, setRailExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
-  const notifications = useNotificationsStore((s) => s.items);
-  const markRead = useNotificationsStore((s) => s.markRead);
-  const markAllRead = useNotificationsStore((s) => s.markAllRead);
-  const unread = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications]
-  );
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
       if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
         setMoreOpen(false);
-      }
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
-        setNotifOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -80,14 +60,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               railExpanded ? "w-52" : "w-14"
             )}
             onMouseEnter={() => setRailExpanded(true)}
-            onMouseLeave={() => {
-              if (!notifOpen) setRailExpanded(false);
-            }}
+            onMouseLeave={() => setRailExpanded(false)}
           >
             <div
               className={cn(
                 "mb-1 transition-opacity",
-                railExpanded ? "opacity-100" : "pointer-events-none h-0 overflow-hidden opacity-0"
+                railExpanded
+                  ? "opacity-100"
+                  : "pointer-events-none h-0 overflow-hidden opacity-0"
               )}
             >
               <ClassSelector />
@@ -119,84 +99,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-
-            <div className="relative" ref={notifRef}>
-              <button
-                type="button"
-                title="Notifications"
-                onClick={() => {
-                  setNotifOpen((v) => !v);
-                  setRailExpanded(true);
-                }}
-                className={cn(
-                  "flex h-11 w-full items-center gap-3 rounded-2xl px-2.5 text-sm font-medium transition-colors",
-                  notifOpen
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <span className="relative">
-                  <Bell className="h-5 w-5 shrink-0" />
-                  {unread > 0 ? (
-                    <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold text-primary-foreground">
-                      {unread > 9 ? "9+" : unread}
-                    </span>
-                  ) : null}
-                </span>
-                <span
-                  className={cn(
-                    "truncate transition-opacity",
-                    railExpanded ? "opacity-100" : "sr-only opacity-0"
-                  )}
-                >
-                  Notifications
-                </span>
-              </button>
-              {notifOpen ? (
-                <div className="absolute left-full top-0 z-50 ml-2 w-72 rounded-2xl bg-card/95 p-2 shadow-lg backdrop-blur-xl">
-                  <div className="mb-1 flex items-center justify-between px-2 py-1">
-                    <p className="text-xs font-semibold">Notifications</p>
-                    {notifications.length > 0 ? (
-                      <button
-                        type="button"
-                        className="text-[11px] text-primary hover:underline"
-                        onClick={() => markAllRead()}
-                      >
-                        Mark all read
-                      </button>
-                    ) : null}
-                  </div>
-                  {notifications.length === 0 ? (
-                    <p className="px-2 py-4 text-xs text-muted-foreground">
-                      No notifications yet.
-                    </p>
-                  ) : (
-                    <ul className="max-h-72 space-y-1 overflow-y-auto">
-                      {notifications.map((n) => (
-                        <li key={n.id}>
-                          <Link
-                            href={n.href}
-                            onClick={() => {
-                              markRead(n.id);
-                              setNotifOpen(false);
-                            }}
-                            className={cn(
-                              "block rounded-xl px-2.5 py-2 transition-colors hover:bg-muted",
-                              !n.read && "bg-primary/5"
-                            )}
-                          >
-                            <p className="text-xs font-medium">{n.title}</p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              {n.body}
-                            </p>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ) : null}
-            </div>
           </nav>
         </div>
 

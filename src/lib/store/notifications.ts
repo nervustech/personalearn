@@ -9,15 +9,14 @@ export type AppNotification = {
   body: string;
   href: string;
   createdAt: string;
-  read: boolean;
 };
 
 type NotificationsState = {
   items: AppNotification[];
-  add: (item: Omit<AppNotification, "id" | "createdAt" | "read">) => void;
-  markRead: (id: string) => void;
-  markAllRead: () => void;
-  clear: () => void;
+  add: (item: Omit<AppNotification, "id" | "createdAt">) => void;
+  /** Remove after click-through or explicit close. */
+  dismiss: (id: string) => void;
+  dismissAll: () => void;
 };
 
 export const useNotificationsStore = create<NotificationsState>()(
@@ -31,22 +30,15 @@ export const useNotificationsStore = create<NotificationsState>()(
               ...item,
               id: crypto.randomUUID(),
               createdAt: new Date().toISOString(),
-              read: false,
             },
             ...state.items,
-          ].slice(0, 50),
+          ].slice(0, 20),
         })),
-      markRead: (id) =>
+      dismiss: (id) =>
         set((state) => ({
-          items: state.items.map((n) =>
-            n.id === id ? { ...n, read: true } : n
-          ),
+          items: state.items.filter((n) => n.id !== id),
         })),
-      markAllRead: () =>
-        set((state) => ({
-          items: state.items.map((n) => ({ ...n, read: true })),
-        })),
-      clear: () => set({ items: [] }),
+      dismissAll: () => set({ items: [] }),
     }),
     { name: "personalearn-notifications" }
   )

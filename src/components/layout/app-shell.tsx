@@ -8,7 +8,6 @@ import {
   Menu,
   MoreHorizontal,
   School,
-  Settings,
   WandSparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/layout/brand-mark";
 import { ClassSelector } from "@/components/classes/class-selector";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useNotificationsStore } from "@/lib/store/notifications";
 
@@ -216,17 +215,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </button>
           {moreOpen ? (
-            <div className="absolute bottom-0 left-full z-50 ml-2 w-56 rounded-2xl bg-card/95 p-1.5 shadow-lg backdrop-blur-xl">
-              <DropdownMenuItem className="gap-2 text-muted-foreground">
-                <Settings className="h-4 w-4" />
-                Settings
-              </DropdownMenuItem>
-              <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
-                <span className="text-muted-foreground">Appearance</span>
-                <ThemeToggle />
-              </div>
-              <div className="my-1 h-px bg-border/60" />
-              <SignOutButton />
+            <div className="absolute bottom-0 left-full z-50 ml-2 w-40 rounded-2xl bg-card/95 p-1 shadow-lg backdrop-blur-xl">
+              <ThemeToggle
+                label="Appearance"
+                className="h-8 w-8 shrink-0"
+                menuClassName="-left-1 -right-1 w-auto"
+              />
+              <div className="my-0.5 h-px bg-border/60" />
+              <SignOutButton className="gap-1.5 px-2 py-1.5" />
             </div>
           ) : null}
         </div>
@@ -274,6 +270,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
           <DropdownMenu
             align="end"
+            side="top"
             trigger={
               <button
                 type="button"

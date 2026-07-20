@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { AssessmentHealthStrip } from "@/components/dashboard/assessment-health-strip";
 import { CompetencySnapshot } from "@/components/dashboard/competency-snapshot";
 import { NotificationPreviews } from "@/components/dashboard/notification-previews";
 import { RecentActivityLists } from "@/components/dashboard/recent-activity-lists";
@@ -35,8 +34,11 @@ export default function DashboardPage() {
   const { data: submissions, isLoading: submissionsLoading } =
     useClassSubmissions(activeClass?.id);
 
-  const snapshotLoading = studentsLoading || competencyLoading;
-  const healthLoading = assessmentsLoading || submissionsLoading;
+  const performanceLoading =
+    studentsLoading ||
+    competencyLoading ||
+    assessmentsLoading ||
+    submissionsLoading;
 
   return (
     <>
@@ -55,35 +57,26 @@ export default function DashboardPage() {
 
         <NotificationPreviews />
 
-        {/* Primary column: Performance. Shortcuts below (side-by-side on md+). */}
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start">
+        {/* Primary: Performance. Recent lists full-width below (side-by-side on md+). */}
+        <div className="space-y-4">
           <Card className={cn("surface-float border-0")}>
             <CardHeader>
               <CardTitle>Performance</CardTitle>
               <CardDescription>
-                Assessment health and competency progress
+                Class overview and per-student assessment health
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent>
               {activeClass ? (
-                <>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Term</span>
-                    <span className="font-medium">Term {activeClass.term}</span>
-                  </div>
-                  <AssessmentHealthStrip
-                    classId={activeClass.id}
-                    assessments={assessments ?? []}
-                    submissions={submissions ?? []}
-                    isLoading={healthLoading}
-                  />
-                  <CompetencySnapshot
-                    classId={activeClass.id}
-                    students={students ?? []}
-                    competency={competency ?? []}
-                    isLoading={snapshotLoading}
-                  />
-                </>
+                <CompetencySnapshot
+                  classId={activeClass.id}
+                  term={activeClass.term}
+                  students={students ?? []}
+                  competency={competency ?? []}
+                  assessments={assessments ?? []}
+                  submissions={submissions ?? []}
+                  isLoading={performanceLoading}
+                />
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">

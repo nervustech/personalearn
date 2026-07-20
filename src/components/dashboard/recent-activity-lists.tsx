@@ -83,7 +83,7 @@ export function RecentActivityLists({
               {recentConversations.map((conversation) => (
                 <li key={conversation.id}>
                   <Link
-                    href="/ai-hub"
+                    href={`/ai-hub?conversation=${conversation.id}`}
                     className="block rounded-xl border border-border/60 px-3 py-2 transition-colors hover:bg-muted/60"
                   >
                     <p className="truncate text-sm font-medium">
@@ -137,7 +137,7 @@ export function RecentActivityLists({
               {recentResources.map((resource) => (
                 <li key={resource.id}>
                   <Link
-                    href={`/classes/${classId}`}
+                    href={`/classes/${classId}?resource=${resource.id}`}
                     className="block rounded-xl border border-border/60 px-3 py-2 transition-colors hover:bg-muted/60"
                   >
                     <p className="truncate text-sm font-medium">

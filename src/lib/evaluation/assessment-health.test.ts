@@ -3,6 +3,7 @@ import type { Assessment, StudentSubmission } from "@/types/database";
 import {
   bandFromRatio,
   buildAssessmentHealthCubes,
+  buildStudentAssessmentHealthCubes,
   statusLabelForBand,
 } from "./assessment-health";
 
@@ -109,5 +110,36 @@ describe("buildAssessmentHealthCubes", () => {
 
     expect(cubes[0]!.band).toBe("unsigned");
     expect(cubes[0]!.signedOffCount).toBe(1);
+  });
+});
+
+describe("buildStudentAssessmentHealthCubes", () => {
+  it("scopes bands to one student and leaves missing assessments unsigned", () => {
+    const assessments = [
+      assessment({ id: "a1", title: "Quiz 1" }),
+      assessment({ id: "a2", title: "Quiz 2" }),
+    ];
+    const cubes = buildStudentAssessmentHealthCubes({
+      assessments,
+      studentId: "stu-1",
+      submissions: [
+        submission({
+          id: "s1",
+          assessment_id: "a1",
+          student_id: "stu-1",
+          competency_flags: { totals: { awarded: 9, max: 10 } },
+        }),
+        submission({
+          id: "s2",
+          assessment_id: "a1",
+          student_id: "stu-2",
+          competency_flags: { totals: { awarded: 1, max: 10 } },
+        }),
+      ],
+    });
+
+    expect(cubes).toHaveLength(2);
+    expect(cubes[0]!.band).toBe("strong");
+    expect(cubes[1]!.band).toBe("unsigned");
   });
 });

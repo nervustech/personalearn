@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { ArrowUp, RotateCcw, Sparkles, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChatMessage } from "@/components/ai-hub/chat-message";
 import { ConversationSidebar } from "@/components/ai-hub/conversation-sidebar";
 import { ThinkingBubble } from "@/components/ai-hub/thinking-bubble";
@@ -29,6 +30,11 @@ const SUGGESTED_PROMPTS = [
 export function AiHubChat() {
   const activeClass = useActiveClassStore((state) => state.activeClass);
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const [pendingConversationId] = useState<string | null>(() =>
+    searchParams.get("conversation")
+  );
+  const deepLinkHandledRef = useRef(false);
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
@@ -136,6 +142,25 @@ export function AiHubChat() {
     setEditingMessageId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when active class changes
   }, [activeClass?.id]);
+
+  // Home deep-link: /ai-hub?conversation=… (PSL-67). Runs after class reset above.
+  useEffect(() => {
+    if (!pendingConversationId || !activeClass?.id) return;
+    if (deepLinkHandledRef.current) return;
+    deepLinkHandledRef.current = true;
+
+    void (async () => {
+      await handleSelectConversation(pendingConversationId);
+      if (typeof window === "undefined") return;
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("conversation")) return;
+      url.searchParams.delete("conversation");
+      const next = url.pathname + (url.search ? url.search : "");
+      window.history.replaceState(window.history.state, "", next);
+    })();
+    // handleSelectConversation closes over latest activeClass/setters; intentional once-per-mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingConversationId, activeClass?.id]);
 
   useEffect(() => {
     const wasGenerating =

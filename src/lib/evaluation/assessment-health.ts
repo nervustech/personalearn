@@ -49,6 +49,32 @@ function ratioFromSubmission(submission: StudentSubmission): number | null {
   return summary.awarded / summary.max;
 }
 
+function cubeForSubmission(
+  assessment: Assessment,
+  submission: StudentSubmission | undefined
+): AssessmentHealthCube {
+  if (!submission) {
+    return {
+      assessment,
+      band: "unsigned",
+      averageRatio: null,
+      signedOffCount: 0,
+      statusLabel: statusLabelForBand("unsigned"),
+    };
+  }
+
+  const ratio = ratioFromSubmission(submission);
+  const band = bandFromRatio(ratio);
+  return {
+    assessment,
+    band,
+    averageRatio: ratio,
+    signedOffCount: ratio !== null ? 1 : 0,
+    statusLabel: statusLabelForBand(band),
+  };
+}
+
+/** Class-level strip: one cube per assessment (mean across students). */
 export function buildAssessmentHealthCubes(input: {
   assessments: Assessment[];
   submissions: StudentSubmission[];
@@ -98,4 +124,21 @@ export function buildAssessmentHealthCubes(input: {
       statusLabel: statusLabelForBand(band),
     };
   });
+}
+
+/** Per-student strip: one cube per assessment for that student (PSL-66). */
+export function buildStudentAssessmentHealthCubes(input: {
+  assessments: Assessment[];
+  submissions: StudentSubmission[];
+  studentId: string;
+}): AssessmentHealthCube[] {
+  const byAssessment = new Map<string, StudentSubmission>();
+  for (const submission of input.submissions) {
+    if (submission.student_id !== input.studentId) continue;
+    byAssessment.set(submission.assessment_id, submission);
+  }
+
+  return input.assessments.map((assessment) =>
+    cubeForSubmission(assessment, byAssessment.get(assessment.id))
+  );
 }

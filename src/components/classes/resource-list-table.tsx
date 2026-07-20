@@ -73,9 +73,13 @@ export function ResourceListTable({
                     {resource.title}
                   </button>
                 </TableCell>
-                <TableCell>{formatResourceType(resource.resource_type)}</TableCell>
                 <TableCell>
-                  <Badge variant={resource.ai_generated ? "accent" : "secondary"}>
+                  {formatResourceType(resource.resource_type)}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={resource.ai_generated ? "accent" : "secondary"}
+                  >
                     {resource.ai_generated ? "AI-generated" : "Uploaded"}
                   </Badge>
                 </TableCell>

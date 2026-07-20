@@ -17,6 +17,7 @@ import { CsvImportDialog } from "@/components/classes/csv-import-dialog";
 import { ClassEditDialog } from "@/components/classes/class-edit-dialog";
 import { ClassResourcesSection } from "@/components/classes/class-resources-section";
 import { ClassDetailSkeleton } from "@/components/classes/class-detail-skeleton";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 
 export default function ClassDetailPage({
   params,
@@ -65,6 +66,12 @@ export default function ClassDetailPage({
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs
+        items={[
+          { label: "Classes", href: "/classes" },
+          { label: cls?.name ?? "Class" },
+        ]}
+      />
       <div className="flex flex-col items-center text-center">
         {cls ? (
           <>

@@ -24,7 +24,7 @@ export default function DashboardPage() {
     <>
       <WelcomeTour />
       <div className="space-y-6">
-        <div>
+        <div className="text-center">
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Dashboard
           </h1>

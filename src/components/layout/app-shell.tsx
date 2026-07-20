@@ -4,16 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
-  BookOpen,
-  Bot,
   Home,
   Menu,
   MoreHorizontal,
   School,
   Settings,
+  WandSparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/layout/brand-mark";
 import { ClassSelector } from "@/components/classes/class-selector";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -22,7 +22,7 @@ import { useNotificationsStore } from "@/lib/store/notifications";
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/ai-hub", label: "AI Hub", icon: Bot },
+  { href: "/ai-hub", label: "AI Hub", icon: WandSparkles },
   { href: "/classes", label: "Classes", icon: School },
 ];
 
@@ -63,177 +63,160 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background md:flex">
-      {/* Desktop left icon rail */}
-      <aside
-        className={cn(
-          "sticky top-0 z-40 hidden h-screen shrink-0 flex-col border-r border-transparent bg-background/80 py-3 backdrop-blur-xl transition-[width] duration-200 md:flex",
-          railExpanded ? "w-56" : "w-[4.5rem]"
-        )}
-        onMouseEnter={() => setRailExpanded(true)}
-        onMouseLeave={() => {
-          if (!moreOpen && !notifOpen) setRailExpanded(false);
-        }}
-      >
+      {/* Desktop left rail — fixed width; only the center nav cube expands */}
+      <aside className="sticky top-0 z-40 hidden h-screen w-[4.5rem] shrink-0 flex-col items-center py-3 md:flex">
         <Link
           href="/dashboard"
-          className="mx-2 mb-4 flex h-11 items-center gap-3 rounded-xl px-2.5 font-display text-sm font-semibold"
+          title="PersonaLearn"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary"
         >
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <BookOpen className="h-4 w-4" />
-          </span>
-          <span
-            className={cn(
-              "truncate transition-opacity",
-              railExpanded ? "opacity-100" : "opacity-0"
-            )}
-          >
-            PersonaLearn
-          </span>
+          <BrandMark className="h-4 w-4" />
         </Link>
 
-        <div
-          className={cn(
-            "mx-2 mb-3 transition-opacity",
-            railExpanded ? "opacity-100" : "pointer-events-none opacity-0"
-          )}
-        >
-          <ClassSelector />
-        </div>
+        {/* Vertically centered nav cube — expands right over content on hover */}
+        <div className="relative flex min-h-0 w-full flex-1 items-center">
+          <nav
+            className={cn(
+              "absolute left-2 top-1/2 z-50 flex -translate-y-1/2 flex-col gap-1 overflow-hidden rounded-3xl bg-card/95 p-2 shadow-lg backdrop-blur-xl transition-[width] duration-200",
+              railExpanded ? "w-52" : "w-14"
+            )}
+            onMouseEnter={() => setRailExpanded(true)}
+            onMouseLeave={() => {
+              if (!notifOpen) setRailExpanded(false);
+            }}
+          >
+            <div
+              className={cn(
+                "mb-1 transition-opacity",
+                railExpanded ? "opacity-100" : "pointer-events-none h-0 overflow-hidden opacity-0"
+              )}
+            >
+              <ClassSelector />
+            </div>
 
-        <nav className="flex flex-1 flex-col gap-1 px-2">
-          {navItems.map(({ href, label, icon: Icon }) => {
-            const active = isActivePath(pathname, href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                title={label}
+            {navItems.map(({ href, label, icon: Icon }) => {
+              const active = isActivePath(pathname, href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  title={label}
+                  className={cn(
+                    "flex h-11 items-center gap-3 rounded-2xl px-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  <span
+                    className={cn(
+                      "truncate transition-opacity",
+                      railExpanded ? "opacity-100" : "sr-only opacity-0"
+                    )}
+                  >
+                    {label}
+                  </span>
+                </Link>
+              );
+            })}
+
+            <div className="relative" ref={notifRef}>
+              <button
+                type="button"
+                title="Notifications"
+                onClick={() => {
+                  setNotifOpen((v) => !v);
+                  setRailExpanded(true);
+                }}
                 className={cn(
-                  "flex h-11 items-center gap-3 rounded-xl px-2.5 text-sm font-medium transition-colors",
-                  active
+                  "flex h-11 w-full items-center gap-3 rounded-2xl px-2.5 text-sm font-medium transition-colors",
+                  notifOpen
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <Icon className="h-5 w-5 shrink-0" />
+                <span className="relative">
+                  <Bell className="h-5 w-5 shrink-0" />
+                  {unread > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold text-primary-foreground">
+                      {unread > 9 ? "9+" : unread}
+                    </span>
+                  ) : null}
+                </span>
                 <span
                   className={cn(
                     "truncate transition-opacity",
                     railExpanded ? "opacity-100" : "sr-only opacity-0"
                   )}
                 >
-                  {label}
+                  Notifications
                 </span>
-              </Link>
-            );
-          })}
-
-          <div className="relative" ref={notifRef}>
-            <button
-              type="button"
-              title="Notifications"
-              onClick={() => {
-                setNotifOpen((v) => !v);
-                setRailExpanded(true);
-              }}
-              className={cn(
-                "flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-sm font-medium transition-colors",
-                notifOpen
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <span className="relative">
-                <Bell className="h-5 w-5 shrink-0" />
-                {unread > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-semibold text-primary-foreground">
-                    {unread > 9 ? "9+" : unread}
-                  </span>
-                ) : null}
-              </span>
-              <span
-                className={cn(
-                  "truncate transition-opacity",
-                  railExpanded ? "opacity-100" : "sr-only opacity-0"
-                )}
-              >
-                Notifications
-              </span>
-            </button>
-            {notifOpen ? (
-              <div className="absolute left-full top-0 z-50 ml-2 w-72 rounded-2xl bg-card/95 p-2 shadow-lg backdrop-blur-xl">
-                <div className="mb-1 flex items-center justify-between px-2 py-1">
-                  <p className="text-xs font-semibold">Notifications</p>
-                  {notifications.length > 0 ? (
-                    <button
-                      type="button"
-                      className="text-[11px] text-primary hover:underline"
-                      onClick={() => markAllRead()}
-                    >
-                      Mark all read
-                    </button>
-                  ) : null}
+              </button>
+              {notifOpen ? (
+                <div className="absolute left-full top-0 z-50 ml-2 w-72 rounded-2xl bg-card/95 p-2 shadow-lg backdrop-blur-xl">
+                  <div className="mb-1 flex items-center justify-between px-2 py-1">
+                    <p className="text-xs font-semibold">Notifications</p>
+                    {notifications.length > 0 ? (
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline"
+                        onClick={() => markAllRead()}
+                      >
+                        Mark all read
+                      </button>
+                    ) : null}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <p className="px-2 py-4 text-xs text-muted-foreground">
+                      No notifications yet.
+                    </p>
+                  ) : (
+                    <ul className="max-h-72 space-y-1 overflow-y-auto">
+                      {notifications.map((n) => (
+                        <li key={n.id}>
+                          <Link
+                            href={n.href}
+                            onClick={() => {
+                              markRead(n.id);
+                              setNotifOpen(false);
+                            }}
+                            className={cn(
+                              "block rounded-xl px-2.5 py-2 transition-colors hover:bg-muted",
+                              !n.read && "bg-primary/5"
+                            )}
+                          >
+                            <p className="text-xs font-medium">{n.title}</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              {n.body}
+                            </p>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                {notifications.length === 0 ? (
-                  <p className="px-2 py-4 text-xs text-muted-foreground">
-                    No notifications yet.
-                  </p>
-                ) : (
-                  <ul className="max-h-72 space-y-1 overflow-y-auto">
-                    {notifications.map((n) => (
-                      <li key={n.id}>
-                        <Link
-                          href={n.href}
-                          onClick={() => {
-                            markRead(n.id);
-                            setNotifOpen(false);
-                          }}
-                          className={cn(
-                            "block rounded-xl px-2.5 py-2 transition-colors hover:bg-muted",
-                            !n.read && "bg-primary/5"
-                          )}
-                        >
-                          <p className="text-xs font-medium">{n.title}</p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
-                            {n.body}
-                          </p>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </nav>
+              ) : null}
+            </div>
+          </nav>
+        </div>
 
-        <div className="relative mt-auto px-2" ref={moreRef}>
+        <div className="relative" ref={moreRef}>
           <button
             type="button"
             title="More"
-            onClick={() => {
-              setMoreOpen((v) => !v);
-              setRailExpanded(true);
-            }}
+            onClick={() => setMoreOpen((v) => !v)}
             className={cn(
-              "flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-sm font-medium transition-colors",
+              "inline-flex h-11 w-11 items-center justify-center rounded-2xl transition-colors",
               moreOpen
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            <Menu className="h-5 w-5 shrink-0" />
-            <span
-              className={cn(
-                "truncate transition-opacity",
-                railExpanded ? "opacity-100" : "sr-only opacity-0"
-              )}
-            >
-              More
-            </span>
+            <Menu className="h-5 w-5" />
           </button>
           {moreOpen ? (
-            <div className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-2xl bg-card/95 p-1.5 shadow-lg backdrop-blur-xl">
+            <div className="absolute bottom-0 left-full z-50 ml-2 w-56 rounded-2xl bg-card/95 p-1.5 shadow-lg backdrop-blur-xl">
               <DropdownMenuItem className="gap-2 text-muted-foreground">
                 <Settings className="h-4 w-4" />
                 Settings
@@ -258,7 +241,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="inline-flex items-center gap-2 font-display text-sm font-semibold"
           >
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <BookOpen className="h-4 w-4" />
+              <BrandMark className="h-4 w-4" />
             </span>
             PersonaLearn
           </Link>

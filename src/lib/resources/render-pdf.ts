@@ -451,91 +451,128 @@ function countWrappedLines(
 }
 
 /** Labeled stacked rows — best for marking-scheme Working / Marks columns. */
+function formatStackedFieldValue(header: string, value: string) {
+  // Break long working chains onto separate lines for readability.
+  if (/^working$/i.test(header.trim())) {
+    return value
+      .replace(/\s*,\s*/g, "\n")
+      .replace(/\s*;\s*/g, "\n")
+      .trim();
+  }
+  return value;
+}
+
+function drawStackedMultiline(
+  ctx: DrawCtx,
+  text: string,
+  opts: {
+    x: number;
+    maxWidth: number;
+    size: number;
+    leading: number;
+    font: PDFFont;
+    color?: ReturnType<typeof rgb>;
+  }
+) {
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      ctx.y -= opts.leading * 0.45;
+      continue;
+    }
+    drawWrappedLine(ctx, trimmed, opts);
+  }
+}
+
 function drawStackedTable(ctx: DrawCtx, headers: string[], rows: string[][]) {
   const cols = Math.max(headers.length, ...rows.map((r) => r.length), 1);
   const labelSize = 9;
-  const valueSize = 10;
-  const leading = 13;
+  const valueSize = 11;
+  const leading = 15;
   const labelWidth = Math.min(
-    110,
+    120,
     Math.max(
-      64,
-      ...headers.map((h) => ctx.bold.widthOfTextAtSize(toWinAnsi(`${h}:`), labelSize) + 8)
+      72,
+      ...headers.map(
+        (h) => ctx.bold.widthOfTextAtSize(toWinAnsi(`${h}:`), labelSize) + 10
+      )
     )
   );
 
   for (let ri = 0; ri < rows.length; ri++) {
     const row = rows[ri];
-    // Estimate block height for page breaks.
-    let est = 10;
+    let est = 14;
     for (let col = 0; col < cols; col++) {
-      const value = cellAt(row, col).trim();
-      if (!value) continue;
       const header = (headers[col] ?? `Col ${col + 1}`).trim() || `Col ${col + 1}`;
-      // First column often is the question id — treat as a row title.
+      const value = formatStackedFieldValue(header, cellAt(row, col).trim());
+      if (!value) continue;
       if (col === 0 && /^(question|q\.?|#|item|no\.?)$/i.test(header)) {
-        est += leading + 4;
+        est += leading + 6;
         continue;
       }
-      est +=
-        countWrappedLines(
-          value,
-          ctx.font,
-          valueSize,
-          CONTENT_WIDTH - labelWidth - 8
-        ) * leading + 4;
+      for (const line of value.split("\n")) {
+        est +=
+          countWrappedLines(
+            line.trim() || " ",
+            ctx.font,
+            valueSize,
+            CONTENT_WIDTH - labelWidth - 8
+          ) * leading;
+      }
+      est += 4;
     }
     ensureSpace(ctx, Math.min(est, PAGE_HEIGHT - MARGIN * 2));
 
     for (let col = 0; col < cols; col++) {
-      const value = cellAt(row, col).trim();
-      if (!value) continue;
       const header =
         (headers[col] ?? `Col ${col + 1}`).trim() || `Col ${col + 1}`;
+      const value = formatStackedFieldValue(header, cellAt(row, col).trim());
+      if (!value) continue;
 
       if (col === 0 && /^(question|q\.?|#|item|no\.?)$/i.test(header)) {
         drawWrappedLine(ctx, `${header} ${value}`, {
           x: MARGIN,
           maxWidth: CONTENT_WIDTH,
-          size: 11,
-          leading: 14,
+          size: 12,
+          leading: 16,
           font: ctx.bold,
         });
-        ctx.y -= 2;
+        ctx.y -= 4;
         continue;
       }
 
       const label = `${header}:`;
       ensureSpace(ctx, leading);
+      const labelY = ctx.y;
       ctx.page.drawText(toWinAnsi(label), {
         x: MARGIN,
-        y: ctx.y,
+        y: labelY,
         size: labelSize,
         font: ctx.bold,
         color: MUTED_COLOR,
       });
-      drawWrappedLine(ctx, value, {
+      drawStackedMultiline(ctx, value, {
         x: MARGIN + labelWidth,
         maxWidth: CONTENT_WIDTH - labelWidth,
         size: valueSize,
         leading,
         font: ctx.font,
       });
-      ctx.y -= 2;
+      ctx.y -= 3;
     }
 
     if (ri < rows.length - 1) {
-      ctx.y -= 2;
+      ctx.y -= 4;
       ctx.page.drawLine({
         start: { x: MARGIN, y: ctx.y },
         end: { x: PAGE_WIDTH - MARGIN, y: ctx.y },
-        thickness: 0.5,
+        thickness: 0.6,
         color: RULE_COLOR,
       });
-      ctx.y -= 8;
+      ctx.y -= 12;
     }
   }
-  ctx.y -= 8;
+  ctx.y -= 10;
 }
 
 function drawGridTable(ctx: DrawCtx, headers: string[], rows: string[][]) {

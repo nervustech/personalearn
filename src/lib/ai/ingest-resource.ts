@@ -87,7 +87,7 @@ export async function ingestResource(
 
   const { error: uploadError } = await supabase.storage
     .from("resources")
-    .upload(storagePath, fileBytes, {
+    .upload(storagePath, Buffer.from(fileBytes), {
       contentType: mimeType,
       upsert: false,
     });
@@ -281,7 +281,7 @@ export async function updateTextResource(
 
   // Keep .txt storage object in sync when present (AI Hub / text uploads).
   if (rawContent.storagePath && !isBinary) {
-    const bytes = new TextEncoder().encode(text);
+    const bytes = Buffer.from(text, "utf8");
     const { error: uploadError } = await supabase.storage
       .from("resources")
       .upload(rawContent.storagePath, bytes, {

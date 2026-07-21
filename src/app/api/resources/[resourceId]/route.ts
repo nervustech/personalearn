@@ -25,7 +25,11 @@ type RouteContext = {
   params: Promise<{ resourceId: string }>;
 };
 
-/** Full resource JSON for the detail page; includes signed view URL for PDF/image. */
+/**
+ * Full resource JSON for the detail page.
+ * Binary originals use same-origin `/download?inline=1` when the storage object
+ * has bytes (empty uploads are skipped so the UI can fall back to extracted text).
+ */
 export async function GET(_request: Request, context: RouteContext) {
   try {
     const supabase = await createClient();
@@ -35,11 +39,15 @@ export async function GET(_request: Request, context: RouteContext) {
     let viewUrl: string | null = null;
     const storagePath = resourceStoragePath(resource.raw_content);
     if (storagePath && isBinaryOriginalResource(resource.raw_content)) {
-      const { data, error } = await supabase.storage
+      const { data: signed, error } = await supabase.storage
         .from("resources")
-        .createSignedUrl(storagePath, 3600);
-      if (!error && data?.signedUrl) {
-        viewUrl = data.signedUrl;
+        .createSignedUrl(storagePath, 120);
+      if (!error && signed?.signedUrl) {
+        const head = await fetch(signed.signedUrl, { method: "HEAD" });
+        const length = Number(head.headers.get("content-length") ?? 0);
+        if (head.ok && length > 0) {
+          viewUrl = `/api/resources/${resourceId}/download?inline=1`;
+        }
       }
     }
 

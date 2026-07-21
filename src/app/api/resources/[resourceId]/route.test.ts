@@ -62,7 +62,7 @@ describe("/api/resources/[resourceId]", () => {
     expect(payload.viewUrl).toBeNull();
   });
 
-  it("includes a signed viewUrl for PDF originals", async () => {
+  it("uses same-origin inline download URL for PDF originals", async () => {
     mockRequireTeacherResource.mockResolvedValue({
       id: resourceId,
       title: "Scan",
@@ -73,6 +73,22 @@ describe("/api/resources/[resourceId]", () => {
         text: "extracted",
       },
     });
+    mockCreateSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://storage.example/original.pdf" },
+      error: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(null, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Length": "2048",
+          },
+        })
+      )
+    );
 
     const response = await GET(
       new Request(`http://localhost/api/resources/${resourceId}`),
@@ -81,8 +97,50 @@ describe("/api/resources/[resourceId]", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload.viewUrl).toBe("https://storage.example/original.pdf");
-    expect(mockCreateSignedUrl).toHaveBeenCalledWith("class/abc/file.pdf", 3600);
+    expect(payload.viewUrl).toBe(
+      `/api/resources/${resourceId}/download?inline=1`
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("omits viewUrl when the stored PDF is empty", async () => {
+    mockRequireTeacherResource.mockResolvedValue({
+      id: resourceId,
+      title: "Scan",
+      ai_generated: false,
+      raw_content: {
+        mimeType: "application/pdf",
+        storagePath: "class/abc/file.pdf",
+        text: "extracted",
+      },
+    });
+    mockCreateSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://storage.example/empty.pdf" },
+      error: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(null, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Length": "0",
+          },
+        })
+      )
+    );
+
+    const response = await GET(
+      new Request(`http://localhost/api/resources/${resourceId}`),
+      { params: Promise.resolve({ resourceId }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.viewUrl).toBeNull();
+    expect(payload.previewText).toBe("extracted");
+    vi.unstubAllGlobals();
   });
 
   it("patches title and text for editable resources", async () => {

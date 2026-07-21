@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 
 const mockRequireTeacherResource = vi.fn();
@@ -28,6 +28,7 @@ vi.mock("@/lib/resources/render-pdf", () => ({
 
 describe("/api/resources/[resourceId]/download", () => {
   const resourceId = "22222222-2222-4222-8222-222222222222";
+  const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // %PDF-
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,9 +36,24 @@ describe("/api/resources/[resourceId]/download", () => {
       data: { signedUrl: "https://storage.example/original.pdf" },
       error: null,
     });
-    mockRenderResourcePdf.mockResolvedValue(
-      new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]) // %PDF-
+    mockRenderResourcePdf.mockResolvedValue(pdfBytes);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("storage.example/original.pdf")) {
+          return new Response(pdfBytes, {
+            status: 200,
+            headers: { "Content-Type": "application/pdf" },
+          });
+        }
+        return new Response("not found", { status: 404 });
+      })
     );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("redirects to the original file for PDF uploads", async () => {
@@ -48,6 +64,7 @@ describe("/api/resources/[resourceId]/download", () => {
       raw_content: {
         mimeType: "application/pdf",
         storagePath: "class/abc/file.pdf",
+        fileName: "file.pdf",
         text: "extracted flat text that must not become the download",
       },
     });
@@ -62,6 +79,35 @@ describe("/api/resources/[resourceId]/download", () => {
       "https://storage.example/original.pdf"
     );
     expect(mockCreateSignedUrl).toHaveBeenCalledWith("class/abc/file.pdf", 3600);
+  });
+
+  it("proxies the original PDF inline for iframe embedding", async () => {
+    mockRequireTeacherResource.mockResolvedValue({
+      id: resourceId,
+      title: "Uploaded worksheet",
+      ai_generated: false,
+      raw_content: {
+        mimeType: "application/pdf",
+        storagePath: "class/abc/file.pdf",
+        fileName: "file.pdf",
+        text: "extracted",
+      },
+    });
+
+    const response = await GET(
+      new Request(
+        `http://localhost/api/resources/${resourceId}/download?inline=1`
+      ),
+      { params: Promise.resolve({ resourceId }) }
+    );
+    const bytes = new Uint8Array(await response.arrayBuffer());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/pdf");
+    expect(response.headers.get("content-disposition")).toContain("inline");
+    expect(String.fromCharCode(...bytes.slice(0, 4))).toBe("%PDF");
+    expect(mockCreateSignedUrl).toHaveBeenCalledWith("class/abc/file.pdf", 3600);
+    expect(fetch).toHaveBeenCalledWith("https://storage.example/original.pdf");
   });
 
   it("exports AI/text as PDF even when a .txt storagePath exists", async () => {

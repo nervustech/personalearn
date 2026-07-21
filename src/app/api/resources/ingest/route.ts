@@ -68,10 +68,12 @@ export async function POST(request: Request) {
     await requireTeacherClass(supabase, classId);
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    // Own a stable copy — PDF extract (unpdf) can detach ArrayBuffers.
+    const fileBytes = bytes.slice();
     const text = await extractTextFromUpload({
       fileName: file.name,
       mimeType: file.type || "application/octet-stream",
-      bytes,
+      bytes: fileBytes.slice(),
     });
 
     const result = await ingestResource(supabase, {
@@ -79,7 +81,7 @@ export async function POST(request: Request) {
       fileName: file.name,
       text,
       mimeType: file.type || "application/octet-stream",
-      fileBytes: bytes,
+      fileBytes,
       resourceType,
     });
 

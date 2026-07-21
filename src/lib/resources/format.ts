@@ -42,6 +42,33 @@ export function resourcePreviewText(rawContent: Record<string, unknown>) {
   return typeof text === "string" ? text : "";
 }
 
+/**
+ * Normalize OCR / PDF-extracted plain text for readable display
+ * (preserve line breaks; collapse runaway blank lines).
+ */
+export function formatExtractedPlainText(text: string) {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** ASCII-safe filename for Content-Disposition (HTTP headers reject non-ByteString). */
+export function contentDispositionFileName(fileName: string) {
+  const trimmed = fileName.trim() || "resource";
+  const dot = trimmed.lastIndexOf(".");
+  const ext =
+    dot > 0 ? trimmed.slice(dot).replace(/[^\w.]/g, "").slice(0, 12) : "";
+  const stemSource = dot > 0 ? trimmed.slice(0, dot) : trimmed;
+  const stem =
+    stemSource
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .slice(0, 80) || "resource";
+  return `${stem}${ext}`;
+}
+
 export function resourceFileName(rawContent: Record<string, unknown>) {
   const fileName = rawContent.fileName;
   return typeof fileName === "string" ? fileName : "resource";

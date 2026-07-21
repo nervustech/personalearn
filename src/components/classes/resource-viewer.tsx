@@ -12,6 +12,7 @@ import { useUpdateResource } from "@/lib/hooks/use-resources";
 import {
   isBinaryOriginalResource,
   isEditableTextResource,
+  formatExtractedPlainText,
   resourceMimeType,
 } from "@/lib/resources/format";
 
@@ -138,7 +139,7 @@ export function ResourceViewer({
         </div>
       ) : binary && viewUrl ? (
         mime.startsWith("image/") ? (
-          /* eslint-disable-next-line @next/next/no-img-element -- signed storage URL */
+          /* eslint-disable-next-line @next/next/no-img-element -- same-origin or signed URL */
           <img
             src={viewUrl}
             alt={resource.title}
@@ -151,9 +152,22 @@ export function ResourceViewer({
             className="h-[min(80vh,48rem)] w-full rounded-lg border border-border bg-card"
           />
         )
+      ) : binary && previewText ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Original file is missing or empty in storage. Showing extracted text
+            instead — re-upload the PDF/image to restore the original viewer.
+          </p>
+          <div className="max-h-[min(80vh,48rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xs">
+            <pre className="whitespace-pre-wrap break-words font-sans text-[0.9375rem] leading-relaxed text-foreground">
+              {formatExtractedPlainText(previewText)}
+            </pre>
+          </div>
+        </div>
       ) : binary ? (
         <p className="text-sm text-muted-foreground">
-          Original file could not be loaded. Try downloading instead.
+          Original file could not be loaded. Try downloading instead, or
+          re-upload the resource.
         </p>
       ) : previewText ? (
         <MarkdownContent

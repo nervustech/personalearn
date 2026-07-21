@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Download, Pencil, Printer, X } from "lucide-react";
 import type { Resource } from "@/types/database";
+import { ResourceBodyEditor } from "@/components/classes/resource-body-editor";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,17 +162,11 @@ export function ResourceViewer({
               disabled={updateResource.isPending}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="resource-body">Body</Label>
-            <textarea
-              id="resource-body"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              disabled={updateResource.isPending}
-              rows={18}
-              className="flex w-full rounded-xl border border-input bg-card px-3 py-2 font-mono text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </div>
+          <ResourceBodyEditor
+            value={text}
+            onChange={setText}
+            disabled={updateResource.isPending}
+          />
         </div>
       ) : binary && viewUrl ? (
         mime.startsWith("image/") ? (

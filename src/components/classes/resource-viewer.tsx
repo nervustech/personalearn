@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Download, Pencil, Printer, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Download, Pencil, X } from "lucide-react";
 import type { Resource } from "@/types/database";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUpdateResource } from "@/lib/hooks/use-resources";
+import { downloadRenderedElementAsPdf } from "@/lib/resources/download-rendered-pdf";
 import {
   isBinaryOriginalResource,
   isEditableTextResource,
@@ -24,23 +25,6 @@ type ResourceViewerProps = {
   previewText: string;
 };
 
-/**
- * Print the rendered page (WYSIWYG tables/math) via the browser print dialog.
- * Teachers choose "Save as PDF" — same content as on screen.
- */
-function printRenderedResource(title: string) {
-  const previous = document.title;
-  document.title = title.trim() || previous;
-  const restore = () => {
-    document.title = previous;
-    window.removeEventListener("afterprint", restore);
-  };
-  window.addEventListener("afterprint", restore);
-  window.print();
-  // Safari / some browsers may not fire afterprint reliably.
-  window.setTimeout(restore, 1000);
-}
-
 export function ResourceViewer({
   classId,
   resource,
@@ -50,17 +34,21 @@ export function ResourceViewer({
   const editable = isEditableTextResource(resource);
   const binary = isBinaryOriginalResource(resource.raw_content);
   const mime = resourceMimeType(resource.raw_content);
-  const printAsPage = shouldExportResourceAsPdf(resource);
+  const exportRenderedPdf = shouldExportResourceAsPdf(resource);
   const updateResource = useUpdateResource(classId, resource.id);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(resource.title);
   const [text, setText] = useState(previewText);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     setTitle(resource.title);
     setText(previewText);
     setEditing(false);
+    setExportError(null);
   }, [resource.id, resource.title, previewText]);
 
   function handleCancel() {
@@ -78,19 +66,36 @@ export function ResourceViewer({
     );
   }
 
+  async function handleDownloadPdf() {
+    const node = captureRef.current;
+    if (!node || exporting) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadRenderedElementAsPdf(node, resource.title);
+    } catch (error) {
+      setExportError(
+        error instanceof Error ? error.message : "Could not create PDF"
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
-        {printAsPage ? (
+        {exportRenderedPdf ? (
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => printRenderedResource(resource.title)}
-            title="Opens print dialog — choose Save as PDF to keep tables as shown"
+            onClick={() => void handleDownloadPdf()}
+            disabled={exporting || editing || !previewText.trim()}
+            title="Download a PDF of the on-screen content (tables included)"
           >
-            <Printer className="h-3.5 w-3.5" />
-            Print / Save as PDF
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? "Preparing PDF…" : "Download PDF"}
           </Button>
         ) : (
           <a
@@ -137,6 +142,10 @@ export function ResourceViewer({
           </>
         ) : null}
       </div>
+
+      {exportError ? (
+        <p className="text-sm text-destructive print:hidden">{exportError}</p>
+      ) : null}
 
       {updateResource.error ? (
         <p className="text-sm text-destructive print:hidden">
@@ -190,7 +199,10 @@ export function ResourceViewer({
             Original file is missing or empty in storage. Showing extracted text
             instead — re-upload the PDF/image to restore the original viewer.
           </p>
-          <div className="max-h-[min(80vh,48rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xs print:max-h-none print:overflow-visible print:border-0 print:p-0 print:shadow-none">
+          <div
+            ref={captureRef}
+            className="max-h-[min(80vh,48rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xs print:max-h-none print:overflow-visible print:border-0 print:p-0 print:shadow-none"
+          >
             <pre className="resource-print-body whitespace-pre-wrap break-words font-sans text-[0.9375rem] leading-relaxed text-foreground">
               {formatExtractedPlainText(previewText)}
             </pre>
@@ -202,10 +214,12 @@ export function ResourceViewer({
           re-upload the resource.
         </p>
       ) : previewText ? (
-        <MarkdownContent
-          content={previewText}
-          className="resource-print-body text-[0.9375rem] text-foreground"
-        />
+        <div ref={captureRef}>
+          <MarkdownContent
+            content={previewText}
+            className="resource-print-body text-[0.9375rem] text-foreground"
+          />
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground">
           No content is available for this resource.

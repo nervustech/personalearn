@@ -1,18 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Download, Pencil, Printer, X } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import type { Resource } from "@/types/database";
-import { ResourceBodyEditor } from "@/components/classes/resource-body-editor";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useUpdateResource } from "@/lib/hooks/use-resources";
 import {
   isBinaryOriginalResource,
-  isEditableTextResource,
   formatExtractedPlainText,
   resourceMimeType,
   shouldExportResourceAsPdf,
@@ -42,133 +36,44 @@ function printRenderedResource(title: string) {
 }
 
 export function ResourceViewer({
-  classId,
   resource,
   viewUrl,
   previewText,
 }: ResourceViewerProps) {
-  const editable = isEditableTextResource(resource);
   const binary = isBinaryOriginalResource(resource.raw_content);
   const mime = resourceMimeType(resource.raw_content);
-  const downloadAsPdf = shouldExportResourceAsPdf(resource);
-  const updateResource = useUpdateResource(classId, resource.id);
-
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(resource.title);
-  const [text, setText] = useState(previewText);
-
-  useEffect(() => {
-    setTitle(resource.title);
-    setText(previewText);
-    setEditing(false);
-  }, [resource.id, resource.title, previewText]);
-
-  function handleCancel() {
-    setTitle(resource.title);
-    setText(previewText);
-    setEditing(false);
-  }
-
-  function handleSave() {
-    updateResource.mutate(
-      { title, text },
-      {
-        onSuccess: () => setEditing(false),
-      }
-    );
-  }
+  const canPrint = shouldExportResourceAsPdf(resource) && Boolean(previewText.trim());
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
-        {downloadAsPdf ? (
+        {canPrint ? (
           <Button
             type="button"
             variant="secondary"
             size="sm"
             onClick={() => printRenderedResource(resource.title)}
-            disabled={editing || !previewText.trim()}
             title="Print the page as shown — in Brave/Chrome choose Save as PDF"
           >
             <Printer className="h-3.5 w-3.5" />
             Print / Save as PDF
           </Button>
         ) : null}
-        <a
-          href={`/api/resources/${resource.id}/download`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-xs font-semibold text-foreground shadow-xs transition-all hover:bg-muted"
-          title={
-            downloadAsPdf
-              ? "Download a clean text PDF (print-layout fallback)"
-              : "Download the original file"
-          }
-        >
-          <Download className="h-3.5 w-3.5" />
-          {downloadAsPdf ? "Download PDF" : "Download"}
-        </a>
-        {editable && !editing ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setEditing(true)}
+        {binary ? (
+          <a
+            href={`/api/resources/${resource.id}/download`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-xs font-semibold text-foreground shadow-xs transition-all hover:bg-muted"
+            title="Download the original file"
           >
-            <Pencil className="h-3.5 w-3.5" />
-            Edit
-          </Button>
-        ) : null}
-        {editing ? (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleCancel}
-              disabled={updateResource.isPending}
-            >
-              <X className="h-3.5 w-3.5" />
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSave}
-              disabled={updateResource.isPending || !title.trim()}
-            >
-              {updateResource.isPending ? "Saving…" : "Save"}
-            </Button>
-          </>
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
         ) : null}
       </div>
 
-      {updateResource.error ? (
-        <p className="text-sm text-destructive print:hidden">
-          {updateResource.error instanceof Error
-            ? updateResource.error.message
-            : "Save failed"}
-        </p>
-      ) : null}
-
-      {editing ? (
-        <div className="space-y-3 print:hidden">
-          <div className="space-y-1.5">
-            <Label htmlFor="resource-title">Title</Label>
-            <Input
-              id="resource-title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              disabled={updateResource.isPending}
-            />
-          </div>
-          <ResourceBodyEditor
-            value={text}
-            onChange={setText}
-            disabled={updateResource.isPending}
-          />
-        </div>
-      ) : binary && viewUrl ? (
+      {binary && viewUrl ? (
         mime.startsWith("image/") ? (
           /* eslint-disable-next-line @next/next/no-img-element -- same-origin or signed URL */
           <img
@@ -219,7 +124,6 @@ export function ResourceViewerSkeleton() {
     <div className="space-y-4" aria-busy="true" aria-label="Loading resource">
       <div className="flex justify-end gap-2">
         <Skeleton className="h-9 w-28 rounded-xl" />
-        <Skeleton className="h-9 w-20 rounded-xl" />
       </div>
       <Skeleton className="h-[min(60vh,32rem)] w-full rounded-lg" />
     </div>

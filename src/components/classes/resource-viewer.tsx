@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Pencil, X } from "lucide-react";
+import { Download, Pencil, Printer, X } from "lucide-react";
 import type { Resource } from "@/types/database";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   isEditableTextResource,
   formatExtractedPlainText,
   resourceMimeType,
+  shouldExportResourceAsPdf,
 } from "@/lib/resources/format";
 
 type ResourceViewerProps = {
@@ -22,6 +23,23 @@ type ResourceViewerProps = {
   viewUrl: string | null;
   previewText: string;
 };
+
+/**
+ * Print the rendered page (WYSIWYG tables/math) via the browser print dialog.
+ * Teachers choose "Save as PDF" — same content as on screen.
+ */
+function printRenderedResource(title: string) {
+  const previous = document.title;
+  document.title = title.trim() || previous;
+  const restore = () => {
+    document.title = previous;
+    window.removeEventListener("afterprint", restore);
+  };
+  window.addEventListener("afterprint", restore);
+  window.print();
+  // Safari / some browsers may not fire afterprint reliably.
+  window.setTimeout(restore, 1000);
+}
 
 export function ResourceViewer({
   classId,
@@ -32,6 +50,7 @@ export function ResourceViewer({
   const editable = isEditableTextResource(resource);
   const binary = isBinaryOriginalResource(resource.raw_content);
   const mime = resourceMimeType(resource.raw_content);
+  const printAsPage = shouldExportResourceAsPdf(resource);
   const updateResource = useUpdateResource(classId, resource.id);
 
   const [editing, setEditing] = useState(false);
@@ -61,16 +80,29 @@ export function ResourceViewer({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <a
-          href={`/api/resources/${resource.id}/download`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-xs font-semibold text-foreground shadow-xs transition-all hover:bg-muted"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Download
-        </a>
+      <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
+        {printAsPage ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => printRenderedResource(resource.title)}
+            title="Opens print dialog — choose Save as PDF to keep tables as shown"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Print / Save as PDF
+          </Button>
+        ) : (
+          <a
+            href={`/api/resources/${resource.id}/download`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-xs font-semibold text-foreground shadow-xs transition-all hover:bg-muted"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
+        )}
         {editable && !editing ? (
           <Button
             type="button"
@@ -107,7 +139,7 @@ export function ResourceViewer({
       </div>
 
       {updateResource.error ? (
-        <p className="text-sm text-destructive">
+        <p className="text-sm text-destructive print:hidden">
           {updateResource.error instanceof Error
             ? updateResource.error.message
             : "Save failed"}
@@ -115,7 +147,7 @@ export function ResourceViewer({
       ) : null}
 
       {editing ? (
-        <div className="space-y-3">
+        <div className="space-y-3 print:hidden">
           <div className="space-y-1.5">
             <Label htmlFor="resource-title">Title</Label>
             <Input
@@ -154,12 +186,12 @@ export function ResourceViewer({
         )
       ) : binary && previewText ? (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground print:hidden">
             Original file is missing or empty in storage. Showing extracted text
             instead — re-upload the PDF/image to restore the original viewer.
           </p>
-          <div className="max-h-[min(80vh,48rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xs">
-            <pre className="whitespace-pre-wrap break-words font-sans text-[0.9375rem] leading-relaxed text-foreground">
+          <div className="max-h-[min(80vh,48rem)] overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xs print:max-h-none print:overflow-visible print:border-0 print:p-0 print:shadow-none">
+            <pre className="resource-print-body whitespace-pre-wrap break-words font-sans text-[0.9375rem] leading-relaxed text-foreground">
               {formatExtractedPlainText(previewText)}
             </pre>
           </div>
@@ -172,7 +204,7 @@ export function ResourceViewer({
       ) : previewText ? (
         <MarkdownContent
           content={previewText}
-          className="text-[0.9375rem] text-foreground"
+          className="resource-print-body text-[0.9375rem] text-foreground"
         />
       ) : (
         <p className="text-sm text-muted-foreground">

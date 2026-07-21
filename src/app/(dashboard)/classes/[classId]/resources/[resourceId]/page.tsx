@@ -31,14 +31,16 @@ export default function ClassResourcePage({
     Boolean(resource) && resource!.class_id !== classId;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <Breadcrumbs
-        items={[
-          { label: "Classes", href: "/classes" },
-          { label: classLabel, href: `/classes/${classId}` },
-          { label: resource?.title ?? "Resource" },
-        ]}
-      />
+    <div className="resource-print-root mx-auto max-w-4xl space-y-4">
+      <div className="print:hidden">
+        <Breadcrumbs
+          items={[
+            { label: "Classes", href: "/classes" },
+            { label: classLabel, href: `/classes/${classId}` },
+            { label: resource?.title ?? "Resource" },
+          ]}
+        />
+      </div>
 
       {isLoading ? (
         <>
@@ -65,10 +67,10 @@ export default function ClassResourcePage({
       ) : (
         <>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
+            <h1 className="text-2xl font-semibold tracking-tight print:text-xl">
               {resource.title}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground print:hidden">
               <span>{formatResourceType(resource.resource_type)}</span>
               <span aria-hidden>·</span>
               <span>{formatResourceDate(resource.created_at)}</span>

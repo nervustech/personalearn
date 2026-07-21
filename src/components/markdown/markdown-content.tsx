@@ -64,26 +64,30 @@ export const markdownComponents: Components = {
     </pre>
   ),
   table: ({ children }) => (
-    <div className="my-3 overflow-x-auto rounded-lg border border-border/80">
-      <table className="w-full min-w-[16rem] border-collapse text-sm">
+    <div className="my-3 overflow-x-auto rounded-lg border border-border/80 print:overflow-visible print:rounded-none print:border-0">
+      <table className="w-full min-w-[16rem] border-collapse text-sm print:min-w-0">
         {children}
       </table>
     </div>
   ),
   thead: ({ children }) => (
-    <thead className="bg-muted/60">{children}</thead>
+    <thead className="bg-muted/60 print:bg-transparent">{children}</thead>
   ),
   th: ({ children }) => (
-    <th className="border-b border-border px-3 py-2 text-left font-semibold">
+    <th className="border-b border-border px-3 py-2 text-left font-semibold print:border print:border-border">
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="border-b border-border/60 px-3 py-2 align-top leading-relaxed">
+    <td className="border-b border-border/60 px-3 py-2 align-top leading-relaxed print:border print:border-border">
       {children}
     </td>
   ),
-  tr: ({ children }) => <tr className="last:[&>td]:border-b-0">{children}</tr>,
+  tr: ({ children }) => (
+    <tr className="last:[&>td]:border-b-0 print:break-inside-avoid">
+      {children}
+    </tr>
+  ),
 };
 
 type MarkdownContentProps = {

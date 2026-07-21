@@ -388,50 +388,189 @@ function drawRule(ctx: DrawCtx) {
   ctx.y -= 10;
 }
 
-function drawTable(ctx: DrawCtx, headers: string[], rows: string[][]) {
+function cellAt(row: string[], col: number) {
+  return row[col] ?? "";
+}
+
+/**
+ * Wide / narrative tables (marking schemes, rubrics) read poorly as equal-width
+ * columns. Stack those as labeled rows; keep compact grids for short tables.
+ */
+export function shouldStackTable(headers: string[], rows: string[][]) {
   const cols = Math.max(headers.length, ...rows.map((r) => r.length), 1);
-  const colWidth = CONTENT_WIDTH / cols;
-  const pad = 4;
+  if (cols >= 4) return true;
+  const samples = [...headers, ...rows.flatMap((r) => r)];
+  const maxLen = Math.max(0, ...samples.map((s) => s.length));
+  if (cols >= 3 && maxLen > 55) return true;
+  return false;
+}
+
+/** Content-weighted column widths (sqrt dampens one huge Working column). */
+export function computeTableColumnWidths(
+  headers: string[],
+  rows: string[][],
+  cols: number,
+  totalWidth: number
+) {
+  const weights = Array.from({ length: cols }, (_, col) => {
+    let maxChars = (headers[col] ?? "").length;
+    for (const row of rows) {
+      maxChars = Math.max(maxChars, cellAt(row, col).length);
+    }
+    return Math.max(3, Math.sqrt(maxChars));
+  });
+  const sum = weights.reduce((a, b) => a + b, 0) || cols;
+  const raw = weights.map((w) => (w / sum) * totalWidth);
+  // Enforce a readable minimum so Answer / Marks don't collapse.
+  const minWidth = Math.min(56, totalWidth / cols);
+  const floored = raw.map((w) => Math.max(minWidth, w));
+  const floorSum = floored.reduce((a, b) => a + b, 0);
+  return floored.map((w) => (w / floorSum) * totalWidth);
+}
+
+function countWrappedLines(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number
+) {
+  const words = toWinAnsi(text).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 1;
+  let lines = 1;
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) > maxWidth) {
+      lines += 1;
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  return lines;
+}
+
+/** Labeled stacked rows — best for marking-scheme Working / Marks columns. */
+function drawStackedTable(ctx: DrawCtx, headers: string[], rows: string[][]) {
+  const cols = Math.max(headers.length, ...rows.map((r) => r.length), 1);
+  const labelSize = 9;
+  const valueSize = 10;
+  const leading = 13;
+  const labelWidth = Math.min(
+    110,
+    Math.max(
+      64,
+      ...headers.map((h) => ctx.bold.widthOfTextAtSize(toWinAnsi(`${h}:`), labelSize) + 8)
+    )
+  );
+
+  for (let ri = 0; ri < rows.length; ri++) {
+    const row = rows[ri];
+    // Estimate block height for page breaks.
+    let est = 10;
+    for (let col = 0; col < cols; col++) {
+      const value = cellAt(row, col).trim();
+      if (!value) continue;
+      const header = (headers[col] ?? `Col ${col + 1}`).trim() || `Col ${col + 1}`;
+      // First column often is the question id — treat as a row title.
+      if (col === 0 && /^(question|q\.?|#|item|no\.?)$/i.test(header)) {
+        est += leading + 4;
+        continue;
+      }
+      est +=
+        countWrappedLines(
+          value,
+          ctx.font,
+          valueSize,
+          CONTENT_WIDTH - labelWidth - 8
+        ) * leading + 4;
+    }
+    ensureSpace(ctx, Math.min(est, PAGE_HEIGHT - MARGIN * 2));
+
+    for (let col = 0; col < cols; col++) {
+      const value = cellAt(row, col).trim();
+      if (!value) continue;
+      const header =
+        (headers[col] ?? `Col ${col + 1}`).trim() || `Col ${col + 1}`;
+
+      if (col === 0 && /^(question|q\.?|#|item|no\.?)$/i.test(header)) {
+        drawWrappedLine(ctx, `${header} ${value}`, {
+          x: MARGIN,
+          maxWidth: CONTENT_WIDTH,
+          size: 11,
+          leading: 14,
+          font: ctx.bold,
+        });
+        ctx.y -= 2;
+        continue;
+      }
+
+      const label = `${header}:`;
+      ensureSpace(ctx, leading);
+      ctx.page.drawText(toWinAnsi(label), {
+        x: MARGIN,
+        y: ctx.y,
+        size: labelSize,
+        font: ctx.bold,
+        color: MUTED_COLOR,
+      });
+      drawWrappedLine(ctx, value, {
+        x: MARGIN + labelWidth,
+        maxWidth: CONTENT_WIDTH - labelWidth,
+        size: valueSize,
+        leading,
+        font: ctx.font,
+      });
+      ctx.y -= 2;
+    }
+
+    if (ri < rows.length - 1) {
+      ctx.y -= 2;
+      ctx.page.drawLine({
+        start: { x: MARGIN, y: ctx.y },
+        end: { x: PAGE_WIDTH - MARGIN, y: ctx.y },
+        thickness: 0.5,
+        color: RULE_COLOR,
+      });
+      ctx.y -= 8;
+    }
+  }
+  ctx.y -= 8;
+}
+
+function drawGridTable(ctx: DrawCtx, headers: string[], rows: string[][]) {
+  const cols = Math.max(headers.length, ...rows.map((r) => r.length), 1);
+  const widths = computeTableColumnWidths(headers, rows, cols, CONTENT_WIDTH);
+  const pad = 5;
   const size = 10;
   const leading = 13;
 
-  const cellText = (row: string[], col: number) => row[col] ?? "";
-
   const drawRow = (row: string[], useBold: boolean) => {
-    // Measure wrapped height first.
-    const lineCounts = Array.from({ length: cols }, (_, col) => {
-      const words = toWinAnsi(cellText(row, col)).split(/\s+/).filter(Boolean);
-      if (words.length === 0) return 1;
-      let lines = 1;
-      let current = "";
-      const font = useBold ? ctx.bold : ctx.font;
-      for (const word of words) {
-        const candidate = current ? `${current} ${word}` : word;
-        if (font.widthOfTextAtSize(candidate, size) > colWidth - pad * 2) {
-          lines += 1;
-          current = word;
-        } else {
-          current = candidate;
-        }
-      }
-      return lines;
-    });
-    const rowHeight = Math.max(...lineCounts) * leading + 6;
+    const lineCounts = Array.from({ length: cols }, (_, col) =>
+      countWrappedLines(
+        cellAt(row, col),
+        useBold ? ctx.bold : ctx.font,
+        size,
+        Math.max(20, widths[col] - pad * 2)
+      )
+    );
+    const rowHeight = Math.max(...lineCounts) * leading + 8;
     ensureSpace(ctx, rowHeight);
 
     const top = ctx.y;
+    let x = MARGIN;
     for (let col = 0; col < cols; col++) {
-      const x = MARGIN + col * colWidth + pad;
       const savedY = ctx.y;
-      drawWrappedLine(ctx, cellText(row, col), {
-        x,
-        maxWidth: colWidth - pad * 2,
+      drawWrappedLine(ctx, cellAt(row, col), {
+        x: x + pad,
+        maxWidth: Math.max(20, widths[col] - pad * 2),
         size,
         leading,
         font: useBold ? ctx.bold : ctx.font,
         color: useBold ? TEXT_COLOR : MUTED_COLOR,
       });
       ctx.y = savedY;
+      x += widths[col];
     }
     ctx.y = top - rowHeight;
   };
@@ -439,17 +578,33 @@ function drawTable(ctx: DrawCtx, headers: string[], rows: string[][]) {
   if (headers.some(Boolean)) {
     drawRow(headers, true);
     ctx.page.drawLine({
-      start: { x: MARGIN, y: ctx.y + 2 },
-      end: { x: PAGE_WIDTH - MARGIN, y: ctx.y + 2 },
+      start: { x: MARGIN, y: ctx.y + 3 },
+      end: { x: PAGE_WIDTH - MARGIN, y: ctx.y + 3 },
       thickness: 0.8,
       color: RULE_COLOR,
     });
-    ctx.y -= 4;
+    ctx.y -= 2;
   }
-  for (const row of rows) {
-    drawRow(row, false);
+  for (let ri = 0; ri < rows.length; ri++) {
+    drawRow(rows[ri], false);
+    if (ri < rows.length - 1) {
+      ctx.page.drawLine({
+        start: { x: MARGIN, y: ctx.y + 3 },
+        end: { x: PAGE_WIDTH - MARGIN, y: ctx.y + 3 },
+        thickness: 0.4,
+        color: RULE_COLOR,
+      });
+    }
   }
-  ctx.y -= 6;
+  ctx.y -= 8;
+}
+
+function drawTable(ctx: DrawCtx, headers: string[], rows: string[][]) {
+  if (shouldStackTable(headers, rows)) {
+    drawStackedTable(ctx, headers, rows);
+    return;
+  }
+  drawGridTable(ctx, headers, rows);
 }
 
 /**

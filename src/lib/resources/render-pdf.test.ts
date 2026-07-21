@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeTableColumnWidths,
   flattenMath,
   parseResourcePdfBlocks,
   pdfFileName,
   renderResourcePdf,
+  shouldStackTable,
   stripInlineMarkdown,
   toWinAnsi,
 } from "./render-pdf";
@@ -91,13 +93,71 @@ Intro paragraph.
     expect(heading && "text" in heading ? heading.text : "").not.toMatch(/#/);
   });
 
-  it("builds a PDF that starts with the %PDF signature", async () => {
-    const bytes = await renderResourcePdf(
-      "Fractions worksheet",
-      "# Question 1\n\nSolve $\\frac{3}{4} + \\frac{1}{2}$.\n\n- Show working\n- Box the answer\n"
+  it("stacks wide marking-scheme tables and keeps short ones as grids", () => {
+    expect(
+      shouldStackTable(
+        ["Question", "Answer", "Marks"],
+        [
+          ["1", "56", "1"],
+          ["2", "54", "1"],
+        ]
+      )
+    ).toBe(false);
+
+    expect(
+      shouldStackTable(
+        ["Question", "Working", "Answer", "Marks"],
+        [
+          [
+            "6",
+            "20 x 4 = 80, 3 x 4 = 12, 80 + 12 = 92",
+            "92",
+            "1 mark for method, 1 mark for correct answer",
+          ],
+        ]
+      )
+    ).toBe(true);
+  });
+
+  it("gives longer columns more width in compact grids", () => {
+    const widths = computeTableColumnWidths(
+      ["Q", "Answer", "Notes"],
+      [
+        ["1", "56", "short"],
+        ["2", "54", "a much longer notes cell than the others"],
+      ],
+      3,
+      480
     );
+    expect(widths).toHaveLength(3);
+    expect(widths[2]).toBeGreaterThan(widths[0]);
+    expect(widths.reduce((a, b) => a + b, 0)).toBeCloseTo(480, 5);
+  });
+
+  it("builds a readable PDF for a marking-scheme with wide tables", async () => {
+    const markdown = `# Marking Scheme
+
+## Section A
+
+| Question | Answer | Marks |
+|----------|--------|-------|
+| 1 | 56 | 1 |
+
+## Section B
+
+| Question | Working | Answer | Marks |
+|----------|---------|--------|-------|
+| 6 | \\( 20 \\times 4 = 80 \\), \\( 3 \\times 4 = 12 \\), \\( 80 + 12 = 92 \\) | 92 | 1 mark for method, 1 mark for correct answer |
+`;
+    const blocks = parseResourcePdfBlocks(markdown);
+    const tables = blocks.filter((b) => b.kind === "table");
+    expect(tables).toHaveLength(2);
+    expect(shouldStackTable(tables[0].headers, tables[0].rows)).toBe(false);
+    expect(shouldStackTable(tables[1].headers, tables[1].rows)).toBe(true);
+
+    const bytes = await renderResourcePdf("Week 5 Marking Scheme", markdown);
     expect(String.fromCharCode(...bytes.slice(0, 4))).toBe("%PDF");
-    expect(bytes.byteLength).toBeGreaterThan(500);
+    expect(bytes.byteLength).toBeGreaterThan(800);
   });
 
   it("sanitizes download filenames", () => {

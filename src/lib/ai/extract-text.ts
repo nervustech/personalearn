@@ -1,18 +1,21 @@
 import { generateText } from "ai";
 import { extractText as extractPdfText } from "unpdf";
 import { getGeminiFlashModel, requireGoogleGenerativeAiApiKey } from "@/lib/ai/vision-model";
+import {
+  detectResourceFormat,
+  maxBytesForFormat,
+  unsupportedTypeMessage,
+} from "@/lib/ai/resource-format";
 
-export const MAX_TXT_BYTES = 2 * 1024 * 1024;
-export const MAX_BINARY_BYTES = 5 * 1024 * 1024;
-
-export const SUPPORTED_MIME_TYPES = [
-  "text/plain",
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-] as const;
-
-export type ResourceFormat = "txt" | "pdf" | "image";
+export {
+  MAX_TXT_BYTES,
+  MAX_BINARY_BYTES,
+  SUPPORTED_MIME_TYPES,
+  detectResourceFormat,
+  maxBytesForFormat,
+  unsupportedTypeMessage,
+  type ResourceFormat,
+} from "@/lib/ai/resource-format";
 
 export class ExtractTextError extends Error {
   constructor(
@@ -26,40 +29,6 @@ export class ExtractTextError extends Error {
 
 const IMAGE_OCR_PROMPT =
   "Extract all readable text from this image. Preserve paragraph breaks where possible. Return only the extracted text with no commentary.";
-
-export function detectResourceFormat(
-  fileName: string,
-  mimeType: string
-): ResourceFormat | null {
-  const lowerName = fileName.toLowerCase();
-  const normalizedMime = mimeType.toLowerCase().split(";")[0]?.trim() ?? "";
-
-  if (normalizedMime === "text/plain" || lowerName.endsWith(".txt")) {
-    return "txt";
-  }
-
-  if (normalizedMime === "application/pdf" || lowerName.endsWith(".pdf")) {
-    return "pdf";
-  }
-
-  if (
-    normalizedMime === "image/jpeg" ||
-    normalizedMime === "image/png" ||
-    /\.(jpe?g|png)$/.test(lowerName)
-  ) {
-    return "image";
-  }
-
-  return null;
-}
-
-export function maxBytesForFormat(format: ResourceFormat): number {
-  return format === "txt" ? MAX_TXT_BYTES : MAX_BINARY_BYTES;
-}
-
-export function unsupportedTypeMessage() {
-  return "Unsupported file type. Upload a .txt, .pdf, .jpg, or .png file.";
-}
 
 async function extractTextFromPdf(bytes: Uint8Array): Promise<string> {
   // unpdf may detach the underlying ArrayBuffer; always pass a copy.

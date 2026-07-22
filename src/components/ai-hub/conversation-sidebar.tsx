@@ -28,6 +28,9 @@ type ConversationSidebarProps = {
   onSelect: (conversationId: string) => void;
   onNewConversation: () => void;
   onDelete: (conversationId: string) => void;
+  className?: string;
+  /** Full-screen sheet (mobile): collapse control reads as back-to-chat. */
+  sheetMode?: boolean;
 };
 
 export function ConversationSidebar({
@@ -40,6 +43,8 @@ export function ConversationSidebar({
   onSelect,
   onNewConversation,
   onDelete,
+  className,
+  sheetMode = false,
 }: ConversationSidebarProps) {
   const [search, setSearch] = useState("");
 
@@ -60,14 +65,18 @@ export function ConversationSidebar({
   if (collapsed) {
     return (
       <aside
-        className="flex w-12 shrink-0 flex-col items-center gap-2 overflow-hidden rounded-2xl border border-border/80 bg-card/50 py-3 shadow-xs backdrop-blur-sm"
+        className="relative flex w-10 shrink-0 flex-col items-center gap-3 py-2"
         aria-label="Conversations collapsed"
       >
+        <div
+          className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border"
+          aria-hidden
+        />
         <Button
           type="button"
           variant="secondary"
           size="icon"
-          className="h-8 w-8 rounded-full"
+          className="relative z-10 h-8 w-8 rounded-full bg-background shadow-none"
           onClick={() => onCollapsedChange(false)}
           title="Expand conversations"
           aria-label="Expand conversations"
@@ -78,22 +87,25 @@ export function ConversationSidebar({
           type="button"
           variant="secondary"
           size="icon"
-          className="h-8 w-8 rounded-full"
+          className="relative z-10 h-8 w-8 rounded-full bg-background shadow-none"
           onClick={onNewConversation}
           title="New conversation"
           aria-label="New conversation"
         >
           <Plus className="h-4 w-4" />
         </Button>
-        <div className="mt-1 flex flex-1 items-start pt-1">
-          <MessagesSquare className="h-4 w-4 text-muted-foreground" />
-        </div>
       </aside>
     );
   }
 
   return (
-    <aside className="flex w-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/50 shadow-xs backdrop-blur-sm lg:w-[17rem]">
+    <aside
+      className={cn(
+        "flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/50 shadow-xs backdrop-blur-sm",
+        className ?? "w-full lg:w-[17rem]"
+      )}
+      aria-label="Conversations"
+    >
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <MessagesSquare className="h-4 w-4 shrink-0 text-primary" />
@@ -117,8 +129,8 @@ export function ConversationSidebar({
             size="icon"
             className="h-8 w-8 rounded-full"
             onClick={() => onCollapsedChange(true)}
-            title="Collapse conversations"
-            aria-label="Collapse conversations"
+            title={sheetMode ? "Back to chat" : "Collapse conversations"}
+            aria-label={sheetMode ? "Back to chat" : "Collapse conversations"}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -214,12 +226,14 @@ export function ConversationSidebar({
   );
 }
 
-export function readSidebarCollapsedPreference(): boolean {
-  if (typeof window === "undefined") return false;
+export function readSidebarCollapsedPreference(): boolean | null {
+  if (typeof window === "undefined") return null;
   try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+    const value = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (value === null) return null;
+    return value === "true";
   } catch {
-    return false;
+    return null;
   }
 }
 

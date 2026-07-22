@@ -15,7 +15,7 @@ import {
 } from "@/lib/ai-hub/class-context";
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import { generateAiConversationTitle } from "@/lib/ai-hub/generate-conversation-title";
-import { materializeAttachmentText } from "@/lib/ai-hub/chat-attachments";
+import { materializeAttachmentText } from "@/lib/ai-hub/chat-attachments-server";
 import { getMessageText } from "@/lib/ai-hub/message-content";
 import { getChatModel } from "@/lib/ai/llm";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
@@ -109,12 +109,7 @@ export async function POST(request: Request) {
       ]);
     }
 
-    const tools = createAgentTools({
-      supabase,
-      classId,
-      teacherId: user.id,
-      classContext,
-    });
+    const tools = createAgentTools({ supabase, classId, classContext });
 
     const result = streamText({
       model: getChatModel(),

@@ -4,7 +4,7 @@ import {
   validateChatAttachment,
   validateChatAttachments,
 } from "@/lib/ai-hub/chat-attachments";
-import { MAX_BINARY_BYTES, MAX_TXT_BYTES } from "@/lib/ai/extract-text";
+import { MAX_BINARY_BYTES, MAX_TXT_BYTES } from "@/lib/ai/resource-format";
 
 describe("validateChatAttachment", () => {
   it("accepts supported types within size limits", () => {

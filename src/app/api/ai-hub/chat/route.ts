@@ -15,7 +15,11 @@ import {
 } from "@/lib/ai-hub/class-context";
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import { generateAiConversationTitle } from "@/lib/ai-hub/generate-conversation-title";
+<<<<<<< HEAD
 import { materializeAttachmentText } from "@/lib/ai-hub/chat-attachments-server";
+=======
+import { materializeAttachmentText } from "@/lib/ai-hub/materialize-attachments";
+>>>>>>> 5484545 (fix: keep unpdf out of AI Hub client bundle (PSL-80))
 import { getMessageText } from "@/lib/ai-hub/message-content";
 import { getChatModel } from "@/lib/ai/llm";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";

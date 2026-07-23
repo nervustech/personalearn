@@ -292,6 +292,38 @@ describe("executeGenerateTeachingImage", () => {
     });
     expect(mockGenerateImage).not.toHaveBeenCalled();
   });
+
+  it("surfaces retired Imagen and quota failures clearly", async () => {
+    mockGenerateImage.mockRejectedValueOnce(
+      new Error(
+        "This model models/imagen-4.0-generate-001 is no longer available to new users."
+      )
+    );
+
+    await expect(
+      executeGenerateTeachingImage(deps, {
+        title: "Diagram",
+        prompt: "Number line",
+      })
+    ).resolves.toMatchObject({
+      error: expect.stringMatching(/IMAGE_GENERATION_MODEL=gemini-2.5-flash-image/),
+    });
+
+    mockGenerateImage.mockRejectedValueOnce(
+      new Error(
+        "You exceeded your current quota, please check your plan and billing details."
+      )
+    );
+
+    await expect(
+      executeGenerateTeachingImage(deps, {
+        title: "Diagram",
+        prompt: "Number line",
+      })
+    ).resolves.toMatchObject({
+      error: expect.stringMatching(/quota exceeded/i),
+    });
+  });
 });
 
 describe("executeListStudents", () => {

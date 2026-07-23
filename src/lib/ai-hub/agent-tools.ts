@@ -455,6 +455,16 @@ Style: clear, age-appropriate diagram or illustration suitable for printing or p
         "Image generation is not configured. Set GOOGLE_GENERATIVE_AI_API_KEY on the server."
       );
     }
+    if (/no longer available|NOT_FOUND|is not found/i.test(message)) {
+      return userSafeError(
+        "Image model is unavailable for this API key. Set IMAGE_GENERATION_MODEL=gemini-2.5-flash-image (Imagen is blocked for new Gemini keys)."
+      );
+    }
+    if (/quota|rate.?limit|RESOURCE_EXHAUSTED|billing/i.test(message)) {
+      return userSafeError(
+        "Google image quota exceeded for this API key. Wait for the free-tier reset, or enable billing in Google AI Studio, then try again."
+      );
+    }
     return userSafeError(
       "Could not generate the teaching image. Please try again."
     );

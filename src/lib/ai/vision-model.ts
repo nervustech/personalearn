@@ -6,8 +6,12 @@ export const GEMINI_FLASH_MODEL = "gemini-2.5-flash";
 export const GEMINI_FLASH_LITE_MODEL = "gemini-3.1-flash-lite";
 /** Higher tier for evidence-gated escalation (F7) — not used unless explicitly enabled. */
 export const GEMINI_PRO_VISION_MODEL = "gemini-2.5-pro";
-/** Default Imagen model for teaching-aid drafts (AI Hub). */
-export const DEFAULT_IMAGE_GENERATION_MODEL = "imagen-4.0-generate-001";
+/**
+ * Default teaching-aid image model (AI Hub / PSL-83).
+ * Imagen (`imagen-4.0-generate-001`) is no longer available to new Gemini API keys —
+ * use Gemini image models via `google.image(...)` instead.
+ */
+export const DEFAULT_IMAGE_GENERATION_MODEL = "gemini-2.5-flash-image";
 
 function clean(value: string | undefined) {
   const trimmed = value?.trim();

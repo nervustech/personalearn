@@ -89,11 +89,6 @@ export function useEvaluationBatches(classId: string | undefined) {
     queryKey: evaluationBatchesQueryKey(classId ?? ""),
     enabled: Boolean(classId),
     queryFn: () => fetchBatches(classId!),
-    refetchInterval: (query) => {
-      const batches = query.state.data;
-      if (!batches?.some((b) => b.status === "processing")) return false;
-      return 8_000;
-    },
   });
 }
 

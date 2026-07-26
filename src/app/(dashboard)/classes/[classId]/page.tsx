@@ -1,11 +1,13 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { useStudents } from "@/lib/hooks/use-classes";
 import { useClasses } from "@/lib/hooks/use-classes";
 import { filterStudentsByQuery } from "@/lib/classes/filter-class-lists";
+import { useAssessments } from "@/lib/hooks/use-evaluation";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,9 +26,31 @@ export default function ClassDetailPage({
 }: {
   params: Promise<{ classId: string }>;
 }) {
+  return (
+    <Suspense fallback={<ClassDetailSkeleton />}>
+      <ClassDetailContent params={params} />
+    </Suspense>
+  );
+}
+
+function ClassDetailContent({
+  params,
+}: {
+  params: Promise<{ classId: string }>;
+}) {
   const { classId } = use(params);
+  const searchParams = useSearchParams();
+  // Capture once so clearing the URL does not remount / lose the open dialog.
+  const [pendingAssessmentId, setPendingAssessmentId] = useState<string | null>(
+    () => searchParams.get("assessment")
+  );
+  const [pendingResourceId, setPendingResourceId] = useState<string | null>(
+    () => searchParams.get("resource")
+  );
   const { data: classes, isLoading: classesLoading } = useClasses();
   const { data: students, isLoading: studentsLoading } = useStudents(classId);
+  const { data: assessments, isLoading: assessmentsLoading } =
+    useAssessments(classId);
   const setActiveClass = useActiveClassStore((state) => state.setActiveClass);
   const [searchQuery, setSearchQuery] = useState("");
   const cls = classes?.find((c) => c.id === classId);
@@ -36,6 +60,53 @@ export default function ClassDetailPage({
     () => filterStudentsByQuery(students ?? [], searchQuery),
     [students, searchQuery]
   );
+
+  const openResourceId = useMemo(() => {
+    if (pendingResourceId) return pendingResourceId;
+    if (!pendingAssessmentId || assessmentsLoading) return null;
+    if (!assessments) return null;
+    const assessment = assessments.find((row) => row.id === pendingAssessmentId);
+    return assessment?.resource_id ?? null;
+  }, [
+    pendingResourceId,
+    pendingAssessmentId,
+    assessments,
+    assessmentsLoading,
+  ]);
+
+  const clearDeepLinkParams = useCallback(() => {
+    setPendingAssessmentId(null);
+    setPendingResourceId(null);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    let changed = false;
+    for (const key of ["assessment", "resource"] as const) {
+      if (url.searchParams.has(key)) {
+        url.searchParams.delete(key);
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    const next = url.pathname + (url.search ? url.search : "");
+    // Avoid router.replace — it remounts the page and closes the dialog.
+    window.history.replaceState(window.history.state, "", next);
+  }, []);
+
+  useEffect(() => {
+    if (pendingResourceId) return;
+    if (!pendingAssessmentId || assessmentsLoading || !assessments) return;
+    const assessment = assessments.find((row) => row.id === pendingAssessmentId);
+    // Unknown assessment or no linked resource — drop the query.
+    if (!assessment?.resource_id) {
+      clearDeepLinkParams();
+    }
+  }, [
+    pendingResourceId,
+    pendingAssessmentId,
+    assessments,
+    assessmentsLoading,
+    clearDeepLinkParams,
+  ]);
 
   useEffect(() => {
     if (!cls) return;
@@ -119,6 +190,8 @@ export default function ClassDetailPage({
           classId={classId}
           scrollable
           searchQuery={searchQuery}
+          openResourceId={openResourceId}
+          onOpenResourceConsumed={clearDeepLinkParams}
         />
 
         <Card className="flex min-h-0 flex-col lg:max-h-[min(70vh,40rem)]">

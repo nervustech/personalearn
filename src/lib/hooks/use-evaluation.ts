@@ -3,10 +3,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import type { StudentEvalProfile } from "@/lib/evaluation/student-profile";
-import type { Assessment, EvaluationBatch } from "@/types/database";
+import type {
+  Assessment,
+  EvaluationBatch,
+  StudentSubmission,
+} from "@/types/database";
 
 export const assessmentsQueryKey = (classId: string) =>
   ["assessments", classId] as const;
+
+export const classSubmissionsQueryKey = (classId: string) =>
+  ["class-submissions", classId] as const;
 
 export const studentEvalProfileQueryKey = (
   classId: string,
@@ -52,6 +59,28 @@ export function useAssessments(classId: string | undefined) {
     queryKey: assessmentsQueryKey(classId ?? ""),
     enabled: Boolean(classId),
     queryFn: () => fetchAssessments(classId!),
+  });
+}
+
+async function fetchClassSubmissions(classId: string) {
+  const response = await fetch(
+    `/api/classes/${encodeURIComponent(classId)}/submissions`
+  );
+  const payload = (await response.json()) as {
+    submissions?: StudentSubmission[];
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Failed to load submissions");
+  }
+  return payload.submissions ?? [];
+}
+
+export function useClassSubmissions(classId: string | undefined) {
+  return useQuery({
+    queryKey: classSubmissionsQueryKey(classId ?? ""),
+    enabled: Boolean(classId),
+    queryFn: () => fetchClassSubmissions(classId!),
   });
 }
 
@@ -148,11 +177,100 @@ export function useCreateEvaluationBatch(classId: string) {
   });
 }
 
+async function sha256HexBrowser(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * F1: Direct-to-storage upload via signed URLs (avoids Vercel body limits).
+ * Falls back to legacy FormData /upload only if signed-url flow fails to mint tokens.
+ */
 export function useUploadEvaluationPages(classId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: { batchId: string; files: File[] }) => {
+      const urlsRes = await fetch(
+        `/api/evaluation-batches/${input.batchId}/upload-urls`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            files: input.files.map((f) => ({
+              fileName: f.name,
+              contentType: f.type || undefined,
+            })),
+          }),
+        }
+      );
+      const urlsPayload = (await urlsRes.json()) as {
+        uploads?: {
+          fileName: string;
+          storagePath: string;
+          token: string;
+          contentType: string;
+        }[];
+        error?: string;
+      };
+
+      if (urlsRes.ok && urlsPayload.uploads?.length === input.files.length) {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const confirmed: {
+          storagePath: string;
+          fileName: string;
+          contentHash: string;
+        }[] = [];
+
+        for (let i = 0; i < input.files.length; i += 1) {
+          const file = input.files[i]!;
+          const slot = urlsPayload.uploads[i]!;
+          const contentHash = await sha256HexBrowser(file);
+          const { error: putError } = await supabase.storage
+            .from("student_submissions")
+            .uploadToSignedUrl(slot.storagePath, slot.token, file, {
+              contentType: slot.contentType || file.type || "image/jpeg",
+              upsert: false,
+            });
+          if (putError) {
+            throw new Error(putError.message || `Upload failed: ${file.name}`);
+          }
+          confirmed.push({
+            storagePath: slot.storagePath,
+            fileName: file.name,
+            contentHash,
+          });
+        }
+
+        const confirmRes = await fetch(
+          `/api/evaluation-batches/${input.batchId}/confirm-upload`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pages: confirmed }),
+          }
+        );
+        const confirmPayload = (await confirmRes.json()) as {
+          pageCount?: number;
+          queued?: boolean;
+          warnings?: {
+            fileName: string;
+            duplicateOfFileName: string;
+            message: string;
+          }[];
+          error?: string;
+        };
+        if (!confirmRes.ok) {
+          throw new Error(confirmPayload.error ?? "Could not confirm upload");
+        }
+        return confirmPayload;
+      }
+
+      // Legacy path (small batches / older servers).
       const formData = new FormData();
       for (const file of input.files) {
         formData.append("files", file);
@@ -172,13 +290,46 @@ export function useUploadEvaluationPages(classId: string) {
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Upload failed");
+        throw new Error(
+          urlsPayload.error ?? payload.error ?? "Upload failed"
+        );
       }
       return payload;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
+      });
+    },
+  });
+}
+
+export function useStartEvaluationProcessing(classId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (batchId: string) => {
+      const response = await fetch(
+        `/api/evaluation-batches/${batchId}/process-async`,
+        { method: "POST" }
+      );
+      const payload = (await response.json()) as {
+        started?: boolean;
+        reviewHref?: string;
+        status?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Could not start grading");
+      }
+      return payload;
+    },
+    onSuccess: (_data, batchId) => {
+      queryClient.invalidateQueries({
+        queryKey: evaluationBatchesQueryKey(classId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: evaluationScriptsQueryKey(batchId),
       });
     },
   });
@@ -426,6 +577,9 @@ export function useSignOffScript(classId: string, batchId: string) {
       });
       queryClient.invalidateQueries({
         queryKey: assessmentsQueryKey(classId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: classSubmissionsQueryKey(classId),
       });
       queryClient.invalidateQueries({
         queryKey: ["student-eval-profile", classId],

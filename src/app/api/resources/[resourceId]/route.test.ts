@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DELETE, GET } from "./route";
+import { DELETE, GET, PATCH } from "./route";
 
 const mockRequireTeacherResource = vi.fn();
 const mockDeleteResource = vi.fn();
+const mockUpdateTextResource = vi.fn();
 const mockCreateSignedUrl = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -22,6 +23,7 @@ vi.mock("@/lib/resources/class-resources", () => ({
 
 vi.mock("@/lib/ai/ingest-resource", () => ({
   deleteResource: (...args: unknown[]) => mockDeleteResource(...args),
+  updateTextResource: (...args: unknown[]) => mockUpdateTextResource(...args),
 }));
 
 describe("/api/resources/[resourceId]", () => {
@@ -29,12 +31,136 @@ describe("/api/resources/[resourceId]", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequireTeacherResource.mockResolvedValue({ id: resourceId });
+    mockRequireTeacherResource.mockResolvedValue({
+      id: resourceId,
+      title: "Resource",
+      ai_generated: false,
+      raw_content: { text: "hello" },
+    });
     mockDeleteResource.mockResolvedValue(undefined);
+    mockUpdateTextResource.mockResolvedValue({
+      resourceId,
+      chunkCount: 1,
+      title: "Updated",
+    });
     mockCreateSignedUrl.mockResolvedValue({
       data: { signedUrl: "https://storage.example/original.pdf" },
       error: null,
     });
+  });
+
+  it("returns JSON resource detail with preview text", async () => {
+    const response = await GET(
+      new Request(`http://localhost/api/resources/${resourceId}`),
+      { params: Promise.resolve({ resourceId }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.resource.id).toBe(resourceId);
+    expect(payload.previewText).toBe("hello");
+    expect(payload.viewUrl).toBeNull();
+  });
+
+  it("uses same-origin inline download URL for PDF originals", async () => {
+    mockRequireTeacherResource.mockResolvedValue({
+      id: resourceId,
+      title: "Scan",
+      ai_generated: false,
+      raw_content: {
+        mimeType: "application/pdf",
+        storagePath: "class/abc/file.pdf",
+        text: "extracted",
+      },
+    });
+    mockCreateSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://storage.example/original.pdf" },
+      error: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(null, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Length": "2048",
+          },
+        })
+      )
+    );
+
+    const response = await GET(
+      new Request(`http://localhost/api/resources/${resourceId}`),
+      { params: Promise.resolve({ resourceId }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.viewUrl).toBe(
+      `/api/resources/${resourceId}/download?inline=1`
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("omits viewUrl when the stored PDF is empty", async () => {
+    mockRequireTeacherResource.mockResolvedValue({
+      id: resourceId,
+      title: "Scan",
+      ai_generated: false,
+      raw_content: {
+        mimeType: "application/pdf",
+        storagePath: "class/abc/file.pdf",
+        text: "extracted",
+      },
+    });
+    mockCreateSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://storage.example/empty.pdf" },
+      error: null,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(null, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Length": "0",
+          },
+        })
+      )
+    );
+
+    const response = await GET(
+      new Request(`http://localhost/api/resources/${resourceId}`),
+      { params: Promise.resolve({ resourceId }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.viewUrl).toBeNull();
+    expect(payload.previewText).toBe("extracted");
+    vi.unstubAllGlobals();
+  });
+
+  it("patches title and text for editable resources", async () => {
+    const response = await PATCH(
+      new Request(`http://localhost/api/resources/${resourceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Updated", text: "New body" }),
+      }),
+      { params: Promise.resolve({ resourceId }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.title).toBe("Updated");
+    expect(mockUpdateTextResource).toHaveBeenCalledWith(
+      expect.anything(),
+      resourceId,
+      { title: "Updated", text: "New body" }
+    );
   });
 
   it("deletes an owned resource", async () => {
@@ -67,66 +193,5 @@ describe("/api/resources/[resourceId]", () => {
 
     expect(response.status).toBe(403);
     expect(payload.error).toBe("Resource not found");
-  });
-
-  it("redirects to the original file when storagePath exists", async () => {
-    mockRequireTeacherResource.mockResolvedValue({
-      id: resourceId,
-      title: "Uploaded worksheet",
-      raw_content: {
-        storagePath: "class/abc/file.pdf",
-        text: "extracted flat text that must not become the download",
-      },
-    });
-
-    const response = await GET(
-      new Request(`http://localhost/api/resources/${resourceId}`),
-      { params: Promise.resolve({ resourceId }) }
-    );
-
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(
-      "https://storage.example/original.pdf"
-    );
-    expect(mockCreateSignedUrl).toHaveBeenCalledWith("class/abc/file.pdf", 3600);
-  });
-
-  it("generates a PDF only when there is text and no original file", async () => {
-    mockRequireTeacherResource.mockResolvedValue({
-      id: resourceId,
-      title: "Fractions worksheet",
-      raw_content: { text: "# Question 1\n\nSolve 3/4 + 1/2." },
-    });
-
-    const response = await GET(
-      new Request(`http://localhost/api/resources/${resourceId}`),
-      { params: Promise.resolve({ resourceId }) }
-    );
-    const bytes = new Uint8Array(await response.arrayBuffer());
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("application/pdf");
-    expect(response.headers.get("content-disposition")).toContain(
-      "Fractions-worksheet.pdf"
-    );
-    expect(String.fromCharCode(...bytes.slice(0, 4))).toBe("%PDF");
-    expect(mockCreateSignedUrl).not.toHaveBeenCalled();
-  });
-
-  it("returns 404 when a resource has no text and no original file", async () => {
-    mockRequireTeacherResource.mockResolvedValue({
-      id: resourceId,
-      title: "Empty",
-      raw_content: {},
-    });
-
-    const response = await GET(
-      new Request(`http://localhost/api/resources/${resourceId}`),
-      { params: Promise.resolve({ resourceId }) }
-    );
-    const payload = await response.json();
-
-    expect(response.status).toBe(404);
-    expect(payload.error).toBe("No downloadable content for this resource");
   });
 });

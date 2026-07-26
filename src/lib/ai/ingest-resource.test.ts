@@ -45,7 +45,7 @@ describe("ingestResource", () => {
     expect(result.chunkCount).toBeGreaterThan(0);
     expect(storageUpload).toHaveBeenCalledWith(
       expect.stringMatching(/^class-1\/.*\.pdf$/),
-      expect.any(Uint8Array),
+      expect.any(Buffer),
       expect.objectContaining({ contentType: "application/pdf" })
     );
     expect(resourceInsert).toHaveBeenCalledWith(

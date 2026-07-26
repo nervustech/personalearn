@@ -41,9 +41,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background md:flex">
+    <div className="min-h-screen bg-background md:flex print:block print:bg-white">
       {/* Desktop left rail — fixed width; only the center nav cube expands */}
-      <aside className="sticky top-0 z-40 hidden h-screen w-[4.5rem] shrink-0 flex-col items-center py-3 md:flex">
+      <aside className="sticky top-0 z-40 hidden h-screen w-[4.5rem] shrink-0 flex-col items-center py-3 md:flex print:hidden">
         <Link
           href="/dashboard"
           title="PersonaLearn"
@@ -131,9 +131,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-20 md:pb-0">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-20 md:pb-0 print:min-h-0 print:pb-0">
         {/* Mobile top strip: class selector only */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden print:hidden">
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-2 font-display text-sm font-semibold"
@@ -146,13 +146,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <ClassSelector />
         </header>
 
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8">
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8 print:max-w-none print:px-0 print:py-0">
           {children}
         </main>
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 bg-background/90 px-2 pb-[env(safe-area-inset-bottom)] pt-1 shadow-[0_-8px_24px_rgb(0_0_0_/0.06)] backdrop-blur-xl md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 bg-background/90 px-2 pb-[env(safe-area-inset-bottom)] pt-1 shadow-[0_-8px_24px_rgb(0_0_0_/0.06)] backdrop-blur-xl md:hidden print:hidden">
         <div className="mx-auto flex max-w-lg items-stretch justify-around">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);

@@ -62,7 +62,8 @@ export function unsupportedTypeMessage() {
 }
 
 async function extractTextFromPdf(bytes: Uint8Array): Promise<string> {
-  const { text } = await extractPdfText(bytes, { mergePages: true });
+  // unpdf may detach the underlying ArrayBuffer; always pass a copy.
+  const { text } = await extractPdfText(bytes.slice(), { mergePages: true });
   return text.trim();
 }
 

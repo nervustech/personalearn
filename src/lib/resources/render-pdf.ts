@@ -60,7 +60,7 @@ export function toWinAnsi(text: string): string {
 
 /** Flatten common LaTeX / math delimiters into readable plain text. */
 export function flattenMath(text: string): string {
-  let out = text
+  const out = text
     .replace(/\$\$([\s\S]+?)\$\$/g, (_, expr: string) => ` ${flattenLatexExpr(expr)} `)
     .replace(/\$([^$\n]+?)\$/g, (_, expr: string) => flattenLatexExpr(expr))
     .replace(/\\\(([\s\S]+?)\\\)/g, (_, expr: string) => flattenLatexExpr(expr))

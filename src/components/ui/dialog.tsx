@@ -40,7 +40,7 @@ export function Dialog({
       className={cn(
         // Important: do not set `display:flex` unconditionally — it overrides the
         // UA rule `dialog:not([open]) { display: none }` and makes closed modals visible.
-        "fixed inset-0 z-50 m-auto h-fit max-h-[min(92vh,54rem)] w-[calc(100%-2rem)] max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-lg open:flex backdrop:bg-black/60",
+        "fixed inset-0 z-50 m-auto h-fit max-h-[min(92vh,54rem)] w-[calc(100%-2rem)] max-w-md flex-col overflow-hidden rounded-2xl bg-card/95 p-0 text-card-foreground shadow-lg backdrop-blur-xl open:flex backdrop:bg-black/60",
         className
       )}
       onClose={() => onOpenChange(false)}
@@ -50,7 +50,7 @@ export function Dialog({
         if (event.target === dialogRef.current) onOpenChange(false);
       }}
     >
-      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-6 py-4">
+      <div className="flex shrink-0 items-start justify-between gap-3 px-6 py-4">
         <div className="min-w-0">
           <h2 className="font-display text-lg font-semibold">{title}</h2>
           {description ? (

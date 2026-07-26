@@ -17,6 +17,13 @@ const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
 type ThemeToggleProps = {
   className?: string;
   variant?: "default" | "hero";
+  /** Extra classes for the theme options panel. */
+  menuClassName?: string;
+  /**
+   * When set, renders a full-width labeled row (e.g. "Appearance") and
+   * anchors the theme menu to that row so it stacks flush with a parent popover.
+   */
+  label?: string;
 };
 
 function ThemeTriggerIcon({ theme }: { theme: Theme | undefined }) {
@@ -25,13 +32,18 @@ function ThemeTriggerIcon({ theme }: { theme: Theme | undefined }) {
   return <Sun className="h-4 w-4" />;
 }
 
-export function ThemeToggle({ className, variant = "default" }: ThemeToggleProps) {
+export function ThemeToggle({
+  className,
+  variant = "default",
+  menuClassName,
+  label,
+}: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
-  const triggerClassName = cn(
+  const iconClassName = cn(
     "inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors",
     variant === "hero"
       ? "border border-white/20 bg-white/10 text-white hover:bg-white/20"
@@ -40,8 +52,18 @@ export function ThemeToggle({ className, variant = "default" }: ThemeToggleProps
   );
 
   if (!mounted) {
+    if (label) {
+      return (
+        <div className="flex w-full items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 text-sm">
+          <span className="text-muted-foreground">{label}</span>
+          <span className={iconClassName}>
+            <Monitor className="h-4 w-4 opacity-0" />
+          </span>
+        </div>
+      );
+    }
     return (
-      <button type="button" aria-label="Theme" className={triggerClassName}>
+      <button type="button" aria-label="Theme" className={iconClassName}>
         <Monitor className="h-4 w-4 opacity-0" />
       </button>
     );
@@ -49,37 +71,70 @@ export function ThemeToggle({ className, variant = "default" }: ThemeToggleProps
 
   const activeTheme = (theme ?? "system") as Theme;
 
+  const options = themeOptions.map(({ value, label: optionLabel, icon: Icon }) => {
+    const selected = activeTheme === value;
+    return (
+      <DropdownMenuItem
+        key={value}
+        onClick={() => setTheme(value)}
+        className={cn(
+          "gap-1.5 px-2 py-1.5",
+          selected && "bg-primary/10 text-primary"
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="flex-1">{optionLabel}</span>
+        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+          {selected ? <Check className="h-4 w-4" /> : null}
+        </span>
+      </DropdownMenuItem>
+    );
+  });
+
+  if (label) {
+    return (
+      <DropdownMenu
+        align="start"
+        side="top"
+        rootClassName="w-full"
+        contentClassName={cn("left-0 right-0 w-auto", menuClassName)}
+        trigger={
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label={`${label}: choose theme`}
+            aria-haspopup="menu"
+            className="flex w-full cursor-pointer items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 text-sm"
+          >
+            <span className="text-muted-foreground">{label}</span>
+            <span className={iconClassName} aria-hidden>
+              <ThemeTriggerIcon theme={activeTheme} />
+            </span>
+          </div>
+        }
+      >
+        {options}
+      </DropdownMenu>
+    );
+  }
+
   return (
     <DropdownMenu
       align="end"
+      side="top"
+      contentClassName={menuClassName}
       trigger={
         <button
           type="button"
           aria-label="Choose theme"
           aria-haspopup="menu"
-          className={triggerClassName}
+          className={iconClassName}
         >
           <ThemeTriggerIcon theme={activeTheme} />
         </button>
       }
     >
-      {themeOptions.map(({ value, label, icon: Icon }) => {
-        const selected = activeTheme === value;
-        return (
-          <DropdownMenuItem
-            key={value}
-            onClick={() => setTheme(value)}
-            className={cn(
-              "gap-2",
-              selected && "bg-primary/10 text-primary"
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="flex-1">{label}</span>
-            {selected ? <Check className="h-4 w-4 shrink-0" /> : null}
-          </DropdownMenuItem>
-        );
-      })}
+      {options}
     </DropdownMenu>
   );
 }

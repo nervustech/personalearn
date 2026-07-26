@@ -44,7 +44,7 @@ export function WelcomeTour() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl bg-card/95 p-6 shadow-xl backdrop-blur-xl">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium text-primary">

@@ -5,8 +5,9 @@ import { LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useActiveClassStore } from "@/lib/store/active-class";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
-export function SignOutButton() {
+export function SignOutButton({ className }: { className?: string }) {
   const router = useRouter();
   const clearActiveClass = useActiveClassStore((state) => state.clearActiveClass);
 
@@ -19,8 +20,8 @@ export function SignOutButton() {
   }
 
   return (
-    <DropdownMenuItem onClick={handleSignOut}>
-      <LogOut className="mr-2 h-4 w-4" />
+    <DropdownMenuItem onClick={handleSignOut} className={cn("gap-1.5", className)}>
+      <LogOut className="h-4 w-4 shrink-0" />
       Sign out
     </DropdownMenuItem>
   );

@@ -26,10 +26,13 @@ import {
 import type { QuestionEvaluation } from "@/types/database";
 import { cn } from "@/lib/utils";
 import type { UseMutationResult } from "@tanstack/react-query";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 
 type EvalReviewWorkspaceProps = {
   classId: string;
   batchId: string;
+  /** Display name for breadcrumb root segment. */
+  classLabel?: string;
   classSubject?: string;
 };
 
@@ -490,7 +493,7 @@ function ScriptWorkspace({
             markerStatus={question.status}
             questionLabel={question.question_number}
           />
-          <aside className="rounded-2xl border border-border bg-card/80 p-3 lg:sticky lg:top-3">
+          <aside className="rounded-2xl bg-card/90 p-3 shadow-sm backdrop-blur-sm lg:sticky lg:top-3">
             <QuestionAnalysisPanel
               script={script}
               question={question}
@@ -547,6 +550,7 @@ function ScriptWorkspace({
 export function EvalReviewWorkspace({
   classId,
   batchId,
+  classLabel = "Class",
   classSubject = "General",
 }: EvalReviewWorkspaceProps) {
   const { data, isLoading, error } = useEvaluationScripts(batchId);
@@ -557,6 +561,7 @@ export function EvalReviewWorkspace({
     const assessmentId = data?.batch?.assessment_id;
     if (!assessmentId || !assessments?.length) {
       return {
+        title: "Evaluation",
         strand: classSubject,
         subStrand: null as string | null,
       };
@@ -565,6 +570,7 @@ export function EvalReviewWorkspace({
     const strand =
       assessment?.linked_strand?.trim() || classSubject || "General";
     return {
+      title: assessment?.title?.trim() || "Evaluation",
       strand,
       subStrand: assessment?.linked_sub_strand ?? null,
     };
@@ -607,9 +613,32 @@ export function EvalReviewWorkspace({
   const selectedScript =
     reviewScripts.find((s) => s.id === selectedScriptId) ?? null;
 
+  const breadcrumbItems = [
+    { label: classLabel, href: `/classes/${classId}` },
+    {
+      label: assessmentMeta.title,
+      href: selectedScript
+        ? `/classes/${classId}/evaluations/${batchId}`
+        : undefined,
+    },
+    ...(selectedScript
+      ? [
+          {
+            label: selectedScript.student_name?.trim() || "Student",
+          },
+        ]
+      : []),
+  ];
+
   if (isLoading) {
     return (
       <div className="space-y-3">
+        <Breadcrumbs
+          items={[
+            { label: classLabel, href: `/classes/${classId}` },
+            { label: "Evaluation" },
+          ]}
+        />
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -618,40 +647,58 @@ export function EvalReviewWorkspace({
 
   if (error) {
     return (
-      <p className="text-sm text-destructive">
-        {error instanceof Error ? error.message : "Failed to load review queue"}
-      </p>
+      <div className="space-y-3">
+        <Breadcrumbs
+          items={[
+            { label: classLabel, href: `/classes/${classId}` },
+            { label: "Evaluation" },
+          ]}
+        />
+        <p className="text-sm text-destructive">
+          {error instanceof Error ? error.message : "Failed to load review queue"}
+        </p>
+      </div>
     );
   }
 
   if (reviewScripts.length === 0) {
     return (
-      <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
-        <p className="text-sm font-medium">
-          {draftingInProgress
-            ? "Drafting marks…"
-            : awaitingIdentity
-              ? "Waiting on identity"
-              : "No scripts to review yet"}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {draftingInProgress
-            ? "Cleared scripts are drafting in the background — this page will fill as they finish."
-            : awaitingIdentity
-              ? "Confirm amber identities below, then drafting starts automatically."
-              : "Upload scans from the class page to begin."}
-        </p>
-      </section>
+      <div className="space-y-3">
+        <Breadcrumbs
+          items={[
+            { label: classLabel, href: `/classes/${classId}` },
+            { label: assessmentMeta.title },
+          ]}
+        />
+        <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+          <p className="text-sm font-medium">
+            {draftingInProgress
+              ? "Drafting marks…"
+              : awaitingIdentity
+                ? "Waiting on identity"
+                : "No scripts to review yet"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {draftingInProgress
+              ? "Cleared scripts are drafting in the background — this page will fill as they finish."
+              : awaitingIdentity
+                ? "Confirm amber identities below, then drafting starts automatically."
+                : "Upload scans from the class page to begin."}
+          </p>
+        </section>
+      </div>
     );
   }
 
   return (
-    <section className="grid gap-3 lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start">
+    <div className="space-y-3">
+      <Breadcrumbs items={breadcrumbItems} />
+      <section className="grid gap-3 lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start">
       <nav
         aria-label="Scripts"
-        className="max-h-48 overflow-y-auto rounded-xl border border-border bg-card lg:sticky lg:top-3 lg:max-h-[calc(100vh-5.5rem)]"
+        className="max-h-48 overflow-y-auto rounded-xl bg-card/95 shadow-sm backdrop-blur-sm lg:sticky lg:top-3 lg:max-h-[calc(100vh-5.5rem)]"
       >
-        <div className="sticky top-0 z-10 border-b border-border bg-card px-2.5 py-1.5">
+        <div className="sticky top-0 z-10 bg-card/95 px-2.5 py-1.5 backdrop-blur-sm">
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Students · {reviewScripts.length}
           </p>
@@ -699,5 +746,6 @@ export function EvalReviewWorkspace({
         />
       ) : null}
     </section>
+    </div>
   );
 }

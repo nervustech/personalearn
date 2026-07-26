@@ -109,7 +109,12 @@ export async function POST(request: Request) {
       ]);
     }
 
-    const tools = createAgentTools({ supabase, classId, classContext });
+    const tools = createAgentTools({
+      supabase,
+      classId,
+      teacherId: user.id,
+      classContext,
+    });
 
     const result = streamText({
       model: getChatModel(),

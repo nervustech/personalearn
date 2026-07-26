@@ -26,6 +26,7 @@ function isActivePath(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const hideMobileTopHeader = pathname.startsWith("/ai-hub");
   const [railExpanded, setRailExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -132,19 +133,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-20 md:pb-0 print:min-h-0 print:pb-0">
-        {/* Mobile top strip: class selector only */}
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden print:hidden">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 font-display text-sm font-semibold"
-          >
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <BrandMark className="h-4 w-4" />
-            </span>
-            PersonaLearn
-          </Link>
-          <ClassSelector />
-        </header>
+        {/* Mobile top strip — hidden on AI Hub for full-height chat */}
+        {!hideMobileTopHeader ? (
+          <header className="sticky top-0 z-30 flex items-center justify-between gap-2 bg-background/80 px-4 py-3 backdrop-blur-xl md:hidden print:hidden">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 font-display text-sm font-semibold"
+            >
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <BrandMark className="h-4 w-4" />
+              </span>
+              PersonaLearn
+            </Link>
+            <ClassSelector />
+          </header>
+        ) : null}
 
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 md:py-8 print:max-w-none print:px-0 print:py-0">
           {children}

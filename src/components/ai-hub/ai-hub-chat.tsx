@@ -3,19 +3,46 @@
 import { useChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { ArrowUp, RotateCcw, Sparkles, Square } from "lucide-react";
+import {
+  ArrowUp,
+  ChevronDown,
+  MessagesSquare,
+  Paperclip,
+  Plus,
+  RotateCcw,
+  Square,
+  SquarePen,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ChatMessage } from "@/components/ai-hub/chat-message";
-import { ConversationSidebar } from "@/components/ai-hub/conversation-sidebar";
+import {
+  ConversationSidebar,
+  readSidebarCollapsedPreference,
+  writeSidebarCollapsedPreference,
+} from "@/components/ai-hub/conversation-sidebar";
 import { ThinkingBubble } from "@/components/ai-hub/thinking-bubble";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { conversationMessagesQueryKey } from "@/lib/hooks/use-conversation-messages";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { ConversationRow } from "@/lib/ai-hub/conversations";
+import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
+import {
+  chatAttachmentAccept,
+  validateChatAttachments,
+  type PendingAttachment,
+} from "@/lib/ai-hub/chat-attachments";
+import {
+  CONVERSATION_MESSAGES_STALE_TIME,
+  conversationMessagesQueryKey,
+  fetchConversationMessages,
+} from "@/lib/hooks/use-conversation-messages";
 import {
   conversationsQueryKey,
   useConversations,
 } from "@/lib/hooks/use-conversations";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { resourcesQueryKey } from "@/lib/hooks/use-resources";
 import { assessmentsQueryKey } from "@/lib/hooks/use-evaluation";
 import { useActiveClassStore } from "@/lib/store/active-class";
@@ -26,6 +53,17 @@ const SUGGESTED_PROMPTS = [
   "Draft a short fractions quiz for this class",
   "Suggest a practical CBC activity",
 ];
+
+/** Distance from bottom (px) under which the scroll-to-bottom control stays hidden. */
+const SCROLL_NEAR_BOTTOM_PX = 100;
+
+function isMessagesQueryFresh(
+  dataUpdatedAt: number | undefined,
+  isInvalidated: boolean | undefined
+): boolean {
+  if (!dataUpdatedAt || isInvalidated) return false;
+  return Date.now() - dataUpdatedAt < CONVERSATION_MESSAGES_STALE_TIME;
+}
 
 export function AiHubChat() {
   const activeClass = useActiveClassStore((state) => state.activeClass);
@@ -46,13 +84,43 @@ export function AiHubChat() {
   >(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    PendingAttachment[]
+  >([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const isMobile = useIsMobile();
   const conversationIdRef = useRef<string | null>(null);
   const setSelectedConversationIdRef = useRef(setSelectedConversationId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef(draft);
   const prevStatusRef = useRef<string>("ready");
 
   setSelectedConversationIdRef.current = setSelectedConversationId;
+  draftRef.current = draft;
+
+  useEffect(() => {
+    const stored = readSidebarCollapsedPreference();
+    if (stored === null) {
+      // No preference yet: collapsed on mobile, expanded on desktop.
+      setSidebarCollapsed(window.matchMedia("(max-width: 767px)").matches);
+      return;
+    }
+    setSidebarCollapsed(stored);
+  }, []);
+
+  function handleSidebarCollapsedChange(collapsed: boolean) {
+    setSidebarCollapsed(collapsed);
+    writeSidebarCollapsedPreference(collapsed);
+  }
+
+  function collapseSidebarOnMobile() {
+    if (!isMobile || sidebarCollapsed) return;
+    handleSidebarCollapsedChange(true);
+  }
 
   const {
     data: conversations = [],
@@ -61,12 +129,61 @@ export function AiHubChat() {
 
   const chatInstanceId = activeClass?.id ?? "none";
 
+  const activeClassIdRef = useRef(activeClass?.id);
+  activeClassIdRef.current = activeClass?.id;
+
+  function patchConversationList(
+    conversationId: string,
+    options?: { title?: string; createIfMissing?: boolean }
+  ) {
+    const classId = activeClassIdRef.current;
+    if (!classId) return;
+
+    const now = new Date().toISOString();
+    queryClient.setQueryData<ConversationRow[]>(
+      conversationsQueryKey(classId),
+      (previous) => {
+        const list = previous ?? [];
+        const existing = list.find((row) => row.id === conversationId);
+
+        if (existing) {
+          const updated: ConversationRow = {
+            ...existing,
+            updated_at: now,
+            ...(options?.title ? { title: options.title } : {}),
+          };
+          return [
+            updated,
+            ...list.filter((row) => row.id !== conversationId),
+          ];
+        }
+
+        if (!options?.createIfMissing) {
+          return list;
+        }
+
+        const created: ConversationRow = {
+          id: conversationId,
+          class_id: classId,
+          teacher_id: "",
+          title: options.title ?? "New conversation",
+          created_at: now,
+          updated_at: now,
+        };
+        return [created, ...list];
+      }
+    );
+  }
+
+  const patchConversationListRef = useRef(patchConversationList);
+  patchConversationListRef.current = patchConversationList;
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/ai-hub/chat",
         body: () => ({
-          classId: activeClass?.id,
+          classId: activeClassIdRef.current,
           conversationId: conversationIdRef.current,
         }),
         fetch: async (input, init) => {
@@ -76,12 +193,15 @@ export function AiHubChat() {
           if (
             conversationId &&
             conversationId !== conversationIdRef.current &&
-            activeClass?.id
+            activeClassIdRef.current
           ) {
             conversationIdRef.current = conversationId;
             setSelectedConversationIdRef.current(conversationId);
-            void queryClient.invalidateQueries({
-              queryKey: conversationsQueryKey(activeClass.id),
+            patchConversationListRef.current(conversationId, {
+              createIfMissing: true,
+              title: generateConversationTitle(
+                draftRef.current || "New conversation"
+              ),
             });
           }
 
@@ -110,12 +230,10 @@ export function AiHubChat() {
           conversationMessagesQueryKey(conversationIdRef.current),
           finishedMessages
         );
+        patchConversationList(conversationIdRef.current);
       }
 
       if (activeClass?.id) {
-        void queryClient.invalidateQueries({
-          queryKey: conversationsQueryKey(activeClass.id),
-        });
         // Agent save_resource writes to class resources — keep the class page in sync.
         void queryClient.invalidateQueries({
           queryKey: resourcesQueryKey(activeClass.id),
@@ -137,6 +255,7 @@ export function AiHubChat() {
     conversationIdRef.current = null;
     setMessages([]);
     setDraft("");
+    setPendingAttachments([]);
     clearError();
     setActionError(null);
     setEditingMessageId(null);
@@ -178,38 +297,85 @@ export function AiHubChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  function updateScrollToBottomVisibility() {
+    const el = messagesContainerRef.current;
+    if (!el) {
+      setShowScrollToBottom(false);
+      return;
+    }
+
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    const hasOverflow = el.scrollHeight > el.clientHeight + 1;
+    setShowScrollToBottom(
+      hasOverflow && distanceFromBottom > SCROLL_NEAR_BOTTOM_PX
+    );
+  }
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      updateScrollToBottomVisibility();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages.length, loadingConversation, isMobile]);
+
+  function scrollMessagesToBottom() {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
+
   async function handleSelectConversation(conversationId: string) {
     if (!activeClass) return;
 
-    setLoadingConversation(true);
     clearError();
     setActionError(null);
+    setEditingMessageId(null);
+    setPendingAttachments([]);
+
+    const queryKey = conversationMessagesQueryKey(conversationId);
+    const cached = queryClient.getQueryData<UIMessage[]>(queryKey);
+    const queryState = queryClient.getQueryState(queryKey);
+    const fresh = isMessagesQueryFresh(
+      queryState?.dataUpdatedAt,
+      queryState?.isInvalidated
+    );
+
+    setSelectedConversationId(conversationId);
+    conversationIdRef.current = conversationId;
+
+    if (cached) {
+      setMessages(cached);
+    }
+
+    if (cached && fresh) {
+      return;
+    }
+
+    if (!cached) {
+      setLoadingConversation(true);
+      setMessages([]);
+    }
 
     try {
-      const response = await fetch(`/api/ai-hub/conversations/${conversationId}`);
-      const payload = (await response.json()) as {
-        messages?: UIMessage[];
-        error?: string;
-      };
+      const loaded = await queryClient.fetchQuery({
+        queryKey,
+        queryFn: () => fetchConversationMessages(conversationId),
+        staleTime: CONVERSATION_MESSAGES_STALE_TIME,
+      });
 
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to load conversation");
+      if (conversationIdRef.current === conversationId) {
+        setMessages(loaded);
       }
-
-      setSelectedConversationId(conversationId);
-      conversationIdRef.current = conversationId;
-      setMessages(payload.messages ?? []);
-      queryClient.setQueryData(
-        conversationMessagesQueryKey(conversationId),
-        payload.messages ?? []
-      );
     } catch (loadError) {
-      setActionError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Failed to load conversation"
-      );
-      setMessages([]);
+      if (conversationIdRef.current === conversationId) {
+        setActionError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Failed to load conversation"
+        );
+        if (!cached) {
+          setMessages([]);
+        }
+      }
     } finally {
       setLoadingConversation(false);
     }
@@ -220,9 +386,11 @@ export function AiHubChat() {
     conversationIdRef.current = null;
     setMessages([]);
     setDraft("");
+    setPendingAttachments([]);
     clearError();
     setActionError(null);
     setEditingMessageId(null);
+    collapseSidebarOnMobile();
   }
 
   function handleEditMessage(messageId: string, text: string) {
@@ -232,6 +400,7 @@ export function AiHubChat() {
 
     setEditingMessageId(messageId);
     setDraft(text);
+    setPendingAttachments([]);
     clearError();
     setActionError(null);
     requestAnimationFrame(() => {
@@ -252,15 +421,55 @@ export function AiHubChat() {
     });
   }
 
+  function handleFilesSelected(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+
+    const { accepted, error: validationError } = validateChatAttachments(
+      Array.from(fileList),
+      pendingAttachments.length
+    );
+
+    if (validationError) {
+      setActionError(validationError);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setActionError(null);
+    setPendingAttachments((current) => [
+      ...current,
+      ...accepted.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        file,
+      })),
+    ]);
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removePendingAttachment(id: string) {
+    setPendingAttachments((current) =>
+      current.filter((attachment) => attachment.id !== id)
+    );
+  }
+
   async function submitMessage(text: string) {
-    if (!text.trim() || !activeClass || status === "streaming" || status === "submitted") {
+    const trimmed = text.trim();
+    const files = pendingAttachments.map((attachment) => attachment.file);
+    const hasFiles = files.length > 0;
+
+    if (
+      (!trimmed && !hasFiles) ||
+      !activeClass ||
+      status === "streaming" ||
+      status === "submitted"
+    ) {
       return;
     }
 
     clearError();
     setActionError(null);
 
-    const trimmed = text.trim();
     const editingId = editingMessageId;
 
     try {
@@ -269,6 +478,7 @@ export function AiHubChat() {
 
         setEditingMessageId(null);
         setDraft("");
+        setPendingAttachments([]);
 
         await sendMessage(
           { text: trimmed, messageId: editingId },
@@ -284,8 +494,18 @@ export function AiHubChat() {
       }
 
       setDraft("");
+      setPendingAttachments([]);
+
+      const dataTransfer = new DataTransfer();
+      for (const file of files) {
+        dataTransfer.items.add(file);
+      }
+
       await sendMessage(
-        { text: trimmed },
+        {
+          text: trimmed || "Please review the attached file(s).",
+          ...(hasFiles ? { files: dataTransfer.files } : {}),
+        },
         {
           body: {
             classId: activeClass.id,
@@ -293,6 +513,10 @@ export function AiHubChat() {
           },
         }
       );
+
+      if (conversationIdRef.current) {
+        patchConversationList(conversationIdRef.current);
+      }
     } catch (submitError) {
       setActionError(
         submitError instanceof Error
@@ -326,8 +550,13 @@ export function AiHubChat() {
       }
 
       if (activeClass?.id) {
-        await queryClient.invalidateQueries({
-          queryKey: conversationsQueryKey(activeClass.id),
+        queryClient.setQueryData<ConversationRow[]>(
+          conversationsQueryKey(activeClass.id),
+          (previous) =>
+            (previous ?? []).filter((row) => row.id !== conversationId)
+        );
+        queryClient.removeQueries({
+          queryKey: conversationMessagesQueryKey(conversationId),
         });
       }
     } catch (deleteError) {
@@ -344,6 +573,8 @@ export function AiHubChat() {
 
   const isBusy = status === "streaming" || status === "submitted" || loadingConversation;
   const isGenerating = status === "streaming" || status === "submitted";
+  const canSend =
+    (Boolean(draft.trim()) || pendingAttachments.length > 0) && !isBusy;
 
   const visibleMessages = useMemo(() => {
     if (!isGenerating) {
@@ -368,85 +599,158 @@ export function AiHubChat() {
     );
   }
 
-  const classLabel = `${activeClass.name} · G${activeClass.grade_level} ${activeClass.subject}`;
-
   return (
     <>
-      <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)]">
-        <ConversationSidebar
-          conversations={conversations}
-          selectedConversationId={selectedConversationId}
-          isLoading={conversationsLoading}
-          deletingConversationId={deletingConversationId}
-          onSelect={(conversationId) => {
-            void handleSelectConversation(conversationId);
-          }}
-          onNewConversation={handleNewConversation}
-          onDelete={setPendingDeleteId}
-        />
+      <div
+        className={cn(
+          "relative h-full min-h-0",
+          isMobile
+            ? "flex flex-col"
+            : cn(
+                "grid gap-3 sm:gap-4",
+                sidebarCollapsed
+                  ? "grid-cols-[auto_minmax(0,1fr)]"
+                  : "grid-cols-[minmax(11rem,17rem)_minmax(0,1fr)]"
+              )
+        )}
+      >
+        {!isMobile ? (
+          <ConversationSidebar
+            conversations={conversations}
+            selectedConversationId={selectedConversationId}
+            isLoading={conversationsLoading}
+            deletingConversationId={deletingConversationId}
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={handleSidebarCollapsedChange}
+            onSelect={(conversationId) => {
+              void handleSelectConversation(conversationId);
+            }}
+            onNewConversation={handleNewConversation}
+            onDelete={setPendingDeleteId}
+          />
+        ) : null}
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-card/95 shadow-sm backdrop-blur-sm">
-          <header className="flex shrink-0 items-center justify-between gap-3 bg-gradient-to-r from-primary/5 via-transparent to-transparent px-4 py-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 text-primary shadow-xs">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">Class assistant</p>
-                <p className="truncate text-xs text-muted-foreground">{classLabel}</p>
-              </div>
-            </div>
-            <div className="hidden items-center gap-1 rounded-full border border-border/80 bg-background/80 px-2.5 py-1 text-xs text-muted-foreground sm:flex">
-              <Sparkles className="h-3 w-3 text-primary" />
-              Scoped to active class
-            </div>
-          </header>
+        <section className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+          {isMobile ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute left-1 top-2 z-10 h-9 w-9 rounded-full bg-background/80 backdrop-blur-sm"
+                onClick={() => handleSidebarCollapsedChange(false)}
+                title="Conversations"
+                aria-label="Open conversations"
+              >
+                <MessagesSquare className="h-5 w-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-2 z-10 h-9 w-9 rounded-full bg-background/80 backdrop-blur-sm"
+                onClick={handleNewConversation}
+                title="New conversation"
+                aria-label="New conversation"
+              >
+                <SquarePen className="h-5 w-5" />
+              </Button>
+            </>
+          ) : null}
 
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              {messages.length === 0 ? (
-                <div className="flex h-full flex-col justify-center gap-4 py-6">
-                  <div className="mx-auto max-w-md text-center">
-                    <p className="text-base font-medium text-foreground">
-                      How can I help with {activeClass.name}?
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      I already know your class is Grade {activeClass.grade_level}{" "}
-                      {activeClass.subject}, Term {activeClass.term}. Ask about
-                      planning, resources, or feedback.
-                    </p>
+            <div className="relative min-h-0 flex-1">
+              <div
+                ref={messagesContainerRef}
+                onScroll={updateScrollToBottomVisibility}
+                className={cn(
+                  "h-full overflow-y-auto px-1 py-4 sm:px-0",
+                  isMobile && "pt-12"
+                )}
+              >
+                {loadingConversation && messages.length === 0 ? (
+                  <div
+                    className="space-y-5 py-2"
+                    aria-busy="true"
+                    aria-label="Loading conversation"
+                  >
+                    <div className="flex gap-3">
+                      <div className="flex-1 space-y-2 pt-1">
+                        <Skeleton className="h-3 w-[88%]" />
+                        <Skeleton className="h-3 w-[72%]" />
+                        <Skeleton className="h-3 w-[40%]" />
+                      </div>
+                    </div>
+                    <div className="flex flex-row-reverse gap-3">
+                      <Skeleton className="h-10 w-[min(70%,20rem)] rounded-2xl" />
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="flex-1 space-y-2 pt-1">
+                        <Skeleton className="h-3 w-[80%]" />
+                        <Skeleton className="h-3 w-[65%]" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="mx-auto flex max-w-lg flex-wrap justify-center gap-2">
-                    {SUGGESTED_PROMPTS.map((prompt) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => void submitMessage(prompt)}
-                        className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground disabled:opacity-50"
-                      >
-                        {prompt}
-                      </button>
+                ) : messages.length === 0 ? (
+                  <div className="flex h-full flex-col justify-center gap-4 py-6">
+                    <div className="mx-auto max-w-md text-center">
+                      <p className="text-base font-medium text-foreground">
+                        How can I help with {activeClass.name}?
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        I already know your class is Grade {activeClass.grade_level}{" "}
+                        {activeClass.subject}, Term {activeClass.term}. Ask about
+                        planning, resources, or feedback.
+                      </p>
+                    </div>
+                    <div className="mx-auto flex max-w-lg flex-wrap justify-center gap-2">
+                      {SUGGESTED_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void submitMessage(prompt)}
+                          className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground disabled:opacity-50"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {visibleMessages.map((message) => (
+                      <ChatMessage
+                        key={message.id}
+                        message={message}
+                        canEdit={!isBusy && message.role === "user"}
+                        onEdit={handleEditMessage}
+                      />
                     ))}
+                    {isGenerating ? <ThinkingBubble /> : null}
+                    <div ref={messagesEndRef} />
                   </div>
+                )}
+              </div>
+
+              {showScrollToBottom ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    onClick={scrollMessagesToBottom}
+                    className="pointer-events-auto h-9 w-9 rounded-full border border-border/80 bg-background/90 shadow-md backdrop-blur-sm hover:bg-background"
+                    title="Scroll to bottom"
+                    aria-label="Scroll to bottom"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {visibleMessages.map((message) => (
-                    <ChatMessage
-                      key={message.id}
-                      message={message}
-                      canEdit={!isBusy && message.role === "user"}
-                      onEdit={handleEditMessage}
-                    />
-                  ))}
-                  {isGenerating ? <ThinkingBubble /> : null}
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
+              ) : null}
             </div>
 
-            <div className="shrink-0 bg-background/60 p-4 backdrop-blur-sm">
+            <div className="shrink-0 bg-background px-1 pb-1 pt-2 sm:px-0 sm:pb-2">
               {error || actionError ? (
                 <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2">
                   <p className="text-sm text-destructive">
@@ -471,55 +775,133 @@ export function AiHubChat() {
                 </div>
               ) : null}
 
-              <form onSubmit={handleSubmit} className="flex items-center gap-2">
-                <textarea
-                  ref={textareaRef}
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      void handleSubmit(event);
-                    }
-                  }}
-                  placeholder={
-                    editingMessageId
-                      ? "Edit your message and send to regenerate…"
-                      : `Ask about ${activeClass.subject}…`
-                  }
-                  disabled={isBusy}
-                  rows={1}
-                  maxLength={4000}
-                  className={cn(
-                    "min-h-11 max-h-32 flex-1 resize-none rounded-full border border-input bg-background px-5 py-3 text-sm shadow-xs outline-none transition-colors",
-                    "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30",
-                    "disabled:cursor-not-allowed disabled:opacity-50"
-                  )}
+              {pendingAttachments.length > 0 ? (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {pendingAttachments.map((attachment) => (
+                    <span
+                      key={attachment.id}
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/60 py-1 pl-2.5 pr-1 text-xs text-foreground"
+                    >
+                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{attachment.file.name}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${attachment.file.name}`}
+                        disabled={isBusy}
+                        onClick={() => removePendingAttachment(attachment.id)}
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <form onSubmit={handleSubmit} className="flex items-end">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={chatAttachmentAccept()}
+                  multiple
+                  className="hidden"
+                  onChange={(event) => handleFilesSelected(event.target.files)}
                 />
-                {isGenerating ? (
+                <div
+                  className={cn(
+                    "flex min-h-11 w-full items-end gap-1 rounded-full border border-input bg-background p-1 shadow-xs transition-colors",
+                    "focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30"
+                  )}
+                >
                   <Button
                     type="button"
-                    variant="secondary"
-                    onClick={() => handleStop()}
-                    className="h-11 shrink-0 rounded-full px-4 shadow-sm"
+                    variant="ghost"
+                    disabled={isBusy || editingMessageId !== null}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-9 w-9 shrink-0 rounded-full p-0 text-muted-foreground hover:text-foreground"
+                    title="Attach file"
+                    aria-label="Attach file"
                   >
-                    <Square className="h-3.5 w-3.5 fill-current" />
-                    Stop
+                    <Plus className="h-5 w-5" strokeWidth={2} />
                   </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    disabled={!draft.trim()}
-                    className="h-11 w-11 shrink-0 rounded-full p-0 shadow-sm"
-                  >
-                    <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
-                    <span className="sr-only">Send message</span>
-                  </Button>
-                )}
+                  <textarea
+                    ref={textareaRef}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void handleSubmit(event);
+                      }
+                    }}
+                    placeholder={
+                      editingMessageId
+                        ? "Edit your message and send to regenerate…"
+                        : `Ask about ${activeClass.subject}…`
+                    }
+                    disabled={isBusy}
+                    rows={1}
+                    maxLength={4000}
+                    className={cn(
+                      "min-h-9 max-h-32 flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none",
+                      "disabled:cursor-not-allowed disabled:opacity-50"
+                    )}
+                  />
+                  {isGenerating ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => handleStop()}
+                      className="h-9 shrink-0 rounded-full px-3 shadow-none"
+                    >
+                      <Square className="h-3.5 w-3.5 fill-current" />
+                      Stop
+                    </Button>
+                  ) : (
+                    <Button
+                      type="submit"
+                      disabled={!canSend}
+                      className="h-9 w-9 shrink-0 rounded-full p-0 shadow-sm"
+                    >
+                      <ArrowUp className="h-4 w-4" strokeWidth={2.5} />
+                      <span className="sr-only">Send message</span>
+                    </Button>
+                  )}
+                </div>
               </form>
+              <p className="mt-2 px-1 text-center text-[11px] text-muted-foreground">
+                Attachments (.txt 2 MB · .pdf/.jpg/.png 5 MB) stay in this chat
+                only — they are not saved to the class library.
+              </p>
             </div>
           </div>
         </section>
+
+        {isMobile && !sidebarCollapsed ? (
+          <div
+            className="absolute inset-0 z-30 flex flex-col bg-background"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Conversations"
+          >
+            <ConversationSidebar
+              conversations={conversations}
+              selectedConversationId={selectedConversationId}
+              isLoading={conversationsLoading}
+              deletingConversationId={deletingConversationId}
+              collapsed={false}
+              onCollapsedChange={handleSidebarCollapsedChange}
+              onSelect={(conversationId) => {
+                void handleSelectConversation(conversationId);
+                collapseSidebarOnMobile();
+              }}
+              onNewConversation={handleNewConversation}
+              onDelete={setPendingDeleteId}
+              className="h-full w-full rounded-none border-0 bg-background shadow-none backdrop-blur-none"
+              sheetMode
+            />
+          </div>
+        ) : null}
       </div>
 
       <Dialog

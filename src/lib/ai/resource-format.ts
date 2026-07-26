@@ -1,11 +1,7 @@
-<<<<<<< HEAD
 /**
  * Client-safe upload format helpers (no unpdf / vision deps).
  * Keep heavy extraction in `@/lib/ai/extract-text` (server-only).
  */
-=======
-/** Client-safe upload format helpers — no PDF/OCR runtime deps. */
->>>>>>> 5484545 (fix: keep unpdf out of AI Hub client bundle (PSL-80))
 
 export const MAX_TXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BINARY_BYTES = 5 * 1024 * 1024;

@@ -2,10 +2,7 @@ import {
   detectResourceFormat,
   maxBytesForFormat,
   unsupportedTypeMessage,
-<<<<<<< HEAD
-=======
   type ResourceFormat,
->>>>>>> 5484545 (fix: keep unpdf out of AI Hub client bundle (PSL-80))
 } from "@/lib/ai/resource-format";
 
 const MAX_ATTACHMENTS = 5;
@@ -56,12 +53,9 @@ export function validateChatAttachments(
 export function chatAttachmentAccept(): string {
   return ".txt,.pdf,.jpg,.jpeg,.png,text/plain,application/pdf,image/jpeg,image/png";
 }
-<<<<<<< HEAD
-=======
 
 export function formatAttachmentLabel(format: ResourceFormat): string {
   if (format === "txt") return "text";
   if (format === "pdf") return "pdf";
   return "image";
 }
->>>>>>> 5484545 (fix: keep unpdf out of AI Hub client bundle (PSL-80))

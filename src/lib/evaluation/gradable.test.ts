@@ -15,6 +15,7 @@ describe("isGradableResourceType", () => {
     expect(isGradableResourceType("lesson_notes")).toBe(false);
     expect(isGradableResourceType("scheme_of_work")).toBe(false);
     expect(isGradableResourceType("marking_scheme")).toBe(false);
+    expect(isGradableResourceType("teaching_aid")).toBe(false);
     expect(isGradableResourceType("other")).toBe(false);
   });
 });

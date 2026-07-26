@@ -2,6 +2,7 @@ import {
   detectResourceFormat,
   maxBytesForFormat,
   unsupportedTypeMessage,
+  type ResourceFormat,
 } from "@/lib/ai/resource-format";
 
 const MAX_ATTACHMENTS = 5;
@@ -51,4 +52,10 @@ export function validateChatAttachments(
 
 export function chatAttachmentAccept(): string {
   return ".txt,.pdf,.jpg,.jpeg,.png,text/plain,application/pdf,image/jpeg,image/png";
+}
+
+export function formatAttachmentLabel(format: ResourceFormat): string {
+  if (format === "txt") return "text";
+  if (format === "pdf") return "pdf";
+  return "image";
 }

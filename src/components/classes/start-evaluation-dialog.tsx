@@ -144,7 +144,7 @@ export function StartEvaluationDialog({
     }
 
     try {
-      const batch = await createBatch.mutateAsync({
+      const { batch, reused } = await createBatch.mutateAsync({
         assessmentId: assessmentId || null,
         resourceId: assessmentId ? null : resourceId || null,
         markingSchemeResourceId:
@@ -153,6 +153,12 @@ export function StartEvaluationDialog({
         studentId: studentId ?? null,
       });
       setCreatedBatchId(batch.id);
+      // Open in-review batch → continue review; draft (empty or partial) → upload step.
+      if (reused && batch.status === "in_review") {
+        handleOpenChange(false);
+        router.push(`/classes/${classId}/evaluations/${batch.id}`);
+        return;
+      }
       setStep(1);
     } catch (error) {
       setFormError(

@@ -142,6 +142,8 @@ export type EvaluatedScriptPage = {
   questionNumbers?: string[];
   readAdmissionNumber?: string | null;
   conflict?: boolean;
+  /** Student already has a submission/script for this assessment. */
+  alreadyEvaluated?: boolean;
 };
 
 export type EvaluatedScript = {

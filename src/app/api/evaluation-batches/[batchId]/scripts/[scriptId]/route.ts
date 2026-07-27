@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 function authStatus(message: string) {
   if (message === "Not authenticated") return 401;
+  if (message.includes("already been evaluated")) return 409;
   if (
     message === "Class not found" ||
     message === "Evaluation batch not found" ||

@@ -156,14 +156,15 @@ export function useCreateEvaluationBatch(classId: string) {
       });
       const payload = (await response.json()) as {
         batch?: EvaluationBatch;
+        reused?: boolean;
         error?: string;
       };
       if (!response.ok) {
         throw new Error(payload.error ?? "Could not start evaluation");
       }
-      return payload.batch!;
+      return { batch: payload.batch!, reused: Boolean(payload.reused) };
     },
-    onSuccess: (_batch, input) => {
+    onSuccess: (_result, input) => {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });

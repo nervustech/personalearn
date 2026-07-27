@@ -14,6 +14,8 @@ type StudentEvalProfileDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEvaluateAssessment: (assessmentId: string) => void;
+  /** Open existing review when status is in_review. */
+  onContinueReview?: (batchId: string) => void;
 };
 
 const STATUS_LABEL: Record<StudentAssessmentStatus, string> = {
@@ -45,6 +47,7 @@ export function StudentEvalProfileDialog({
   open,
   onOpenChange,
   onEvaluateAssessment,
+  onContinueReview,
 }: StudentEvalProfileDialogProps) {
   const studentId = student?.id;
   const { data, isLoading, error } = useStudentEvalProfile(
@@ -105,7 +108,13 @@ export function StudentEvalProfileDialog({
         ) : (
           <ul className="divide-y divide-border rounded-xl border border-border">
             {assessments.map((row) => {
-              const { assessment, status, markSummary, feedback } = row;
+              const {
+                assessment,
+                status,
+                markSummary,
+                feedback,
+                reviewBatchId,
+              } = row;
               const isExpanded = expandedId === assessment.id;
               const markText =
                 markSummary &&
@@ -141,15 +150,23 @@ export function StudentEvalProfileDialog({
                       >
                         {isExpanded ? "Hide feedback" : "View feedback"}
                       </Button>
+                    ) : status === "in_review" &&
+                      reviewBatchId &&
+                      onContinueReview ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => onContinueReview(reviewBatchId)}
+                      >
+                        Continue review
+                      </Button>
                     ) : (
                       <Button
                         type="button"
                         size="sm"
                         onClick={() => onEvaluateAssessment(assessment.id)}
                       >
-                        {status === "in_review"
-                          ? "Continue / upload work"
-                          : "Evaluate / Upload work"}
+                        Evaluate / Upload work
                       </Button>
                     )}
                   </div>

@@ -1,12 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Assessment, EvaluationBatch } from "@/types/database";
 import {
+  ALREADY_EVALUATED_MESSAGE,
+  findOpenBatchForAssessment,
+  getStudentAssessmentEvalState,
+} from "@/lib/evaluation/assessment-eval-guard";
+import {
   ensureAssessmentForGradableResource,
   ensureAssessmentsForClassGradableResources,
   shouldPublishAssessment,
 } from "@/lib/evaluation/create-assessment-from-resource";
 import type { GradableResourceType } from "@/lib/evaluation/gradable";
 import { isGradableResourceType } from "@/lib/evaluation/gradable";
+
+export type CreateEvaluationBatchResult = {
+  batch: EvaluationBatch;
+  /** True when an existing open batch for the assessment was returned. */
+  reused: boolean;
+};
 
 export async function listClassAssessments(
   supabase: SupabaseClient,
@@ -55,7 +66,7 @@ export type CreateEvaluationBatchInput = {
 export async function createEvaluationBatch(
   supabase: SupabaseClient,
   input: CreateEvaluationBatchInput
-): Promise<EvaluationBatch> {
+): Promise<CreateEvaluationBatchResult> {
   let assessmentId = input.assessmentId ?? null;
 
   if (assessmentId) {
@@ -101,6 +112,47 @@ export async function createEvaluationBatch(
     throw new Error("assessmentId or a gradable resourceId is required");
   }
 
+  const scopedStudentId: string | null = input.studentId ?? null;
+  if (scopedStudentId) {
+    const { data: student, error: studentError } = await supabase
+      .from("students")
+      .select("id")
+      .eq("id", scopedStudentId)
+      .eq("class_id", input.classId)
+      .maybeSingle();
+
+    if (studentError || !student) {
+      throw new Error("Student not found in this class");
+    }
+
+    const prior = await getStudentAssessmentEvalState(supabase, {
+      assessmentId,
+      studentId: scopedStudentId,
+    });
+    if (prior.hasSubmission || prior.priorBatchId) {
+      throw new Error(ALREADY_EVALUATED_MESSAGE);
+    }
+  }
+
+  // One open evaluation per assessment — reuse instead of creating a second.
+  const existingOpen = await findOpenBatchForAssessment(supabase, {
+    classId: input.classId,
+    assessmentId,
+  });
+  if (existingOpen) {
+    if (
+      scopedStudentId &&
+      existingOpen.scoped_student_id &&
+      existingOpen.scoped_student_id !== scopedStudentId
+    ) {
+      // Open batch is scoped to a different student — still one batch per assessment.
+      throw new Error(
+        "This assessment already has an open evaluation. Finish or open that review before starting another."
+      );
+    }
+    return { batch: existingOpen, reused: true };
+  }
+
   const markingSchemeResourceId = input.markingSchemeResourceId ?? null;
   if (markingSchemeResourceId) {
     const { data: scheme, error: schemeError } = await supabase
@@ -122,20 +174,6 @@ export async function createEvaluationBatch(
     );
   }
 
-  const scopedStudentId: string | null = input.studentId ?? null;
-  if (scopedStudentId) {
-    const { data: student, error: studentError } = await supabase
-      .from("students")
-      .select("id")
-      .eq("id", scopedStudentId)
-      .eq("class_id", input.classId)
-      .maybeSingle();
-
-    if (studentError || !student) {
-      throw new Error("Student not found in this class");
-    }
-  }
-
   const { data: batch, error: batchError } = await supabase
     .from("evaluation_batches")
     .insert({
@@ -149,10 +187,22 @@ export async function createEvaluationBatch(
     .single();
 
   if (batchError || !batch) {
+    // Race: another open batch was created for this assessment.
+    if (
+      batchError?.code === "23505" ||
+      batchError?.message?.toLowerCase().includes("duplicate") ||
+      batchError?.message?.includes("idx_evaluation_batches_one_open")
+    ) {
+      const raced = await findOpenBatchForAssessment(supabase, {
+        classId: input.classId,
+        assessmentId,
+      });
+      if (raced) return { batch: raced, reused: true };
+    }
     throw new Error(batchError?.message ?? "Could not create evaluation batch");
   }
 
-  return batch as EvaluationBatch;
+  return { batch: batch as EvaluationBatch, reused: false };
 }
 
 export async function requireTeacherEvaluationBatch(

@@ -98,10 +98,11 @@ ${schemeText}
 Return ONLY valid JSON with keys:
 - awarded (number — marks awarded)
 - max (number — maximum marks for this question from the scheme)
-- feedback (string — brief rationale for the teacher/student)
-- student_answer (string — short excerpt of what the student wrote for this question)
-- expected_answer (string — what the marking scheme required for this question)
+- feedback (string — teacher-facing explanation of what the student did wrong/right, then a short student-facing suggested feedback sentence)
+- student_answer (string — what the student wrote for THIS question only; include formula/work if visible)
+- expected_answer (string — what the marking scheme required for THIS question)
 
+Grade every part of this question label if it has sub-parts on the page. Do not skip visible working.
 No markdown.`;
   }
 
@@ -112,10 +113,11 @@ ${instructionBlock}
 Return ONLY valid JSON with keys:
 - awarded (number — estimated marks awarded)
 - max (number — estimated maximum for this question)
-- feedback (string — brief rationale noting this is an estimate without a scheme)
-- student_answer (string — short excerpt of what the student wrote for this question)
+- feedback (string — brief rationale noting this is an estimate without a scheme, plus short student-facing suggested feedback)
+- student_answer (string — what the student wrote for THIS question only)
 - expected_answer (null — always null when there is no marking scheme)
 
+Grade every visible part for this question label. Do not skip working.
 No markdown.`;
 }
 

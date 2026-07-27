@@ -63,9 +63,12 @@ describe("/api/evaluation-batches", () => {
 
   it("creates a batch", async () => {
     mockCreateBatch.mockResolvedValue({
-      id: "batch-1",
-      class_id: classId,
-      status: "draft",
+      batch: {
+        id: "batch-1",
+        class_id: classId,
+        status: "draft",
+      },
+      reused: false,
     });
 
     const response = await POST(
@@ -84,6 +87,7 @@ describe("/api/evaluation-batches", () => {
 
     expect(response.status).toBe(201);
     expect(payload.batch.id).toBe("batch-1");
+    expect(payload.reused).toBe(false);
     expect(mockCreateBatch).toHaveBeenCalledWith(
       {},
       expect.objectContaining({
@@ -93,5 +97,28 @@ describe("/api/evaluation-batches", () => {
         proceedWithoutScheme: true,
       })
     );
+  });
+
+  it("returns 409 when student was already evaluated", async () => {
+    mockCreateBatch.mockRejectedValue(
+      new Error("This student has already been evaluated for this assessment")
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/evaluation-batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId,
+          assessmentId: "assess-1",
+          proceedWithoutScheme: true,
+          studentId: "stu-1",
+        }),
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toMatch(/already been evaluated/i);
   });
 });

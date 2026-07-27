@@ -115,6 +115,14 @@ function ScriptRow({
         </span>
       </div>
 
+      {script.alreadyEvaluated ? (
+        <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
+          Already evaluated — this student already has an evaluation for this
+          assessment. Do not draft again; open their existing review or
+          signed-off feedback instead.
+        </p>
+      ) : null}
+
       {script.hasByteDuplicate ? (
         <p className="text-sm text-amber-900 dark:text-amber-100">
           Duplicate scan (same file stored once) — confirm identity before
@@ -122,7 +130,9 @@ function ScriptRow({
         </p>
       ) : null}
 
-      {script.hasConflict && !script.hasByteDuplicate ? (
+      {script.hasConflict &&
+      !script.hasByteDuplicate &&
+      !script.alreadyEvaluated ? (
         <p className="text-sm text-amber-900 dark:text-amber-100">
           Conflict: two pages share the same admission number and question
           number. Both pages are kept — confirm the correct student before
@@ -173,6 +183,7 @@ function ScriptRow({
                 Q{(meta?.questionNumbers ?? []).join(",") || "?"}
                 {meta?.conflict ? " · conflict" : ""}
                 {meta?.duplicate ? " · duplicate" : ""}
+                {meta?.alreadyEvaluated ? " · already evaluated" : ""}
               </figcaption>
             </figure>
           );
@@ -241,7 +252,7 @@ function ScriptRow({
         )}
       </Dialog>
 
-      {isAmber ? (
+      {isAmber && !script.alreadyEvaluated ? (
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-[12rem] flex-1 space-y-1.5">
             <Label htmlFor={`assign-${script.id}`}>Assign student</Label>

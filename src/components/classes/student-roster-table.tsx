@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import type { Student } from "@/types/database";
 import { useDeleteStudent } from "@/lib/hooks/use-classes";
@@ -33,6 +34,7 @@ export function StudentRosterTable({
   students,
   emptyMessage = "No students yet. Use the buttons above to add one or import a CSV.",
 }: StudentRosterTableProps) {
+  const router = useRouter();
   const deleteStudent = useDeleteStudent(classId);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [n1Eval, setN1Eval] = useState<N1EvalTarget | null>(null);
@@ -140,6 +142,10 @@ export function StudentRosterTable({
           if (!selectedStudent) return;
           setN1Eval({ student: selectedStudent, assessmentId });
           setSelectedStudent(null);
+        }}
+        onContinueReview={(batchId) => {
+          setSelectedStudent(null);
+          router.push(`/classes/${classId}/evaluations/${batchId}`);
         }}
       />
 

@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  getStudentAssessmentEvalState,
+  listAlreadyEvaluatedStudentIds,
+  listStudentsWithPriorScriptsOnAssessment,
+  markPagesAlreadyEvaluated,
+  ALREADY_EVALUATED_MESSAGE,
+} from "@/lib/evaluation/assessment-eval-guard";
+import {
   groupPagesByAdmission,
   scriptHasByteDuplicate,
   scriptHasConflict,
@@ -18,11 +25,17 @@ import type {
   QuestionEvaluation,
 } from "@/types/database";
 
+function scriptAlreadyEvaluated(pages: EvaluatedScriptPage[]): boolean {
+  return pages.some((p) => p.alreadyEvaluated === true);
+}
+
 export type ScriptReviewDto = EvaluatedScript & {
   student_name: string | null;
   missingPageWarning: boolean;
   hasConflict: boolean;
   hasByteDuplicate: boolean;
+  /** Student already evaluated for this assessment (prior submission/script). */
+  alreadyEvaluated: boolean;
   pageUrls: {
     storagePath: string;
     uploadIndex: number;
@@ -146,6 +159,7 @@ export async function listBatchScriptsForReview(
       missingPageWarning: scriptHasMissingPageWarning(pages),
       hasConflict: scriptHasConflict(pages),
       hasByteDuplicate: scriptHasByteDuplicate(pages),
+      alreadyEvaluated: scriptAlreadyEvaluated(pages),
       pageUrls,
       questions,
       totals: computeScriptTotal(questions),
@@ -249,6 +263,28 @@ export async function processBatchIdentity(
 
   const drafts = groupPagesByAdmission(pageReads, roster);
 
+  const { data: batchRow, error: batchError } = await supabase
+    .from("evaluation_batches")
+    .select("assessment_id")
+    .eq("id", batchId)
+    .maybeSingle();
+
+  if (batchError) throw new Error(batchError.message);
+  const assessmentId = (batchRow?.assessment_id as string | null) ?? null;
+
+  const alreadyEvaluatedIds = new Set<string>();
+  if (assessmentId) {
+    const [fromSubmissions, fromPriorScripts] = await Promise.all([
+      listAlreadyEvaluatedStudentIds(supabase, assessmentId),
+      listStudentsWithPriorScriptsOnAssessment(supabase, {
+        assessmentId,
+        excludeBatchId: batchId,
+      }),
+    ]);
+    for (const id of fromSubmissions) alreadyEvaluatedIds.add(id);
+    for (const id of fromPriorScripts) alreadyEvaluatedIds.add(id);
+  }
+
   const pendingIds = scripts.map((s) => s.id);
   const { error: deleteError } = await supabase
     .from("evaluated_scripts")
@@ -257,14 +293,23 @@ export async function processBatchIdentity(
 
   if (deleteError) throw new Error(deleteError.message);
 
-  const inserts = drafts.map((draft) => ({
-    batch_id: batchId,
-    student_id: draft.student_id,
-    read_admission_number: draft.read_admission_number,
-    match_confidence: draft.match_confidence,
-    page_order: draft.page_order,
-    status: draft.status,
-  }));
+  const inserts = drafts.map((draft) => {
+    const isRepeat =
+      Boolean(draft.student_id) &&
+      alreadyEvaluatedIds.has(draft.student_id as string);
+    const pageOrder = isRepeat
+      ? markPagesAlreadyEvaluated(draft.page_order)
+      : draft.page_order;
+    return {
+      batch_id: batchId,
+      student_id: draft.student_id,
+      read_admission_number: draft.read_admission_number,
+      match_confidence: isRepeat ? "low" : draft.match_confidence,
+      page_order: pageOrder,
+      // Keep amber so auto-draft skips; teacher sees the flag.
+      status: isRepeat ? "identity_amber" : draft.status,
+    };
+  });
 
   const { error: insertError } = await supabase
     .from("evaluated_scripts")
@@ -293,6 +338,26 @@ export async function assignScriptStudent(
 
   if (studentError || !student) {
     throw new Error("Student not found in this class");
+  }
+
+  const { data: batchMeta, error: batchMetaError } = await supabase
+    .from("evaluation_batches")
+    .select("assessment_id")
+    .eq("id", input.batchId)
+    .maybeSingle();
+
+  if (batchMetaError) throw new Error(batchMetaError.message);
+  const assessmentId = (batchMeta?.assessment_id as string | null) ?? null;
+
+  if (assessmentId) {
+    const prior = await getStudentAssessmentEvalState(supabase, {
+      assessmentId,
+      studentId: input.studentId,
+      currentBatchId: input.batchId,
+    });
+    if (prior.hasSubmission || prior.priorBatchId) {
+      throw new Error(ALREADY_EVALUATED_MESSAGE);
+    }
   }
 
   const { data: script, error: scriptError } = await supabase

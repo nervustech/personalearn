@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     await requireTeacherClass(supabase, body.classId);
 
-    const batch = await createEvaluationBatch(supabase, {
+    const { batch, reused } = await createEvaluationBatch(supabase, {
       classId: body.classId,
       assessmentId: body.assessmentId,
       resourceId: body.resourceId,
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       studentId: body.studentId,
     });
 
-    return NextResponse.json({ batch }, { status: 201 });
+    return NextResponse.json({ batch, reused }, { status: reused ? 200 : 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";
     const status =
@@ -65,6 +65,9 @@ export async function POST(request: Request) {
         ? 401
         : message === "Class not found"
           ? 403
+          : message.includes("already been evaluated") ||
+              message.includes("already has an open evaluation")
+            ? 409
           : message.includes("required") ||
               message.includes("not found") ||
               message.includes("not a marking") ||

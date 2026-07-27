@@ -511,7 +511,7 @@ export async function executeStartEvaluationBatch(
   }
 ) {
   try {
-    const batch = await createEvaluationBatch(deps.supabase, {
+    const { batch, reused } = await createEvaluationBatch(deps.supabase, {
       classId: deps.classId,
       assessmentId: input.assessmentId ?? null,
       resourceId: input.resourceId ?? null,
@@ -523,13 +523,15 @@ export async function executeStartEvaluationBatch(
     const reviewHref = `/classes/${deps.classId}/evaluations/${batch.id}`;
     return {
       started: true,
+      reused,
       batchId: batch.id,
       status: batch.status,
       assessmentId: batch.assessment_id,
       reviewHref,
       deepLink: reviewHref,
-      message:
-        "Evaluation batch created. Upload scanned pages from the class page; grading runs in the background. Share the reviewHref deep-link so the teacher can open review when drafts are ready.",
+      message: reused
+        ? "Reused the open evaluation batch for this assessment. Upload scanned pages from the class page; share the reviewHref deep-link when drafts are ready."
+        : "Evaluation batch created. Upload scanned pages from the class page; grading runs in the background. Share the reviewHref deep-link so the teacher can open review when drafts are ready.",
     };
   } catch (error) {
     const message =

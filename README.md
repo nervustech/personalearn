@@ -41,14 +41,18 @@ In **Vercel → Project Settings → Environment Variables**, add the same Supab
 |----------|----------|-------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Project URL from Supabase → Settings → API |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes* | *Or `NEXT_PUBLIC_PUBLISHABLE_KEY` (same anon key) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server routes | Never expose to middleware or client |
+| `SUPABASE_SERVICE_ROLE_KEY` | Eval / cron | Server-only; Gemini Batch poll + live evaluate |
+| `CRON_SECRET` | Production | Vercel Cron auth for `/api/cron/eval-batch-poll` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Eval / AI | Gemini vision + Batch API |
+| `EVAL_VISION_MODEL` | Optional | Override vision model (ADR-005; default Flash Lite) |
+| `EVAL_VISION_ESCALATION` | Optional | Set `1` to enable low-confidence vision escalation |
 
-Missing Preview vars cause `MIDDLEWARE_INVOCATION_FAILED` on PR deployments. **Redeploy** after saving env changes.
+Missing Preview vars cause `MIDDLEWARE_INVOCATION_FAILED` on PR deployments. **Redeploy** after saving env changes. Use `GET /api/health` to verify Supabase and eval env diagnostics on a deployment.
 
 ### 3. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)
-2. Run the migration in `supabase/migrations/20260621_init_schema.sql` via the SQL Editor
+2. Run migrations in `supabase/migrations/` via the SQL Editor (at minimum `20260621_init_schema.sql`; for evaluation, also `20260802_eval_direct_multimodal.sql` — ADR-005 direct multimodal pipeline)
 3. **Auth (PSL-18):** Enable Google OAuth under Authentication → Providers
 4. Set Site URL and redirect URLs in **Supabase** (Authentication → URL Configuration). Dev project example:
    - Site URL: `https://personalearndev.vercel.app`

@@ -24,6 +24,8 @@ export type StudentAssessmentRow = {
   feedback: StudentAssessmentFeedback | null;
   /** Deep-link into eval review when a batch is ready (F10). */
   reviewBatchId: string | null;
+  /** Drafted script for split-pane deep link (ADR-004 F8/F10). */
+  reviewScriptId: string | null;
 };
 
 export type StudentEvalProfile = {
@@ -59,6 +61,7 @@ export function buildStudentAssessmentRows(input: {
   submissionsByAssessmentId: Map<string, StudentSubmission>;
   inFlightAssessmentIds: Set<string>;
   reviewBatchIdByAssessmentId?: Map<string, string>;
+  reviewScriptIdByAssessmentId?: Map<string, string>;
 }): StudentAssessmentRow[] {
   return input.assessments.map((assessment) => {
     const submission = input.submissionsByAssessmentId.get(assessment.id);
@@ -68,6 +71,8 @@ export function buildStudentAssessmentRows(input: {
     });
     const reviewBatchId =
       input.reviewBatchIdByAssessmentId?.get(assessment.id) ?? null;
+    const reviewScriptId =
+      input.reviewScriptIdByAssessmentId?.get(assessment.id) ?? null;
 
     if (!submission) {
       return {
@@ -76,6 +81,7 @@ export function buildStudentAssessmentRows(input: {
         markSummary: null,
         feedback: null,
         reviewBatchId,
+        reviewScriptId: null,
       };
     }
 
@@ -88,6 +94,7 @@ export function buildStudentAssessmentRows(input: {
         teacherFeedback: submission.teacher_feedback,
       },
       reviewBatchId,
+      reviewScriptId,
     };
   });
 }
@@ -156,6 +163,7 @@ export async function getStudentEvalProfile(
 
   const inFlightAssessmentIds = new Set<string>();
   const reviewBatchIdByAssessmentId = new Map<string, string>();
+  const reviewScriptIdByAssessmentId = new Map<string, string>();
 
   for (const row of scriptsResult.data ?? []) {
     const batch = row.evaluation_batches as
@@ -172,6 +180,13 @@ export async function getStudentEvalProfile(
           assessmentId,
           row.batch_id as string
         );
+      }
+      const status = row.status as string;
+      if (
+        (status === "drafted" || status === "signed_off") &&
+        !reviewScriptIdByAssessmentId.has(assessmentId)
+      ) {
+        reviewScriptIdByAssessmentId.set(assessmentId, row.id as string);
       }
     }
   }
@@ -198,6 +213,7 @@ export async function getStudentEvalProfile(
       submissionsByAssessmentId,
       inFlightAssessmentIds,
       reviewBatchIdByAssessmentId,
+      reviewScriptIdByAssessmentId,
     }),
   };
 }

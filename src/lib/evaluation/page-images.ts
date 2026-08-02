@@ -1,10 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DraftPageImage } from "@/lib/evaluation/draft-question";
 import {
   compareQuestionLabels,
   normalizeQuestionLabel,
 } from "@/lib/evaluation/normalize-question";
 import type { EvaluatedScriptPage } from "@/types/database";
+
+export type PageImageBytes = {
+  bytes: Uint8Array;
+  mimeType: string;
+};
 
 export function mimeFromStoragePath(storagePath: string): string {
   return storagePath.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
@@ -48,8 +52,8 @@ export function pagesForQuestion(
 export async function downloadPageBytes(
   supabase: SupabaseClient,
   storagePath: string,
-  cache: Map<string, DraftPageImage>
-): Promise<DraftPageImage> {
+  cache: Map<string, PageImageBytes>
+): Promise<PageImageBytes> {
   const cached = cache.get(storagePath);
   if (cached) return cached;
 
@@ -62,7 +66,7 @@ export async function downloadPageBytes(
   }
 
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  const image: DraftPageImage = {
+  const image: PageImageBytes = {
     bytes,
     mimeType: mimeFromStoragePath(storagePath),
   };
@@ -81,13 +85,23 @@ export type ScriptPageUrl = {
 export function pageUrlsForQuestion(
   pages: EvaluatedScriptPage[],
   pageUrls: ScriptPageUrl[],
-  questionLabel: string
+  questionLabel: string,
+  pageNumber?: number | null
 ): ScriptPageUrl[] {
   const matchedPages = pagesForQuestion(pages, questionLabel);
+  const sorted = [...matchedPages].sort((a, b) => a.uploadIndex - b.uploadIndex);
+  const targetPages =
+    pageNumber != null &&
+    Number.isInteger(pageNumber) &&
+    pageNumber >= 1 &&
+    pageNumber <= sorted.length
+      ? [sorted[pageNumber - 1]!]
+      : sorted;
+
   const byPath = new Map(pageUrls.map((p) => [p.storagePath, p]));
   const urls: ScriptPageUrl[] = [];
   const seen = new Set<string>();
-  for (const page of matchedPages) {
+  for (const page of targetPages) {
     if (seen.has(page.storagePath)) continue;
     seen.add(page.storagePath);
     const url = byPath.get(page.storagePath);

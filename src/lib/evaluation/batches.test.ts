@@ -120,6 +120,7 @@ describe("createEvaluationBatch", () => {
       marking_scheme_resource_id: null,
       scoped_student_id: null,
       status: "draft",
+      mode: "batch",
     });
     expect(mockEnsure).not.toHaveBeenCalled();
   });
@@ -284,6 +285,7 @@ describe("createEvaluationBatch", () => {
       marking_scheme_resource_id: null,
       scoped_student_id: "stu-1",
       status: "draft",
+      mode: "live",
     });
   });
 

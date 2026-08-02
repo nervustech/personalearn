@@ -92,20 +92,8 @@ export type Assessment = {
 export type EvaluationBatchStatus =
   | "draft"
   | "processing"
-  | "drafted"
   | "in_review"
   | "signed_off";
-
-export type EvaluationBatch = {
-  id: string;
-  class_id: string;
-  assessment_id: string | null;
-  marking_scheme_resource_id: string | null;
-  /** When set, batch was started for a single student (PSL-48 N=1). */
-  scoped_student_id: string | null;
-  status: EvaluationBatchStatus;
-  created_at: string;
-};
 
 /** Vision answer region (0–1000 normalized). Multi-page answers use several entries. */
 export type QuestionBoundingBox = {
@@ -122,27 +110,96 @@ export type StudentAssessmentStatus =
   | "in_review"
   | "signed_off";
 
-export type EvaluatedScriptStatus =
-  | "pending"
-  | "identity_amber"
-  | "identity_cleared"
-  | "drafted"
-  | "signed_off";
+export type EvaluationBatchMode = "batch" | "live";
 
-/** Enriched page entry stored in evaluated_scripts.page_order (PSL-45+). */
+export type EvaluationBatch = {
+  id: string;
+  class_id: string;
+  assessment_id: string | null;
+  marking_scheme_resource_id: string | null;
+  /** When set, batch was started for a single student (PSL-48 N=1). */
+  scoped_student_id: string | null;
+  mode: EvaluationBatchMode;
+  status: EvaluationBatchStatus;
+  created_at: string;
+};
+
+/** Normalized vertical scroll region on a page (0–1). */
+export type QuestionVerticalBounds = {
+  top_percent: number;
+  bottom_percent: number;
+};
+
+export type EvaluatedScriptStatus =
+  | "uploaded"
+  | "indexing"
+  | "identity_amber"
+  | "evaluating"
+  | "ready"
+  | "signed_off"
+  | "failed"
+  | "unmatched"
+  /** @deprecated Legacy ADR-004 rows — treat as uploaded/indexing during migration */
+  | "pending"
+  | "parsing"
+  | "queued_draft"
+  | "drafting"
+  | "identity_cleared"
+  | "drafted";
+
+export type GeminiBatchJobPhase = "index" | "evaluate";
+
+export type GeminiBatchJobState =
+  | "pending"
+  | "submitted"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type GeminiBatchJob = {
+  id: string;
+  batch_id: string;
+  phase: GeminiBatchJobPhase;
+  provider_batch_name: string | null;
+  state: GeminiBatchJobState;
+  attempt_count: number;
+  page_count: number;
+  script_count: number;
+  error: string | null;
+  submitted_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EvaluationPage = {
+  id: string;
+  batch_id: string;
+  script_id: string | null;
+  storage_path: string;
+  file_name: string;
+  upload_index: number;
+  content_hash: string;
+  admission_number: string | null;
+  admission_confidence: number | null;
+  page_number: number | null;
+  total_pages: number | null;
+  questions_found: string[];
+  index_model_id: string | null;
+  created_at: string;
+};
+
+/** Page entry on a script (legacy page_order + new pipeline). */
 export type EvaluatedScriptPage = {
   storagePath: string;
   fileName: string;
   uploadIndex: number;
-  /** Hex SHA-256 of uploaded bytes (batch-scoped dedupe). */
   contentHash?: string;
-  /** True when this entry reused an earlier page's blob in the same batch. */
   duplicate?: boolean;
-  /** Normalized labels e.g. "1", "1a", "a" (legacy number[] coerced on read). */
   questionNumbers?: string[];
   readAdmissionNumber?: string | null;
   conflict?: boolean;
-  /** Student already has a submission/script for this assessment. */
   alreadyEvaluated?: boolean;
 };
 
@@ -157,6 +214,8 @@ export type EvaluatedScript = {
   created_at: string;
 };
 
+export type QuestionAttentionStatus = "CORRECT" | "ATTENTION_NEEDED";
+
 export type QuestionEvaluationStatus =
   | "ai_draft"
   | "ai_estimate"
@@ -170,11 +229,16 @@ export type QuestionEvaluation = {
   awarded: number | null;
   max: number | null;
   feedback: string | null;
-  /** Vision excerpt of what the student wrote (PSL-52). */
   student_answer: string | null;
-  /** Scheme expectation for this Q; null when no scheme / ai_estimate. */
   expected_answer: string | null;
-  /** Answer regions for highlight + crop re-prompt (ADR-004 / F5). */
+  student_work: Record<string, unknown> | null;
+  correct_reference: Record<string, unknown> | null;
+  explanation: string | null;
+  page_number: number | null;
+  vertical_bounds: QuestionVerticalBounds | null;
+  model_id: string | null;
+  confidence: number | null;
+  attention_status: QuestionAttentionStatus | null;
   bounding_box: QuestionBoundingBox[] | null;
   status: QuestionEvaluationStatus;
   created_at: string;

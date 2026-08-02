@@ -258,6 +258,8 @@ export function useUploadEvaluationPages(classId: string) {
         const confirmPayload = (await confirmRes.json()) as {
           pageCount?: number;
           queued?: boolean;
+          skippedAll?: boolean;
+          message?: string;
           warnings?: {
             fileName: string;
             duplicateOfFileName: string;
@@ -283,6 +285,8 @@ export function useUploadEvaluationPages(classId: string) {
       const payload = (await response.json()) as {
         pageCount?: number;
         queued?: boolean;
+        skippedAll?: boolean;
+        message?: string;
         warnings?: {
           fileName: string;
           duplicateOfFileName: string;
@@ -305,23 +309,22 @@ export function useUploadEvaluationPages(classId: string) {
   });
 }
 
-export function useStartEvaluationProcessing(classId: string) {
+export function useStartBatchIndex(classId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (batchId: string) => {
       const response = await fetch(
-        `/api/evaluation-batches/${batchId}/process-async`,
+        `/api/evaluation-batches/${batchId}/start`,
         { method: "POST" }
       );
       const payload = (await response.json()) as {
-        started?: boolean;
-        reviewHref?: string;
-        status?: string;
+        jobId?: string;
+        phase?: string;
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Could not start grading");
+        throw new Error(payload.error ?? "Could not start batch indexing");
       }
       return payload;
     },
@@ -336,33 +339,45 @@ export function useStartEvaluationProcessing(classId: string) {
   });
 }
 
-export function useProcessEvaluationIdentity(classId: string) {
+/** @deprecated Use useStartBatchIndex — kept for call-site compatibility */
+export const useStartEvaluationProcessing = useStartBatchIndex;
+
+export function useEvaluateLive(classId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (batchId: string) => {
+    mutationFn: async (input: { batchId: string; scriptId: string }) => {
       const response = await fetch(
-        `/api/evaluation-batches/${batchId}/process-identity`,
-        { method: "POST" }
+        `/api/evaluation-batches/${input.batchId}/evaluate-live`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scriptId: input.scriptId }),
+        }
       );
       const payload = (await response.json()) as {
-        scripts?: ScriptReviewDto[];
+        status?: string;
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Identity processing failed");
+        throw new Error(payload.error ?? "Live evaluation failed");
       }
-      return payload.scripts ?? [];
+      return payload;
     },
-    onSuccess: (_data, batchId) => {
+    onSuccess: (_data, input) => {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });
       queryClient.invalidateQueries({
-        queryKey: evaluationScriptsQueryKey(batchId),
+        queryKey: evaluationScriptsQueryKey(input.batchId),
       });
     },
   });
+}
+
+/** Bulk class upload: submit index Batch job after pages uploaded. */
+export function useProcessEvaluationIdentity(classId: string) {
+  return useStartBatchIndex(classId);
 }
 
 export function useAssignEvaluationScript(classId: string, batchId: string) {
@@ -398,41 +413,23 @@ export function useAssignEvaluationScript(classId: string, batchId: string) {
   });
 }
 
-export type ProcessDraftsSummary = {
-  drafted: number;
-  skippedAmber: number;
-  skippedPending: number;
-  skippedAlreadyDrafted: number;
-  skippedOther: number;
-  errors: { scriptId: string; message: string }[];
-};
-
-export function useProcessDrafts(classId: string, batchId: string) {
+export function useRemoveEvaluationScript(classId: string, batchId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (overrideBatchId?: string) => {
-      const targetBatchId = overrideBatchId || batchId;
-      if (!targetBatchId) {
-        throw new Error("Batch id is required for draft processing");
-      }
+    mutationFn: async (scriptId: string) => {
       const response = await fetch(
-        `/api/evaluation-batches/${targetBatchId}/process-drafts`,
-        { method: "POST" }
+        `/api/evaluation-batches/${batchId}/scripts/${scriptId}`,
+        { method: "DELETE" }
       );
-      const payload = (await response.json()) as {
-        summary?: ProcessDraftsSummary;
-        error?: string;
-      };
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Draft processing failed");
+        throw new Error(payload.error ?? "Could not remove script");
       }
-      return payload.summary!;
     },
-    onSuccess: (_summary, overrideBatchId) => {
-      const targetBatchId = overrideBatchId || batchId;
+    onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: evaluationScriptsQueryKey(targetBatchId),
+        queryKey: evaluationScriptsQueryKey(batchId),
       });
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
@@ -504,6 +501,7 @@ export function useUpdateQuestionEvaluation(classId: string, batchId: string) {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });
+      queryClient.invalidateQueries({ queryKey: ["script-review"] });
     },
   });
 }
@@ -542,6 +540,7 @@ export function useReevaluateQuestion(classId: string, batchId: string) {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });
+      queryClient.invalidateQueries({ queryKey: ["script-review"] });
     },
   });
 }
@@ -585,6 +584,7 @@ export function useSignOffScript(classId: string, batchId: string) {
       queryClient.invalidateQueries({
         queryKey: ["student-eval-profile", classId],
       });
+      queryClient.invalidateQueries({ queryKey: ["script-review"] });
     },
   });
 }

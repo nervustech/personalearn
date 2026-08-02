@@ -57,6 +57,10 @@ export function getEvalVisionModel(): LanguageModel {
   return googleModel(override ?? GEMINI_FLASH_LITE_MODEL);
 }
 
+export function getEvalVisionModelId(): string {
+  return clean(process.env.EVAL_VISION_MODEL) ?? GEMINI_FLASH_LITE_MODEL;
+}
+
 /** True only when EVAL_VISION_ESCALATION is explicitly enabled. */
 export function isEvalVisionEscalationEnabled(): boolean {
   const raw = clean(process.env.EVAL_VISION_ESCALATION)?.toLowerCase();

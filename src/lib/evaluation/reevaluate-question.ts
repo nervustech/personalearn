@@ -3,13 +3,14 @@ import {
   previewCompetency,
   type CompetencyPreview,
 } from "@/lib/evaluation/competency-map";
-import { draftQuestionFromImages } from "@/lib/evaluation/draft-question";
 import { loadMarkingSchemeText } from "@/lib/evaluation/load-marking-scheme";
 import {
   asScriptPages,
   downloadPageBytes,
+  mimeFromStoragePath,
   pagesForQuestion,
 } from "@/lib/evaluation/page-images";
+import { syncEvaluateScript } from "@/lib/evaluation/sync-client";
 import { computeScriptTotal, type ScriptTotal } from "@/lib/evaluation/script-totals";
 import type {
   EvaluationBatch,
@@ -23,7 +24,6 @@ export type ReevaluateQuestionResult = {
   competencyPreview: CompetencyPreview | null;
 };
 
-/** Cap teacher re-eval instructions before they enter the vision prompt. */
 export const MAX_REEVAL_INSTRUCTION_CHARS = 2000;
 
 export function normalizeReevalInstruction(
@@ -38,6 +38,15 @@ export function normalizeReevalInstruction(
     );
   }
   return trimmed;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(bytes).toString("base64");
+  }
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
 }
 
 async function loadCompetencyPreview(
@@ -103,8 +112,8 @@ export async function reevaluateScriptQuestion(
   if (script.status === "signed_off") {
     throw new Error("Script is already signed off");
   }
-  if (script.status !== "drafted") {
-    throw new Error("Script must be drafted before re-evaluation");
+  if (script.status !== "ready" && script.status !== "drafted") {
+    throw new Error("Script must be ready before re-evaluation");
   }
 
   const { data: existing, error: existingError } = await supabase
@@ -134,31 +143,57 @@ export async function reevaluateScriptQuestion(
   const pages = asScriptPages(script.page_order);
   const qPages = pagesForQuestion(pages, existing.question_number as string);
   const cache = new Map<string, Awaited<ReturnType<typeof downloadPageBytes>>>();
-  const images: Awaited<ReturnType<typeof downloadPageBytes>>[] = [];
+  const images: { mimeType: string; base64: string }[] = [];
   const seen = new Set<string>();
+
   for (const page of qPages) {
     if (seen.has(page.storagePath)) continue;
     seen.add(page.storagePath);
-    images.push(await downloadPageBytes(supabase, page.storagePath, cache));
+    const downloaded = await downloadPageBytes(supabase, page.storagePath, cache);
+    images.push({
+      mimeType: mimeFromStoragePath(page.storagePath),
+      base64: bytesToBase64(downloaded.bytes),
+    });
   }
 
   const instruction = normalizeReevalInstruction(input.instruction);
+  const promptExtra = instruction ? `\n\nTeacher instruction: ${instruction}` : "";
 
-  const draft = await draftQuestionFromImages({
-    pages: images,
-    questionLabel: existing.question_number as string,
-    schemeText,
-    instruction,
+  const { result, modelId } = await syncEvaluateScript({
+    images,
+    markingScheme: schemeText
+      ? `${schemeText}${promptExtra}`
+      : promptExtra || null,
+    questionFocus: existing.question_number as string,
   });
+
+  const graded = result.questions.find(
+    (q) => q.question_number === existing.question_number
+  );
+  if (!graded) {
+    throw new Error("Model did not return the requested question");
+  }
 
   const { data: updated, error: updateError } = await supabase
     .from("question_evaluations")
     .update({
-      awarded: draft.awarded,
-      max: draft.max,
-      feedback: draft.feedback,
-      student_answer: draft.student_answer,
-      expected_answer: draft.expected_answer,
+      awarded: graded.awarded ?? null,
+      max: graded.max ?? null,
+      feedback: graded.suggested_feedback ?? null,
+      student_answer: graded.student_work
+        ? JSON.stringify(graded.student_work)
+        : null,
+      expected_answer: graded.correct_reference
+        ? JSON.stringify(graded.correct_reference)
+        : null,
+      student_work: graded.student_work ?? null,
+      correct_reference: graded.correct_reference ?? null,
+      explanation: graded.explanation ?? null,
+      page_number: graded.page_number ?? null,
+      vertical_bounds: graded.vertical_bounds ?? null,
+      model_id: modelId,
+      confidence: graded.confidence ?? null,
+      attention_status: graded.status,
       status: "reevaluated",
     })
     .eq("id", input.questionId)

@@ -44,6 +44,11 @@ describe("pageUrlsForQuestion", () => {
   it("falls back to all pageUrls when no page lists the question", () => {
     expect(pageUrlsForQuestion(pages, pageUrls, "9")).toEqual(pageUrls);
   });
+
+  it("prefers a specific page_number when provided", () => {
+    expect(pageUrlsForQuestion(pages, pageUrls, "9", 2)).toEqual([pageUrls[1]]);
+    expect(pageUrlsForQuestion(pages, pageUrls, "2", 1)).toEqual([pageUrls[1]]);
+  });
 });
 
 describe("reviewMarkerKind", () => {

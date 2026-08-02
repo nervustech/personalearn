@@ -4,6 +4,7 @@ import {
   statusFromRatio,
   type CompetencyPreview,
 } from "@/lib/evaluation/competency-map";
+import { refreshBatchStatusRollup } from "@/lib/evaluation/batch-status";
 import { computeScriptTotal, type ScriptTotal } from "@/lib/evaluation/script-totals";
 import type {
   CompetencyProgress,
@@ -144,8 +145,8 @@ export async function signOffScript(
     };
   }
 
-  if (script.status !== "drafted") {
-    throw new Error("Script must be drafted before sign-off");
+  if (script.status !== "ready" && script.status !== "drafted") {
+    throw new Error("Script must be ready before sign-off");
   }
 
   const [{ data: assessment }, { data: classRow }] = await Promise.all([
@@ -266,28 +267,7 @@ export async function signOffScript(
 
   if (scriptUpdateError) throw new Error(scriptUpdateError.message);
 
-  // Batch status: in_review while reviewing; signed_off when all drafted scripts signed.
-  const { data: batchScripts, error: listError } = await supabase
-    .from("evaluated_scripts")
-    .select("id, status")
-    .eq("batch_id", input.batchId);
-
-  if (listError) throw new Error(listError.message);
-
-  const rows = batchScripts ?? [];
-  const reviewable = rows.filter(
-    (s) => s.status === "drafted" || s.status === "signed_off"
-  );
-  const allSigned =
-    reviewable.length > 0 &&
-    reviewable.every((s) => s.status === "signed_off");
-
-  const { error: batchStatusError } = await supabase
-    .from("evaluation_batches")
-    .update({ status: allSigned ? "signed_off" : "in_review" })
-    .eq("id", input.batchId);
-
-  if (batchStatusError) throw new Error(batchStatusError.message);
+  await refreshBatchStatusRollup(supabase, input.batchId);
 
   return {
     scriptId: input.scriptId,

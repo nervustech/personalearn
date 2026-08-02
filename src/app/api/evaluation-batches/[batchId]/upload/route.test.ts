@@ -6,6 +6,7 @@ const mockRequireTeacherClass = vi.fn();
 const mockRequireBatch = vi.fn();
 const mockUpload = vi.fn();
 const mockInsert = vi.fn();
+const mockSelect = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -15,6 +16,7 @@ vi.mock("@/lib/supabase/server", () => ({
       })),
     },
     from: vi.fn(() => ({
+      select: (...args: unknown[]) => mockSelect(...args),
       insert: (...args: unknown[]) => mockInsert(...args),
     })),
   })),
@@ -42,6 +44,9 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
       status: "draft",
     });
     mockUpload.mockResolvedValue({ error: null });
+    mockSelect.mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+    });
     mockInsert.mockReturnValue({
       select: vi.fn(() => ({
         single: vi.fn().mockResolvedValue({
@@ -130,7 +135,7 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
     );
   });
 
-  it("stores identical bytes once and keeps two page_order rows with a warning", async () => {
+  it("stores identical bytes once and skips the duplicate row", async () => {
     const formData = new FormData();
     formData.append(
       "files",
@@ -157,11 +162,9 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload.pageCount).toBe(2);
+    expect(payload.pageCount).toBe(1);
     expect(mockUpload).toHaveBeenCalledTimes(1);
-    expect(payload.pages).toHaveLength(2);
-    expect(payload.pages[0].storagePath).toBe(payload.pages[1].storagePath);
-    expect(payload.pages[1].duplicate).toBe(true);
+    expect(payload.pages).toHaveLength(1);
     expect(payload.warnings).toHaveLength(1);
     expect(payload.warnings[0].fileName).toBe("scan-a-copy.jpg");
     expect(payload.warnings[0].duplicateOfFileName).toBe("scan-a.jpg");
@@ -173,11 +176,7 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
         contentHash?: string;
       }[];
     };
-    expect(insertArg.page_order).toHaveLength(2);
-    expect(insertArg.page_order[0]!.contentHash).toBeTruthy();
-    expect(insertArg.page_order[0]!.contentHash).toBe(
-      insertArg.page_order[1]!.contentHash
-    );
-    expect(insertArg.page_order[1]!.duplicate).toBe(true);
+    expect(insertArg.page_order).toHaveLength(1);
+    expect(insertArg.page_order[0]!.duplicate).toBeUndefined();
   });
 });

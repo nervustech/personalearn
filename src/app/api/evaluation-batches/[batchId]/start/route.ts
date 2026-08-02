@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { requireTeacherEvaluationBatch } from "@/lib/evaluation/batches";
-import { processBatchDrafts } from "@/lib/evaluation/drafts";
+import { submitIndexBatch } from "@/lib/evaluation/poll-batches";
+import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 
 function authStatus(message: string) {
@@ -15,6 +16,7 @@ function authStatus(message: string) {
   return 500;
 }
 
+/** Start bulk index Batch job for all uploaded pages in session. */
 export async function POST(
   _request: Request,
   context: { params: Promise<{ batchId: string }> }
@@ -25,15 +27,12 @@ export async function POST(
     const batch = await requireTeacherEvaluationBatch(supabase, batchId);
     await requireTeacherClass(supabase, batch.class_id);
 
-    const summary = await processBatchDrafts(supabase, batchId);
+    const service = createServiceClient();
+    const job = await submitIndexBatch(service, batch);
 
-    return NextResponse.json({ summary });
+    return NextResponse.json({ batchId, jobId: job.id, phase: "index" });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Draft processing failed";
-    return NextResponse.json(
-      { error: message },
-      { status: authStatus(message) }
-    );
+    const message = error instanceof Error ? error.message : "Request failed";
+    return NextResponse.json({ error: message }, { status: authStatus(message) });
   }
 }

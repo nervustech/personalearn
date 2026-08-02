@@ -1,23 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getStudentAssessmentEvalState,
-  listAlreadyEvaluatedStudentIds,
-  listStudentsWithPriorScriptsOnAssessment,
-  markPagesAlreadyEvaluated,
   ALREADY_EVALUATED_MESSAGE,
 } from "@/lib/evaluation/assessment-eval-guard";
+import type { RosterStudent } from "@/lib/evaluation/group-by-admission";
 import {
-  groupPagesByAdmission,
   scriptHasByteDuplicate,
   scriptHasConflict,
   scriptHasMissingPageWarning,
-  type RosterStudent,
-} from "@/lib/evaluation/group-pages";
+} from "@/lib/evaluation/script-page-warnings";
 import {
   compareQuestionLabels,
   normalizeQuestionLabel,
 } from "@/lib/evaluation/normalize-question";
-import { readScriptPageFromImage } from "@/lib/evaluation/read-script-page";
+import {
+  findContentHashDuplicateScriptIds,
+} from "@/lib/evaluation/upload-page-dedupe";
 import { computeScriptTotal, type ScriptTotal } from "@/lib/evaluation/script-totals";
 import type {
   EvaluatedScript,
@@ -65,10 +63,6 @@ function sortPagesByQuestion(pages: EvaluatedScriptPage[]): EvaluatedScriptPage[
     if (cmp !== 0) return cmp;
     return a.uploadIndex - b.uploadIndex;
   });
-}
-
-function mimeFromPath(storagePath: string): string {
-  return storagePath.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
 }
 
 function asPages(pageOrder: unknown): EvaluatedScriptPage[] {
@@ -167,157 +161,6 @@ export async function listBatchScriptsForReview(
   }
 
   return result;
-}
-
-export async function processBatchIdentity(
-  supabase: SupabaseClient,
-  batchId: string,
-  classId: string
-): Promise<ScriptReviewDto[]> {
-  const { data: existing, error: existingError } = await supabase
-    .from("evaluated_scripts")
-    .select("*")
-    .eq("batch_id", batchId);
-
-  if (existingError) throw new Error(existingError.message);
-
-  const scripts = (existing ?? []) as EvaluatedScript[];
-  if (!scripts.length) {
-    throw new Error("No uploaded pages to process");
-  }
-
-  const nonPending = scripts.filter((s) => s.status !== "pending");
-  if (nonPending.length > 0) {
-    throw new Error(
-      "Identity already processed for this batch. Open the review page to confirm amber matches."
-    );
-  }
-
-  const { data: students, error: studentsError } = await supabase
-    .from("students")
-    .select("id, full_name, admission_number")
-    .eq("class_id", classId);
-
-  if (studentsError) throw new Error(studentsError.message);
-  const roster = (students ?? []) as RosterStudent[];
-
-  const pendingPages: {
-    storagePath: string;
-    fileName: string;
-    uploadIndex: number;
-    contentHash?: string;
-    duplicate?: boolean;
-  }[] = [];
-
-  for (const script of scripts) {
-    for (const page of asPages(script.page_order)) {
-      pendingPages.push({
-        storagePath: page.storagePath,
-        fileName: page.fileName,
-        uploadIndex: page.uploadIndex,
-        contentHash: page.contentHash,
-        duplicate: page.duplicate,
-      });
-    }
-  }
-
-  if (!pendingPages.length) {
-    throw new Error("No uploaded pages to process");
-  }
-
-  // One vision call per unique storage blob (byte-deduped uploads share a path).
-  const readByPath = new Map<
-    string,
-    { admissionNumber: string | null; questionNumbers: string[] }
-  >();
-
-  for (const page of pendingPages) {
-    if (readByPath.has(page.storagePath)) continue;
-
-    const { data: blob, error: downloadError } = await supabase.storage
-      .from("student_submissions")
-      .download(page.storagePath);
-
-    if (downloadError || !blob) {
-      throw new Error(
-        downloadError?.message ?? `Could not download ${page.storagePath}`
-      );
-    }
-
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    const read = await readScriptPageFromImage({
-      bytes,
-      mimeType: mimeFromPath(page.storagePath),
-    });
-    readByPath.set(page.storagePath, read);
-  }
-
-  const pageReads = pendingPages.map((page) => {
-    const read = readByPath.get(page.storagePath)!;
-    return {
-      ...page,
-      admissionNumber: read.admissionNumber,
-      questionNumbers: read.questionNumbers,
-    };
-  });
-
-  const drafts = groupPagesByAdmission(pageReads, roster);
-
-  const { data: batchRow, error: batchError } = await supabase
-    .from("evaluation_batches")
-    .select("assessment_id")
-    .eq("id", batchId)
-    .maybeSingle();
-
-  if (batchError) throw new Error(batchError.message);
-  const assessmentId = (batchRow?.assessment_id as string | null) ?? null;
-
-  const alreadyEvaluatedIds = new Set<string>();
-  if (assessmentId) {
-    const [fromSubmissions, fromPriorScripts] = await Promise.all([
-      listAlreadyEvaluatedStudentIds(supabase, assessmentId),
-      listStudentsWithPriorScriptsOnAssessment(supabase, {
-        assessmentId,
-        excludeBatchId: batchId,
-      }),
-    ]);
-    for (const id of fromSubmissions) alreadyEvaluatedIds.add(id);
-    for (const id of fromPriorScripts) alreadyEvaluatedIds.add(id);
-  }
-
-  const pendingIds = scripts.map((s) => s.id);
-  const { error: deleteError } = await supabase
-    .from("evaluated_scripts")
-    .delete()
-    .in("id", pendingIds);
-
-  if (deleteError) throw new Error(deleteError.message);
-
-  const inserts = drafts.map((draft) => {
-    const isRepeat =
-      Boolean(draft.student_id) &&
-      alreadyEvaluatedIds.has(draft.student_id as string);
-    const pageOrder = isRepeat
-      ? markPagesAlreadyEvaluated(draft.page_order)
-      : draft.page_order;
-    return {
-      batch_id: batchId,
-      student_id: draft.student_id,
-      read_admission_number: draft.read_admission_number,
-      match_confidence: isRepeat ? "low" : draft.match_confidence,
-      page_order: pageOrder,
-      // Keep amber so auto-draft skips; teacher sees the flag.
-      status: isRepeat ? "identity_amber" : draft.status,
-    };
-  });
-
-  const { error: insertError } = await supabase
-    .from("evaluated_scripts")
-    .insert(inserts);
-
-  if (insertError) throw new Error(insertError.message);
-
-  return listBatchScriptsForReview(supabase, batchId, classId);
 }
 
 export async function assignScriptStudent(
@@ -489,7 +332,7 @@ export async function assignScriptStudent(
       .update({
         student_id: input.studentId,
         match_confidence: "high",
-        status: "identity_cleared",
+        status: "evaluating",
       })
       .eq("id", input.scriptId)
       .eq("batch_id", input.batchId);
@@ -505,4 +348,103 @@ export async function assignScriptStudent(
   const updated = list.find((s) => s.id === input.scriptId);
   if (!updated) throw new Error("Script not found after assign");
   return updated;
+}
+
+/** Remove a duplicate or mistaken script from an open session. */
+export async function removeScriptFromBatch(
+  supabase: SupabaseClient,
+  input: { batchId: string; classId: string; scriptId: string }
+): Promise<void> {
+  const { data: scripts, error: scriptsError } = await supabase
+    .from("evaluated_scripts")
+    .select("id, status, page_order, student_id, created_at")
+    .eq("batch_id", input.batchId);
+
+  if (scriptsError) throw new Error(scriptsError.message);
+
+  const script = (scripts ?? []).find((s) => s.id === input.scriptId);
+  if (!script) {
+    throw new Error("Script not found");
+  }
+
+  const status = script.status as string;
+  const pages = asPages(script.page_order);
+  const duplicateIds = findContentHashDuplicateScriptIds(
+    (scripts ?? []).map((s) => ({
+      id: s.id,
+      student_id: s.student_id,
+      created_at: s.created_at,
+      page_order: s.page_order,
+    }))
+  );
+  const isHashDuplicate = duplicateIds.includes(input.scriptId);
+
+  const removable =
+    status === "pending" ||
+    status === "identity_amber" ||
+    scriptAlreadyEvaluated(pages) ||
+    isHashDuplicate;
+
+  if (!removable || status === "signed_off") {
+    throw new Error(
+      "Only pending, amber, or content-hash duplicate scripts can be removed"
+    );
+  }
+
+  const { error: deleteError } = await supabase
+    .from("evaluated_scripts")
+    .delete()
+    .eq("id", input.scriptId)
+    .eq("batch_id", input.batchId);
+
+  if (deleteError) throw new Error(deleteError.message);
+
+  const { refreshBatchStatusRollup } = await import(
+    "@/lib/evaluation/batch-status"
+  );
+  await refreshBatchStatusRollup(supabase, input.batchId);
+}
+
+/**
+ * Delete newer scripts that reuse content hashes/paths already on an older
+ * script in the same batch (legacy duplicate rows from before upload guards).
+ */
+export async function removeContentHashDuplicateScripts(
+  supabase: SupabaseClient,
+  batchId: string
+): Promise<number> {
+  const { data: scripts, error } = await supabase
+    .from("evaluated_scripts")
+    .select("id, student_id, created_at, page_order, status")
+    .eq("batch_id", batchId);
+
+  if (error) throw new Error(error.message);
+
+  const removeIds = findContentHashDuplicateScriptIds(
+    (scripts ?? []).map((s) => ({
+      id: s.id,
+      student_id: s.student_id,
+      created_at: s.created_at,
+      page_order: s.page_order,
+    }))
+  ).filter((id) => {
+    const row = (scripts ?? []).find((s) => s.id === id);
+    return row?.status !== "signed_off";
+  });
+
+  if (removeIds.length === 0) return 0;
+
+  const { error: deleteError } = await supabase
+    .from("evaluated_scripts")
+    .delete()
+    .eq("batch_id", batchId)
+    .in("id", removeIds);
+
+  if (deleteError) throw new Error(deleteError.message);
+
+  const { refreshBatchStatusRollup } = await import(
+    "@/lib/evaluation/batch-status"
+  );
+  await refreshBatchStatusRollup(supabase, batchId);
+  return removeIds.length;
 }

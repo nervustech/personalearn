@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reevaluateScriptQuestion } from "./reevaluate-question";
 import { computeScriptTotal } from "./script-totals";
 
-const mockDraft = vi.fn();
+const mockSyncEvaluate = vi.fn();
 const mockLoadScheme = vi.fn();
 
-vi.mock("@/lib/evaluation/draft-question", () => ({
-  draftQuestionFromImages: (...args: unknown[]) => mockDraft(...args),
+vi.mock("@/lib/evaluation/sync-client", () => ({
+  syncEvaluateScript: (...args: unknown[]) => mockSyncEvaluate(...args),
 }));
 
 vi.mock("@/lib/evaluation/load-marking-scheme", () => ({
@@ -17,6 +17,7 @@ vi.mock("@/lib/evaluation/page-images", () => ({
   asScriptPages: (pageOrder: unknown) =>
     Array.isArray(pageOrder) ? pageOrder : [],
   pagesForQuestion: (pages: unknown[]) => pages,
+  mimeFromStoragePath: () => "image/jpeg",
   downloadPageBytes: vi.fn(async () => ({
     bytes: new Uint8Array([1]),
     mimeType: "image/jpeg",
@@ -27,12 +28,22 @@ describe("reevaluateScriptQuestion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLoadScheme.mockResolvedValue("scheme text");
-    mockDraft.mockResolvedValue({
-      awarded: 4,
-      max: 5,
-      feedback: "revised",
-      student_answer: "student revised answer",
-      expected_answer: "correct answer",
+    mockSyncEvaluate.mockResolvedValue({
+      result: {
+        questions: [
+          {
+            question_number: "1",
+            awarded: 4,
+            max: 5,
+            suggested_feedback: "revised",
+            student_work: { text: "student revised answer" },
+            correct_reference: { text: "correct answer" },
+            status: "correct",
+            confidence: 0.9,
+          },
+        ],
+      },
+      modelId: "gemini-test",
     });
   });
 
@@ -82,7 +93,7 @@ describe("reevaluateScriptQuestion", () => {
                           data: {
                             id: "script-1",
                             batch_id: "batch-1",
-                            status: "drafted",
+                            status: "ready",
                             page_order: [
                               {
                                 storagePath: "a/b.jpg",
@@ -227,10 +238,10 @@ describe("reevaluateScriptQuestion", () => {
       instruction: "award method marks",
     });
 
-    expect(mockDraft).toHaveBeenCalledWith(
+    expect(mockSyncEvaluate).toHaveBeenCalledWith(
       expect.objectContaining({
-        questionLabel: "1",
-        instruction: "award method marks",
+        questionFocus: "1",
+        markingScheme: expect.stringContaining("award method marks"),
       })
     );
     expect(result.question.status).toBe("reevaluated");
@@ -282,6 +293,6 @@ describe("reevaluateScriptQuestion", () => {
         questionId: "q1",
       })
     ).rejects.toThrow(/signed off/i);
-    expect(mockDraft).not.toHaveBeenCalled();
+    expect(mockSyncEvaluate).not.toHaveBeenCalled();
   });
 });

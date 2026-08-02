@@ -53,8 +53,8 @@ export async function updateQuestionEvaluation(
   if (script.status === "signed_off") {
     throw new Error("Script is already signed off");
   }
-  if (script.status !== "drafted") {
-    throw new Error("Script must be drafted before editing marks");
+  if (script.status !== "ready" && script.status !== "drafted") {
+    throw new Error("Script must be ready before editing marks");
   }
 
   const { data: existing, error: existingError } = await supabase

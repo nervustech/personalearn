@@ -104,7 +104,7 @@ export function EvalUploadProgressPanel({
                 <p className="text-sm font-medium">{jobSummary(job)}</p>
                 <p className="text-xs text-muted-foreground">
                   {job.status === "running"
-                    ? "You can stay on this page — uploads continue in the background."
+                    ? "Keep this browser tab open until uploads finish. You can browse other pages in PersonaLearn."
                     : job.status === "failed"
                       ? "Retry failed files or dismiss when done."
                       : "Upload complete — start grading when ready."}
@@ -194,6 +194,7 @@ export function EvalUploadProgressPanel({
 /** Compact floating indicator for active uploads anywhere in the dashboard. */
 export function EvalUploadFloatingIndicator() {
   const { activeJob } = useEvalUploadQueue();
+  useUploadBeforeUnload();
   if (!activeJob) return null;
 
   const progress = jobProgress(activeJob);

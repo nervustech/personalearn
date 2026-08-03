@@ -60,13 +60,6 @@ export async function POST(
       );
     }
 
-    const uploads: {
-      fileName: string;
-      storagePath: string;
-      token: string;
-      contentType: string;
-    }[] = [];
-
     for (const file of body.files) {
       if (!isAllowedContentType(file.contentType, file.fileName)) {
         return NextResponse.json(
@@ -74,30 +67,32 @@ export async function POST(
           { status: 400 }
         );
       }
-
-      const ext = extensionFor(file.fileName, file.contentType);
-      const pageId = crypto.randomUUID();
-      const storagePath = `${batch.class_id}/${batchId}/${pageId}.${ext}`;
-      const contentType = file.contentType || `image/${ext === "png" ? "png" : "jpeg"}`;
-
-      const { data, error } = await supabase.storage
-        .from("student_submissions")
-        .createSignedUploadUrl(storagePath);
-
-      if (error || !data) {
-        return NextResponse.json(
-          { error: error?.message ?? "Could not create signed upload URL" },
-          { status: 500 }
-        );
-      }
-
-      uploads.push({
-        fileName: file.fileName,
-        storagePath,
-        token: data.token,
-        contentType,
-      });
     }
+
+    const uploads = await Promise.all(
+      body.files.map(async (file) => {
+        const ext = extensionFor(file.fileName, file.contentType);
+        const pageId = crypto.randomUUID();
+        const storagePath = `${batch.class_id}/${batchId}/${pageId}.${ext}`;
+        const contentType =
+          file.contentType || `image/${ext === "png" ? "png" : "jpeg"}`;
+
+        const { data, error } = await supabase.storage
+          .from("student_submissions")
+          .createSignedUploadUrl(storagePath);
+
+        if (error || !data) {
+          throw new Error(error?.message ?? "Could not create signed upload URL");
+        }
+
+        return {
+          fileName: file.fileName,
+          storagePath,
+          token: data.token,
+          contentType,
+        };
+      })
+    );
 
     return NextResponse.json({ uploads });
   } catch (error) {

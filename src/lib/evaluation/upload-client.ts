@@ -1,4 +1,9 @@
+import { createClient } from "@/lib/supabase/client";
 import { getSupabaseEnv } from "@/lib/supabase/env";
+import {
+  buildEvalPageStoragePath,
+  storageExtension,
+} from "@/lib/evaluation/compress-eval-image.shared";
 
 export type UploadSlot = {
   fileName: string;
@@ -60,7 +65,7 @@ function signedUploadUrl(storagePath: string, token: string): string {
   return `${url}/storage/v1/object/upload/sign/student_submissions/${encodedPath}?token=${encodeURIComponent(token)}`;
 }
 
-/** PUT to signed URL with byte progress via XHR. */
+/** PUT to signed URL with byte progress via XHR (fallback path). */
 export function uploadBlobToSignedUrl(
   slot: UploadSlot,
   blob: Blob,
@@ -101,16 +106,86 @@ export function uploadBlobToSignedUrl(
   });
 }
 
-export async function confirmUploadedPage(
+/** Direct authenticated upload via Supabase Storage RLS (preferred). */
+export async function uploadEvalBlobDirect(
+  classId: string,
   batchId: string,
-  page: { storagePath: string; fileName: string; contentHash: string }
+  fileName: string,
+  blob: Blob,
+  contentType: string
+): Promise<{ storagePath: string }> {
+  const storagePath = buildEvalPageStoragePath(
+    classId,
+    batchId,
+    fileName,
+    contentType
+  );
+  const supabase = createClient();
+  const { error } = await supabase.storage
+    .from("student_submissions")
+    .upload(storagePath, blob, {
+      contentType,
+      upsert: false,
+    });
+
+  if (error) {
+    throw new Error(error.message || `Upload failed: ${fileName}`);
+  }
+
+  return { storagePath };
+}
+
+/** Upload with direct Supabase first; fall back to signed URL mint + XHR. */
+export async function uploadEvalBlob(
+  classId: string,
+  batchId: string,
+  fileName: string,
+  blob: Blob,
+  contentType: string,
+  onProgress?: (loaded: number, total: number) => void
+): Promise<{ storagePath: string }> {
+  const total = blob.size || 1;
+  try {
+    onProgress?.(0, total);
+    const result = await uploadEvalBlobDirect(
+      classId,
+      batchId,
+      fileName,
+      blob,
+      contentType
+    );
+    onProgress?.(total, total);
+    return result;
+  } catch {
+    const ext = storageExtension(fileName, contentType);
+    const slots = await mintUploadSlots(batchId, [
+      {
+        fileName,
+        contentType: contentType || `image/${ext === "png" ? "png" : "jpeg"}`,
+      },
+    ]);
+    const slot = slots[0];
+    if (!slot) {
+      throw new Error("Could not prepare upload URL");
+    }
+    await uploadBlobToSignedUrl({ ...slot, contentType }, blob, onProgress);
+    return { storagePath: slot.storagePath };
+  }
+}
+
+export async function confirmUploadedPages(
+  batchId: string,
+  pages: { storagePath: string; fileName: string; contentHash: string }[]
 ): Promise<ConfirmUploadResult> {
+  if (pages.length === 0) {
+    return { batchId, pageCount: 0, skippedAll: true };
+  }
   const response = await fetch(
     `/api/evaluation-batches/${batchId}/confirm-upload`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pages: [page] }),
+      body: JSON.stringify({ pages }),
     }
   );
   const payload = (await response.json()) as ConfirmUploadResult;
@@ -118,4 +193,11 @@ export async function confirmUploadedPage(
     throw new Error(payload.error ?? "Could not confirm upload");
   }
   return payload;
+}
+
+export async function confirmUploadedPage(
+  batchId: string,
+  page: { storagePath: string; fileName: string; contentHash: string }
+): Promise<ConfirmUploadResult> {
+  return confirmUploadedPages(batchId, [page]);
 }

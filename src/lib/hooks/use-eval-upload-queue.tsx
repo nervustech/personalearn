@@ -13,10 +13,9 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { compressEvalScanImage } from "@/lib/evaluation/compress-eval-image";
 import {
-  confirmUploadedPage,
-  mintUploadSlots,
+  confirmUploadedPages,
   sha256HexBrowser,
-  uploadBlobToSignedUrl,
+  uploadEvalBlob,
 } from "@/lib/evaluation/upload-client";
 import {
   evaluationBatchesQueryKey,
@@ -132,7 +131,8 @@ type EvalUploadQueueContextValue = {
 const EvalUploadQueueContext =
   createContext<EvalUploadQueueContextValue | null>(null);
 
-const UPLOAD_CONCURRENCY = 2;
+/** Each file runs compress → upload end-to-end in parallel. */
+const PIPELINE_CONCURRENCY = 4;
 
 async function runWithConcurrency<T>(
   items: T[],
@@ -187,126 +187,143 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
 
       runningRef.current.add(jobId);
 
-      type Prepared = {
-        fileItem: UploadFileItem;
-        blob: Blob;
-        contentType: string;
+      type PendingConfirm = {
+        fileId: string;
+        storagePath: string;
+        fileName: string;
+        contentHash: string;
       };
 
-      const prepared: Prepared[] = [];
+      const toProcess = job.files.filter(
+        (fileItem) =>
+          fileItem.status !== "confirmed" && fileItem.status !== "skipped"
+      );
+
+      const pendingConfirms: PendingConfirm[] = [];
 
       try {
-        for (const fileItem of job.files) {
-          if (
-            fileItem.status === "confirmed" ||
-            fileItem.status === "skipped"
-          ) {
-            continue;
-          }
+        await runWithConcurrency(
+          toProcess,
+          PIPELINE_CONCURRENCY,
+          async (fileItem) => {
+            const source = filesRef.current.get(`${jobId}:${fileItem.id}`);
+            if (!source) {
+              patchFile(jobId, fileItem.id, {
+                status: "failed",
+                error: "File no longer available — re-select and upload again.",
+              });
+              return;
+            }
 
-          const source = filesRef.current.get(`${jobId}:${fileItem.id}`);
-          if (!source) {
-            patchFile(jobId, fileItem.id, {
-              status: "failed",
-              error: "File no longer available — re-select and upload again.",
-            });
-            continue;
-          }
+            try {
+              patchFile(jobId, fileItem.id, {
+                status: "compressing",
+                progress: 0,
+                error: undefined,
+              });
 
-          patchFile(jobId, fileItem.id, {
-            status: "compressing",
-            progress: 0,
-            error: undefined,
-          });
-          const compressed = await compressEvalScanImage(source);
-          prepared.push({
-            fileItem,
-            blob: compressed,
-            contentType: compressed.type || "image/jpeg",
-          });
-        }
+              const compressed = await compressEvalScanImage(source);
+              const contentType = compressed.type || "image/jpeg";
 
-        if (prepared.length > 0) {
-          const slots = await mintUploadSlots(
-            job.batchId,
-            prepared.map((entry) => ({
-              fileName: entry.fileItem.fileName,
-              contentType: entry.contentType,
-            }))
-          );
+              patchFile(jobId, fileItem.id, {
+                status: "uploading",
+                progress: 0,
+              });
 
-          if (slots.length !== prepared.length) {
-            throw new Error("Upload URL count mismatch");
-          }
-
-          await runWithConcurrency(
-            prepared.map((entry, index) => ({ entry, slot: slots[index]! })),
-            UPLOAD_CONCURRENCY,
-            async ({ entry, slot }) => {
-              const { fileItem, blob, contentType } = entry;
-              try {
-                patchFile(jobId, fileItem.id, {
-                  status: "uploading",
-                  progress: 0,
-                  error: undefined,
-                });
-
-                await uploadBlobToSignedUrl(
-                  { ...slot, contentType },
-                  blob,
-                  (loaded, total) => {
-                    patchFile(jobId, fileItem.id, {
-                      progress:
-                        total > 0 ? Math.round((loaded / total) * 100) : 0,
-                    });
-                  }
-                );
-
-                patchFile(jobId, fileItem.id, {
-                  status: "confirming",
-                  progress: 100,
-                });
-
-                const contentHash = await sha256HexBrowser(blob);
-                const confirm = await confirmUploadedPage(job.batchId, {
-                  storagePath: slot.storagePath,
-                  fileName: fileItem.fileName,
-                  contentHash,
-                });
-
-                for (const warning of confirm.warnings ?? []) {
-                  dispatch({
-                    type: "append_warning",
-                    jobId,
-                    warning: warning.message,
+              const { storagePath } = await uploadEvalBlob(
+                job.classId,
+                job.batchId,
+                fileItem.fileName,
+                compressed,
+                contentType,
+                (loaded, total) => {
+                  patchFile(jobId, fileItem.id, {
+                    progress:
+                      total > 0 ? Math.round((loaded / total) * 100) : 0,
                   });
                 }
+              );
 
-                if (confirm.skippedAll) {
-                  patchFile(jobId, fileItem.id, {
+              patchFile(jobId, fileItem.id, {
+                status: "confirming",
+                progress: 100,
+              });
+
+              const contentHash = await sha256HexBrowser(compressed);
+              pendingConfirms.push({
+                fileId: fileItem.id,
+                storagePath,
+                fileName: fileItem.fileName,
+                contentHash,
+              });
+            } catch (error) {
+              patchFile(jobId, fileItem.id, {
+                status: "failed",
+                error:
+                  error instanceof Error ? error.message : "Upload failed",
+              });
+            }
+          }
+        );
+
+        if (pendingConfirms.length > 0) {
+          try {
+            const confirm = await confirmUploadedPages(
+              job.batchId,
+              pendingConfirms.map((entry) => ({
+                storagePath: entry.storagePath,
+                fileName: entry.fileName,
+                contentHash: entry.contentHash,
+              }))
+            );
+
+            for (const warning of confirm.warnings ?? []) {
+              dispatch({
+                type: "append_warning",
+                jobId,
+                warning: warning.message,
+              });
+            }
+
+            if (confirm.skippedAll) {
+              for (const entry of pendingConfirms) {
+                patchFile(jobId, entry.fileId, {
+                  status: "skipped",
+                  progress: 100,
+                  warning:
+                    confirm.message ??
+                    "Already in this session — not added again.",
+                });
+              }
+            } else {
+              for (const entry of pendingConfirms) {
+                const warning = confirm.warnings?.find(
+                  (item) => item.fileName === entry.fileName
+                );
+                if (warning) {
+                  patchFile(jobId, entry.fileId, {
                     status: "skipped",
                     progress: 100,
-                    warning:
-                      confirm.message ??
-                      "Already in this session — not added again.",
+                    warning: warning.message,
                   });
                 } else {
-                  patchFile(jobId, fileItem.id, {
+                  patchFile(jobId, entry.fileId, {
                     status: "confirmed",
                     progress: 100,
                   });
                 }
-
-                invalidateBatch(job.classId, job.batchId);
-              } catch (error) {
-                patchFile(jobId, fileItem.id, {
-                  status: "failed",
-                  error:
-                    error instanceof Error ? error.message : "Upload failed",
-                });
               }
             }
-          );
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "Could not confirm upload";
+            for (const entry of pendingConfirms) {
+              patchFile(jobId, entry.fileId, {
+                status: "failed",
+                error: message,
+              });
+            }
+          }
         }
 
         const latest = stateRef.current.jobs.find((entry) => entry.id === jobId);

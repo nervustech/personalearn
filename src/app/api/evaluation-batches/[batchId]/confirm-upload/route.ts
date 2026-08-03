@@ -6,6 +6,7 @@ import {
   buildUploadDedupeState,
   dedupeIncomingUploadPages,
 } from "@/lib/evaluation/upload-page-dedupe";
+import { isValidEvalPageStoragePath } from "@/lib/evaluation/compress-eval-image.shared";
 import { createClient } from "@/lib/supabase/server";
 import type { UploadDuplicateWarning } from "../upload/route";
 
@@ -46,6 +47,21 @@ export async function POST(
         { error: "At least one confirmed page is required" },
         { status: 400 }
       );
+    }
+
+    for (const page of body.pages) {
+      if (
+        !isValidEvalPageStoragePath(
+          page.storagePath,
+          batch.class_id,
+          batchId
+        )
+      ) {
+        return NextResponse.json(
+          { error: `Invalid storage path: ${page.fileName}` },
+          { status: 400 }
+        );
+      }
     }
 
     const { data: existingPages, error: existingError } = await supabase

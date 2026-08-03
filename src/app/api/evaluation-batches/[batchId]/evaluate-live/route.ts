@@ -23,27 +23,28 @@ export async function POST(
 ) {
   try {
     const { batchId } = await context.params;
-    const body = (await request.json()) as { scriptId?: string };
-    if (!body.scriptId) {
-      return NextResponse.json({ error: "scriptId is required" }, { status: 400 });
-    }
+    const body = (await request.json()) as { scriptId?: string | null };
 
     const supabase = await createClient();
     const batch = await requireTeacherEvaluationBatch(supabase, batchId);
     await requireTeacherClass(supabase, batch.class_id);
 
     const service = createServiceClient();
-    await runLiveEvaluation(service, batch, body.scriptId);
+    const scriptId = await runLiveEvaluation(
+      service,
+      batch,
+      body.scriptId ?? null
+    );
 
     const { data: script } = await supabase
       .from("evaluated_scripts")
       .select("id, status")
-      .eq("id", body.scriptId)
+      .eq("id", scriptId)
       .single();
 
     return NextResponse.json({
       batchId,
-      scriptId: body.scriptId,
+      scriptId,
       status: script?.status ?? "ready",
     });
   } catch (error) {

@@ -31,7 +31,14 @@ export async function GET(
       batch.class_id
     );
 
-    return NextResponse.json({ scripts, batch });
+    const { count: pageCount, error: pageCountError } = await supabase
+      .from("evaluation_pages")
+      .select("*", { count: "exact", head: true })
+      .eq("batch_id", batchId);
+
+    if (pageCountError) throw new Error(pageCountError.message);
+
+    return NextResponse.json({ scripts, batch, pageCount: pageCount ?? 0 });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to load scripts";

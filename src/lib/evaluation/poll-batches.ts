@@ -178,6 +178,13 @@ async function processCompletedIndexBatch(
     roster: roster ?? [],
   });
 
+  // Drop placeholder scripts from upload phase before creating grouped scripts.
+  await supabase
+    .from("evaluated_scripts")
+    .delete()
+    .eq("batch_id", batch.id)
+    .in("status", ["uploaded", "pending"]);
+
   for (const group of groups) {
     await upsertScriptFromGroup(supabase, { batchId: batch.id, group });
   }
@@ -365,15 +372,62 @@ export async function pollPendingBatchJobs(
 export async function runLiveEvaluation(
   supabase: SupabaseClient,
   batch: EvaluationBatch,
-  scriptId: string
-): Promise<void> {
+  scriptId?: string | null
+): Promise<string> {
   const markingScheme = await loadMarkingSchemeText(supabase, batch);
+
+  let resolvedScriptId = scriptId ?? null;
+
+  if (!resolvedScriptId) {
+    const { data: unassigned, error: unassignedError } = await supabase
+      .from("evaluation_pages")
+      .select("*")
+      .eq("batch_id", batch.id)
+      .is("script_id", null)
+      .order("upload_index");
+
+    if (unassignedError) throw new Error(unassignedError.message);
+    if (!unassigned?.length) {
+      throw new Error("No pages to grade");
+    }
+
+    const pageOrder = unassigned.map((p) => ({
+      storagePath: p.storage_path,
+      fileName: p.file_name,
+      uploadIndex: p.upload_index,
+      contentHash: p.content_hash,
+    }));
+
+    const { data: created, error: createError } = await supabase
+      .from("evaluated_scripts")
+      .insert({
+        batch_id: batch.id,
+        page_order: pageOrder,
+        status: "uploaded",
+      })
+      .select("id")
+      .single();
+
+    if (createError || !created) {
+      throw new Error(createError?.message ?? "Could not create script");
+    }
+
+    resolvedScriptId = created.id as string;
+
+    await supabase
+      .from("evaluation_pages")
+      .update({ script_id: resolvedScriptId })
+      .in(
+        "id",
+        unassigned.map((p) => p.id)
+      );
+  }
 
   const { data: pages, error: pagesError } = await supabase
     .from("evaluation_pages")
     .select("*")
     .eq("batch_id", batch.id)
-    .eq("script_id", scriptId)
+    .eq("script_id", resolvedScriptId)
     .order("upload_index");
 
   if (pagesError) throw new Error(pagesError.message);
@@ -423,11 +477,11 @@ export async function runLiveEvaluation(
   await upsertScriptFromGroup(supabase, {
     batchId: batch.id,
     group,
-    existingScriptId: scriptId,
+    existingScriptId: resolvedScriptId,
   });
 
   if (group.status === "identity_amber" || group.status === "unmatched") {
-    return;
+    return resolvedScriptId;
   }
 
   const images = [];
@@ -439,7 +493,7 @@ export async function runLiveEvaluation(
   await supabase
     .from("evaluated_scripts")
     .update({ status: "evaluating" })
-    .eq("id", scriptId);
+    .eq("id", resolvedScriptId);
 
   const { result, modelId } = await syncEvaluateScript({
     images,
@@ -447,11 +501,12 @@ export async function runLiveEvaluation(
   });
 
   await persistEvaluateResults(supabase, {
-    scriptId,
+    scriptId: resolvedScriptId,
     result,
     modelId,
     hasMarkingScheme: Boolean(markingScheme),
   });
 
   await refreshBatchStatusRollup(supabase, batch.id);
+  return resolvedScriptId;
 }

@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { EvalQueueSummaryBar } from "@/components/classes/eval-queue-summary";
+import { EvalUploadGradingBanner } from "@/components/classes/eval-upload-grading-banner";
 import { EvalSessionToolbar } from "@/components/classes/eval-session-toolbar";
 import { useEvalScriptRealtime } from "@/lib/hooks/use-eval-script-realtime";
 
@@ -805,22 +806,33 @@ export function EvalReviewWorkspace({
         </Link>
       </div>
       <EvalQueueSummaryBar scripts={allScripts} />
+      <EvalUploadGradingBanner batchId={batchId} />
       <EvalSessionToolbar
         classId={classId}
         batchId={batchId}
         batchSignedOff={data?.batch?.status === "signed_off"}
         scripts={allScripts}
+        pageCount={data?.pageCount ?? 0}
+        isLive={data?.batch?.mode === "live"}
         onUpdated={() => {
           void refetch();
         }}
       />
 
-      {allScripts.length === 0 ? (
+      {allScripts.length === 0 && (data?.pageCount ?? 0) === 0 ? (
         <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
-          <p className="text-sm font-medium">No scripts yet</p>
+          <p className="text-sm font-medium">No pages yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Use <span className="font-medium">Add pages</span> above to upload
             scans for this session.
+          </p>
+        </section>
+      ) : allScripts.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+          <p className="text-sm font-medium">Pages uploaded</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Start grading when uploads finish — scripts appear here as identity
+            is matched and marks are drafted.
           </p>
         </section>
       ) : (

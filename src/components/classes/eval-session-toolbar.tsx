@@ -2,13 +2,13 @@
 
 import { useRef, useState } from "react";
 import { Plus, RefreshCw } from "lucide-react";
-import { compressEvalScanImages } from "@/lib/evaluation/compress-eval-image";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import {
-  useProcessEvaluationIdentity,
+  useEvaluateLive,
+  useEvaluationScripts,
   useStartEvaluationProcessing,
-  useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
+import { useEvalUploadQueue } from "@/lib/hooks/use-eval-upload-queue";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,8 @@ type EvalSessionToolbarProps = {
   batchId: string;
   batchSignedOff?: boolean;
   scripts: ScriptReviewDto[];
+  pageCount?: number;
+  isLive?: boolean;
   onUpdated?: () => void;
 };
 
@@ -26,19 +28,23 @@ export function EvalSessionToolbar({
   batchId,
   batchSignedOff = false,
   scripts,
+  pageCount = 0,
+  isLive = false,
   onUpdated,
 }: EvalSessionToolbarProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
-  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const [kickSummary, setKickSummary] = useState<string | null>(null);
-  const [compressing, setCompressing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadPages = useUploadEvaluationPages(classId);
-  const processIdentity = useProcessEvaluationIdentity(classId);
+  const { enqueueUpload, jobForBatch } = useEvalUploadQueue();
   const startProcessing = useStartEvaluationProcessing(classId);
+  const evaluateLive = useEvaluateLive(classId);
+  const { refetch } = useEvaluationScripts(batchId);
+
+  const uploadJob = jobForBatch(batchId);
+  const uploadActive = uploadJob?.status === "running";
 
   const gradingActive = scripts.some((s) =>
     ["indexing", "evaluating", "parsing", "queued_draft", "drafting"].includes(
@@ -46,46 +52,60 @@ export function EvalSessionToolbar({
     )
   );
 
-  const uploadPending =
-    compressing || uploadPages.isPending || processIdentity.isPending;
+  const canStartGrading =
+    pageCount > 0 &&
+    !uploadActive &&
+    !gradingActive &&
+    !startProcessing.isPending &&
+    !evaluateLive.isPending;
 
   function resetAddDialog() {
     setSelectedFiles([]);
     setFormError(null);
-    setUploadWarnings([]);
-    uploadPages.reset();
-    processIdentity.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  async function handleAddPages() {
+  function handleAddPages() {
     setFormError(null);
-    setUploadWarnings([]);
     if (!selectedFiles.length) {
       setFormError("Choose at least one scan image.");
       return;
     }
 
+    enqueueUpload({
+      classId,
+      batchId,
+      files: selectedFiles,
+    });
+
+    setAddOpen(false);
+    resetAddDialog();
+    onUpdated?.();
+  }
+
+  async function handleStartGrading() {
+    setKickSummary(null);
+    setFormError(null);
     try {
-      setCompressing(true);
-      const files = await compressEvalScanImages(selectedFiles);
-      setCompressing(false);
-
-      const uploadResult = await uploadPages.mutateAsync({ batchId, files });
-      const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
-      if (warnings.length) setUploadWarnings(warnings);
-
-      if (!(uploadResult.skippedAll ?? false)) {
-        await processIdentity.mutateAsync(batchId);
+      if (isLive) {
+        await evaluateLive.mutateAsync({ batchId });
+        setKickSummary(
+          "Grading this student — the queue updates when marks are ready."
+        );
+      } else {
+        const result = await startProcessing.mutateAsync(batchId);
+        const phase = result.phase === "evaluate" ? "evaluate" : "index";
+        setKickSummary(
+          result.jobId
+            ? `Batch ${phase} job submitted — grading runs in the background.`
+            : "Batch processing started."
+        );
       }
-
-      setAddOpen(false);
-      resetAddDialog();
+      await refetch();
       onUpdated?.();
     } catch (error) {
-      setCompressing(false);
       setFormError(
-        error instanceof Error ? error.message : "Upload or identity failed"
+        error instanceof Error ? error.message : "Could not start grading"
       );
     }
   }
@@ -118,7 +138,7 @@ export function EvalSessionToolbar({
           type="button"
           size="sm"
           variant="secondary"
-          disabled={uploadPending}
+          disabled={uploadActive}
           onClick={() => {
             resetAddDialog();
             setAddOpen(true);
@@ -127,23 +147,47 @@ export function EvalSessionToolbar({
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Add pages
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          disabled={startProcessing.isPending || uploadPending}
-          onClick={handleRetryGrading}
-        >
-          <RefreshCw
-            className={`mr-1.5 h-3.5 w-3.5 ${startProcessing.isPending ? "animate-spin" : ""}`}
-          />
-          {startProcessing.isPending ? "Retrying…" : "Retry grading"}
-        </Button>
+        {canStartGrading ? (
+          <Button
+            type="button"
+            size="sm"
+            disabled={startProcessing.isPending || evaluateLive.isPending}
+            onClick={handleStartGrading}
+          >
+            {startProcessing.isPending || evaluateLive.isPending
+              ? "Starting…"
+              : isLive
+                ? "Grade now"
+                : "Start grading"}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={startProcessing.isPending || uploadActive}
+            onClick={handleRetryGrading}
+          >
+            <RefreshCw
+              className={`mr-1.5 h-3.5 w-3.5 ${startProcessing.isPending ? "animate-spin" : ""}`}
+            />
+            {startProcessing.isPending ? "Retrying…" : "Retry grading"}
+          </Button>
+        )}
       </div>
-      {gradingActive ? (
+      {uploadActive ? (
+        <p className="text-xs text-muted-foreground">
+          Uploading pages in the background — start grading when uploads finish.
+        </p>
+      ) : gradingActive ? (
         <p className="text-xs text-muted-foreground">
           Indexing and grading run in the background — you can leave this page.
           Use retry if dots stay stuck for several minutes.
+        </p>
+      ) : canStartGrading ? (
+        <p className="text-xs text-muted-foreground">
+          {pageCount} page{pageCount === 1 ? "" : "s"} uploaded — start grading
+          when ready.
         </p>
       ) : null}
       {kickSummary ? (
@@ -160,7 +204,7 @@ export function EvalSessionToolbar({
           if (!open) resetAddDialog();
         }}
         title="Add pages to session"
-        description="Upload more scans for this assessment. New pages are matched to students and join the same grading queue."
+        description="Upload more scans for this assessment. Pages save as they upload — start or retry grading from the toolbar when ready."
         className="max-w-md"
       >
         <div className="space-y-4">
@@ -173,11 +217,10 @@ export function EvalSessionToolbar({
               multiple
               accept=".jpg,.jpeg,.png,image/jpeg,image/png"
               className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm file:font-medium"
-              disabled={uploadPending}
+              disabled={uploadActive}
               onChange={(event) => {
                 setSelectedFiles(Array.from(event.target.files ?? []));
                 setFormError(null);
-                setUploadWarnings([]);
               }}
             />
             {selectedFiles.length > 0 ? (
@@ -188,14 +231,6 @@ export function EvalSessionToolbar({
             ) : null}
           </div>
 
-          {uploadWarnings.length > 0 ? (
-            <ul className="space-y-1 text-sm text-amber-900 dark:text-amber-100">
-              {uploadWarnings.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          ) : null}
-
           {formError ? (
             <p className="text-sm text-destructive">{formError}</p>
           ) : null}
@@ -204,23 +239,17 @@ export function EvalSessionToolbar({
             <Button
               type="button"
               variant="secondary"
-              disabled={uploadPending}
+              disabled={uploadActive}
               onClick={() => setAddOpen(false)}
             >
               Cancel
             </Button>
             <Button
               type="button"
-              disabled={uploadPending || selectedFiles.length === 0}
+              disabled={uploadActive || selectedFiles.length === 0}
               onClick={handleAddPages}
             >
-              {compressing
-                ? "Preparing…"
-                : uploadPages.isPending
-                  ? "Uploading…"
-                  : processIdentity.isPending
-                    ? "Identifying…"
-                    : "Upload & process"}
+              Upload in background
             </Button>
           </div>
         </div>

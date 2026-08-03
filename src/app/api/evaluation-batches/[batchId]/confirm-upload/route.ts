@@ -84,29 +84,12 @@ export async function POST(
       });
     }
 
-    const { data: script, error: scriptError } = await supabase
-      .from("evaluated_scripts")
-      .insert({
-        batch_id: batchId,
-        page_order: pageOrder,
-        status: "uploaded",
-      })
-      .select("id")
-      .single();
-
-    if (scriptError || !script) {
-      return NextResponse.json(
-        { error: scriptError?.message ?? "Could not queue pages" },
-        { status: 500 }
-      );
-    }
-
     const { error: pagesInsertError } = await supabase
       .from("evaluation_pages")
       .insert(
         pageOrder.map((p) => ({
           batch_id: batchId,
-          script_id: script.id,
+          script_id: null,
           storage_path: p.storagePath,
           file_name: p.fileName,
           upload_index: p.uploadIndex,
@@ -125,7 +108,6 @@ export async function POST(
 
     return NextResponse.json({
       batchId,
-      scriptId: script.id,
       pageCount: pageOrder.length,
       warnings,
       queued: true,

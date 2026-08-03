@@ -103,6 +103,7 @@ export function useEvaluationScripts(batchId: string | undefined) {
       const payload = (await response.json()) as {
         scripts?: ScriptReviewDto[];
         batch?: EvaluationBatch;
+        pageCount?: number;
         error?: string;
       };
       if (!response.ok) {
@@ -111,6 +112,7 @@ export function useEvaluationScripts(batchId: string | undefined) {
       return {
         scripts: payload.scripts ?? [],
         batch: payload.batch,
+        pageCount: payload.pageCount ?? 0,
       };
     },
   });
@@ -346,13 +348,13 @@ export function useEvaluateLive(classId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { batchId: string; scriptId: string }) => {
+    mutationFn: async (input: { batchId: string; scriptId?: string | null }) => {
       const response = await fetch(
         `/api/evaluation-batches/${input.batchId}/evaluate-live`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scriptId: input.scriptId }),
+          body: JSON.stringify({ scriptId: input.scriptId ?? null }),
         }
       );
       const payload = (await response.json()) as {

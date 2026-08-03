@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { requireTeacherEvaluationBatch } from "@/lib/evaluation/batches";
+import { refreshBatchStatusRollup } from "@/lib/evaluation/batch-status";
 import { sha256Hex } from "@/lib/evaluation/content-hash";
 import {
   buildUploadDedupeState,
@@ -177,36 +178,12 @@ export async function POST(
       });
     }
 
-    const pageOrder = pageRows.map((p) => ({
-      storagePath: p.storage_path,
-      fileName: p.file_name,
-      uploadIndex: p.upload_index,
-      contentHash: p.content_hash,
-    }));
-
-    const { data: script, error: scriptError } = await supabase
-      .from("evaluated_scripts")
-      .insert({
-        batch_id: batchId,
-        page_order: pageOrder,
-        status: "uploaded",
-      })
-      .select("id")
-      .single();
-
-    if (scriptError || !script) {
-      return NextResponse.json(
-        { error: scriptError?.message ?? "Could not queue pages" },
-        { status: 500 }
-      );
-    }
-
     const { error: pagesInsertError } = await supabase
       .from("evaluation_pages")
       .insert(
         pageRows.map((p) => ({
           batch_id: batchId,
-          script_id: script.id,
+          script_id: null,
           storage_path: p.storage_path,
           file_name: p.file_name,
           upload_index: p.upload_index,
@@ -221,9 +198,10 @@ export async function POST(
       );
     }
 
+    await refreshBatchStatusRollup(supabase, batchId);
+
     return NextResponse.json({
       batchId,
-      scriptId: script.id,
       pageCount: pageRows.length,
       pages: pagesMeta,
       warnings,

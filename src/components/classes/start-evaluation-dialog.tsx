@@ -8,12 +8,9 @@ import {
   useAssessments,
   useCreateEvaluationBatch,
   useEvaluationBatches,
-  useEvaluateLive,
-  useProcessEvaluationIdentity,
-  useUploadEvaluationPages,
 } from "@/lib/hooks/use-evaluation";
+import { useEvalUploadQueue } from "@/lib/hooks/use-eval-upload-queue";
 import { isOpenEvaluationBatchStatus } from "@/lib/evaluation/batch-stage";
-import { compressEvalScanImages } from "@/lib/evaluation/compress-eval-image";
 import { isGradableResourceType } from "@/lib/evaluation/gradable";
 import { RESOURCE_TYPE_LABELS } from "@/lib/resources/format";
 import { Button } from "@/components/ui/button";
@@ -64,18 +61,13 @@ export function StartEvaluationDialog({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [createdBatchId, setCreatedBatchId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [compressing, setCompressing] = useState(false);
 
   const { data: assessments } = useAssessments(classId);
   const { data: batches } = useEvaluationBatches(classId);
   const { data: resources } = useResources(classId);
   const createBatch = useCreateEvaluationBatch(classId);
-  const uploadPages = useUploadEvaluationPages(classId);
-  const startBatch = useProcessEvaluationIdentity(classId);
-  const evaluateLive = useEvaluateLive(classId);
+  const { enqueueUpload, jobForBatch } = useEvalUploadQueue();
 
   const lockedAssessment = Boolean(preselectedAssessmentId);
   const isN1 = Boolean(studentId);
@@ -99,10 +91,10 @@ export function StartEvaluationDialog({
 
   const pending =
     createBatch.isPending ||
-    uploadPages.isPending ||
-    startBatch.isPending ||
-    evaluateLive.isPending ||
-    compressing;
+    Boolean(
+      createdBatchId &&
+        jobForBatch(createdBatchId)?.status === "running"
+    );
 
   function resetForm() {
     setStep(0);
@@ -113,11 +105,7 @@ export function StartEvaluationDialog({
     setSelectedFiles([]);
     setCreatedBatchId(null);
     setFormError(null);
-    setUploadWarnings([]);
     createBatch.reset();
-    uploadPages.reset();
-    startBatch.reset();
-    evaluateLive.reset();
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -155,10 +143,13 @@ export function StartEvaluationDialog({
     );
     const scriptsPayload = (await scriptsRes.json()) as {
       scripts?: unknown[];
+      pageCount?: number;
     };
-    const hasScripts =
-      scriptsRes.ok && (scriptsPayload.scripts?.length ?? 0) > 0;
-    if (hasScripts) {
+    const hasContent =
+      scriptsRes.ok &&
+      ((scriptsPayload.scripts?.length ?? 0) > 0 ||
+        (scriptsPayload.pageCount ?? 0) > 0);
+    if (hasContent) {
       await resumeOpenBatch(batchId);
       return;
     }
@@ -206,11 +197,14 @@ export function StartEvaluationDialog({
         );
         const scriptsPayload = (await scriptsRes.json()) as {
           scripts?: unknown[];
+          pageCount?: number;
         };
-        const hasScripts =
-          scriptsRes.ok && (scriptsPayload.scripts?.length ?? 0) > 0;
+        const hasContent =
+          scriptsRes.ok &&
+          ((scriptsPayload.scripts?.length ?? 0) > 0 ||
+            (scriptsPayload.pageCount ?? 0) > 0);
 
-        if (hasScripts) {
+        if (hasContent) {
           await resumeOpenBatch(batch.id);
           return;
         }
@@ -230,48 +224,20 @@ export function StartEvaluationDialog({
 
   async function handleUpload() {
     setFormError(null);
-    setUploadWarnings([]);
     if (!createdBatchId || !selectedFiles.length) {
       setFormError("Choose at least one scan image.");
       return;
     }
 
     const batchId = createdBatchId;
-    try {
-      setCompressing(true);
-      const files = await compressEvalScanImages(selectedFiles);
-      setCompressing(false);
-      const uploadResult = await uploadPages.mutateAsync({
-        batchId,
-        files,
-      });
-      const warnings = (uploadResult.warnings ?? []).map((w) => w.message);
-      if (warnings.length) setUploadWarnings(warnings);
+    enqueueUpload({
+      classId,
+      batchId,
+      files: selectedFiles,
+    });
 
-      if (uploadResult.skippedAll) {
-        handleOpenChange(false);
-        router.push(`/classes/${classId}/evaluations/${batchId}`);
-        return;
-      }
-
-      // New pages on an existing session — only process pending scripts.
-      if (!(uploadResult.skippedAll ?? false)) {
-        const scriptId = (uploadResult as { scriptId?: string }).scriptId;
-        if (isN1 && scriptId) {
-          await evaluateLive.mutateAsync({ batchId, scriptId });
-        } else {
-          await startBatch.mutateAsync(batchId);
-        }
-      }
-
-      handleOpenChange(false);
-      router.push(`/classes/${classId}/evaluations/${batchId}`);
-    } catch (error) {
-      setCompressing(false);
-      setFormError(
-        error instanceof Error ? error.message : "Upload or identity failed"
-      );
-    }
+    handleOpenChange(false);
+    router.push(`/classes/${classId}/evaluations/${batchId}`);
   }
 
   const dialogTitle =
@@ -469,8 +435,8 @@ export function StartEvaluationDialog({
             <>
               <p className="text-sm text-muted-foreground">
                 {isN1
-                  ? "Upload this student’s scanned pages as JPEG or PNG (any order). Large phone photos are resized in the browser first."
-                  : "Upload scanned script pages as JPEG or PNG (any order). Large phone photos are resized first. After upload we match admission numbers, grade cleared scripts in the background, and open the session queue — you choose when to review each student."}
+                  ? "Upload this student’s scanned pages as JPEG or PNG (any order). Uploads continue in the background — start grading from the session page when ready."
+                  : "Upload scanned script pages as JPEG or PNG (any order). Uploads continue in the background — start grading from the session page when all scans are in."}
               </p>
               <div className="space-y-1.5">
                 <Label htmlFor="eval-files">Scan images</Label>
@@ -485,7 +451,6 @@ export function StartEvaluationDialog({
                   onChange={(event) => {
                     setSelectedFiles(Array.from(event.target.files ?? []));
                     setFormError(null);
-                    setUploadWarnings([]);
                   }}
                 />
                 {selectedFiles.length > 0 ? (
@@ -495,14 +460,6 @@ export function StartEvaluationDialog({
                   </p>
                 ) : null}
               </div>
-
-              {uploadWarnings.length > 0 ? (
-                <ul className="space-y-1 text-sm text-amber-900 dark:text-amber-100">
-                  {uploadWarnings.map((message) => (
-                    <li key={message}>{message}</li>
-                  ))}
-                </ul>
-              ) : null}
 
               {formError ? (
                 <p className="text-sm text-destructive">{formError}</p>
@@ -522,15 +479,7 @@ export function StartEvaluationDialog({
                   disabled={pending || selectedFiles.length === 0}
                   onClick={handleUpload}
                 >
-                  {compressing
-                    ? "Preparing images…"
-                    : uploadPages.isPending
-                      ? "Uploading…"
-                      : startBatch.isPending || evaluateLive.isPending
-                        ? isN1
-                          ? "Grading…"
-                          : "Starting batch…"
-                        : "Upload & open session"}
+                  Upload & open session
                 </Button>
               </div>
             </>

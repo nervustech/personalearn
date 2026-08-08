@@ -13,7 +13,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { compressEvalScanImage } from "@/lib/evaluation/compress-eval-image";
 import {
-  confirmUploadedPages,
+  confirmUploadedPage,
   sha256HexBrowser,
   uploadEvalBlob,
 } from "@/lib/evaluation/upload-client";
@@ -131,7 +131,7 @@ type EvalUploadQueueContextValue = {
 const EvalUploadQueueContext =
   createContext<EvalUploadQueueContextValue | null>(null);
 
-/** Each file runs compress → upload end-to-end in parallel. */
+/** Each file runs compress → upload → confirm end-to-end in parallel. */
 const PIPELINE_CONCURRENCY = 4;
 
 async function runWithConcurrency<T>(
@@ -159,9 +159,46 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
   stateRef.current = state;
   const filesRef = useRef(new Map<string, File>());
   const runningRef = useRef(new Set<string>());
+  const progressFloorRef = useRef(new Map<string, number>());
+  /** Serialize confirms so parallel pipelines do not race upload_index/dedupe. */
+  const confirmChainRef = useRef(Promise.resolve());
+
+  const confirmPageSerialized = useCallback(
+    async (
+      batchId: string,
+      page: { storagePath: string; fileName: string; contentHash: string }
+    ) => {
+      const previous = confirmChainRef.current;
+      let release!: () => void;
+      confirmChainRef.current = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await previous;
+      try {
+        return await confirmUploadedPage(batchId, page);
+      } finally {
+        release();
+      }
+    },
+    []
+  );
 
   const patchFile = useCallback(
     (jobId: string, fileId: string, patch: Partial<UploadFileItem>) => {
+      // Throttle progress-only updates to cut dashboard churn (H6).
+      if (
+        patch.progress != null &&
+        patch.status === undefined &&
+        patch.error === undefined &&
+        patch.warning === undefined
+      ) {
+        const key = `${jobId}:${fileId}`;
+        const prev = progressFloorRef.current.get(key) ?? -1;
+        if (patch.progress < 100 && patch.progress - prev < 8) {
+          return;
+        }
+        progressFloorRef.current.set(key, patch.progress);
+      }
       dispatch({ type: "patch_file", jobId, fileId, patch });
     },
     []
@@ -180,26 +217,20 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
   );
 
   const processJob = useCallback(
-    async (jobId: string) => {
+    async (jobId: string, jobSnapshot?: UploadJob) => {
       if (runningRef.current.has(jobId)) return;
-      const job = stateRef.current.jobs.find((entry) => entry.id === jobId);
+      // Prefer snapshot from enqueue — stateRef is stale until React re-renders.
+      const job =
+        jobSnapshot ??
+        stateRef.current.jobs.find((entry) => entry.id === jobId);
       if (!job || job.status === "completed") return;
 
       runningRef.current.add(jobId);
-
-      type PendingConfirm = {
-        fileId: string;
-        storagePath: string;
-        fileName: string;
-        contentHash: string;
-      };
 
       const toProcess = job.files.filter(
         (fileItem) =>
           fileItem.status !== "confirmed" && fileItem.status !== "skipped"
       );
-
-      const pendingConfirms: PendingConfirm[] = [];
 
       try {
         await runWithConcurrency(
@@ -250,12 +281,49 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
               });
 
               const contentHash = await sha256HexBrowser(compressed);
-              pendingConfirms.push({
-                fileId: fileItem.id,
+
+              // Confirm as each file finishes; serialize to avoid upload_index races.
+              const confirm = await confirmPageSerialized(job.batchId, {
                 storagePath,
                 fileName: fileItem.fileName,
                 contentHash,
               });
+
+              for (const warning of confirm.warnings ?? []) {
+                dispatch({
+                  type: "append_warning",
+                  jobId,
+                  warning: warning.message,
+                });
+              }
+
+              if (confirm.skippedAll) {
+                patchFile(jobId, fileItem.id, {
+                  status: "skipped",
+                  progress: 100,
+                  warning:
+                    confirm.message ??
+                    "Already in this session — not added again.",
+                });
+              } else {
+                const warning = confirm.warnings?.find(
+                  (item) => item.fileName === fileItem.fileName
+                );
+                if (warning) {
+                  patchFile(jobId, fileItem.id, {
+                    status: "skipped",
+                    progress: 100,
+                    warning: warning.message,
+                  });
+                } else {
+                  patchFile(jobId, fileItem.id, {
+                    status: "confirmed",
+                    progress: 100,
+                  });
+                }
+              }
+
+              invalidateBatch(job.classId, job.batchId);
             } catch (error) {
               patchFile(jobId, fileItem.id, {
                 status: "failed",
@@ -265,66 +333,6 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
             }
           }
         );
-
-        if (pendingConfirms.length > 0) {
-          try {
-            const confirm = await confirmUploadedPages(
-              job.batchId,
-              pendingConfirms.map((entry) => ({
-                storagePath: entry.storagePath,
-                fileName: entry.fileName,
-                contentHash: entry.contentHash,
-              }))
-            );
-
-            for (const warning of confirm.warnings ?? []) {
-              dispatch({
-                type: "append_warning",
-                jobId,
-                warning: warning.message,
-              });
-            }
-
-            if (confirm.skippedAll) {
-              for (const entry of pendingConfirms) {
-                patchFile(jobId, entry.fileId, {
-                  status: "skipped",
-                  progress: 100,
-                  warning:
-                    confirm.message ??
-                    "Already in this session — not added again.",
-                });
-              }
-            } else {
-              for (const entry of pendingConfirms) {
-                const warning = confirm.warnings?.find(
-                  (item) => item.fileName === entry.fileName
-                );
-                if (warning) {
-                  patchFile(jobId, entry.fileId, {
-                    status: "skipped",
-                    progress: 100,
-                    warning: warning.message,
-                  });
-                } else {
-                  patchFile(jobId, entry.fileId, {
-                    status: "confirmed",
-                    progress: 100,
-                  });
-                }
-              }
-            }
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : "Could not confirm upload";
-            for (const entry of pendingConfirms) {
-              patchFile(jobId, entry.fileId, {
-                status: "failed",
-                error: message,
-              });
-            }
-          }
-        }
 
         const latest = stateRef.current.jobs.find((entry) => entry.id === jobId);
         const hasFailed = latest?.files.some((f) => f.status === "failed");
@@ -353,8 +361,21 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
         invalidateBatch(job.classId, job.batchId);
       }
     },
-    [invalidateBatch, patchFile]
+    [confirmPageSerialized, invalidateBatch, patchFile]
   );
+
+  // Safety net: if a job is running in state but never started (stale race), kick it.
+  useEffect(() => {
+    for (const job of state.jobs) {
+      if (job.status !== "running") continue;
+      if (runningRef.current.has(job.id)) continue;
+      const stuckQueued = job.files.every(
+        (f) => f.status === "queued" || f.status === "failed"
+      );
+      if (!stuckQueued) continue;
+      void processJob(job.id, job);
+    }
+  }, [state.jobs, processJob]);
 
   const enqueueUpload = useCallback(
     ({ classId, batchId, files }: EnqueueInput) => {
@@ -366,19 +387,17 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
           filesRef.current.set(`${jobId}:${item.id}`, file);
         }
       });
-      dispatch({
-        type: "enqueue",
-        job: {
-          id: jobId,
-          classId,
-          batchId,
-          status: "running",
-          files: fileItems,
-          warnings: [],
-          startedAt: Date.now(),
-        },
-      });
-      void processJob(jobId);
+      const job: UploadJob = {
+        id: jobId,
+        classId,
+        batchId,
+        status: "running",
+        files: fileItems,
+        warnings: [],
+        startedAt: Date.now(),
+      };
+      dispatch({ type: "enqueue", job });
+      void processJob(jobId, job);
       return jobId;
     },
     [processJob]
@@ -388,8 +407,18 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
     (jobId: string) => {
       const job = stateRef.current.jobs.find((entry) => entry.id === jobId);
       if (!job) return;
-      for (const file of job.files) {
-        if (file.status === "failed") {
+      const resetFiles = job.files.map((file) =>
+        file.status === "failed"
+          ? {
+              ...file,
+              status: "queued" as const,
+              progress: 0,
+              error: undefined,
+            }
+          : file
+      );
+      for (const file of resetFiles) {
+        if (file.status === "queued") {
           patchFile(jobId, file.id, {
             status: "queued",
             progress: 0,
@@ -397,8 +426,13 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
           });
         }
       }
+      const snapshot: UploadJob = {
+        ...job,
+        status: "running",
+        files: resetFiles,
+      };
       dispatch({ type: "finish_job", jobId, status: "running" });
-      void processJob(jobId);
+      void processJob(jobId, snapshot);
     },
     [patchFile, processJob]
   );
@@ -407,6 +441,11 @@ export function EvalUploadQueueProvider({ children }: { children: ReactNode }) {
     for (const key of filesRef.current.keys()) {
       if (key.startsWith(`${jobId}:`)) {
         filesRef.current.delete(key);
+      }
+    }
+    for (const key of progressFloorRef.current.keys()) {
+      if (key.startsWith(`${jobId}:`)) {
+        progressFloorRef.current.delete(key);
       }
     }
     dispatch({ type: "remove", jobId });

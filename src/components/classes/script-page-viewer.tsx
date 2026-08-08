@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ReviewMarkerBadge } from "@/components/classes/review-marker-badge";
 import type { ReviewMarkerKind } from "@/lib/evaluation/page-images";
@@ -26,17 +26,24 @@ export function ScriptPageViewer({
 }: ScriptPageViewerProps) {
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
     setIndex(0);
   }, [pages, questionLabel]);
 
-  useEffect(() => {
+  const scrollToBounds = useCallback(() => {
     const el = scrollRef.current;
-    if (!el || !verticalBounds) return;
-    const target = el.scrollHeight * verticalBounds.top_percent;
-    el.scrollTo({ top: target, behavior: "smooth" });
-  }, [verticalBounds, questionLabel, index]);
+    const img = imgRef.current;
+    if (!el || !verticalBounds || !img || img.clientHeight <= 0) return;
+    const top =
+      img.offsetTop + img.clientHeight * verticalBounds.top_percent - 16;
+    el.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }, [verticalBounds]);
+
+  useEffect(() => {
+    scrollToBounds();
+  }, [scrollToBounds, index]);
 
   const safeIndex = pages.length === 0 ? 0 : Math.min(index, pages.length - 1);
   const page = pages[safeIndex];
@@ -70,9 +77,11 @@ export function ScriptPageViewer({
         <div className="w-full max-w-[min(100%,48rem)] overflow-hidden rounded-sm bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06),0_8px_24px_rgba(0,0,0,0.08)] ring-1 ring-black/5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            ref={imgRef}
             src={page.url ?? undefined}
             alt={page.fileName}
             className="mx-auto block h-auto w-full object-contain"
+            onLoad={scrollToBounds}
           />
         </div>
       </div>

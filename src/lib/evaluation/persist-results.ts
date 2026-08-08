@@ -108,28 +108,37 @@ export async function persistEvaluateResults(
     .delete()
     .eq("script_id", input.scriptId);
 
-  const rows = input.result.questions.map((q) => ({
-    script_id: input.scriptId,
-    question_number: q.question_number,
-    awarded: q.awarded ?? null,
-    max: q.max ?? null,
-    feedback: q.suggested_feedback ?? null,
-    student_answer: q.student_work
-      ? JSON.stringify(q.student_work)
-      : null,
-    expected_answer: q.correct_reference
-      ? JSON.stringify(q.correct_reference)
-      : null,
-    student_work: q.student_work ?? null,
-    correct_reference: q.correct_reference ?? null,
-    explanation: q.explanation ?? null,
-    page_number: q.page_number ?? null,
-    vertical_bounds: q.vertical_bounds ?? null,
-    model_id: input.modelId,
-    confidence: q.confidence ?? null,
-    attention_status: q.status,
-    status: input.hasMarkingScheme ? "ai_draft" : "ai_estimate",
-  }));
+  const rows = input.result.questions.map((q) => {
+    const withIdentity = q as typeof q & {
+      section?: string | null;
+      canonical_key?: string | null;
+    };
+    return {
+      script_id: input.scriptId,
+      question_number: q.question_number,
+      section: withIdentity.section ?? null,
+      canonical_key:
+        withIdentity.canonical_key ?? q.question_number,
+      awarded: q.awarded ?? null,
+      max: q.max ?? null,
+      feedback: q.suggested_feedback ?? null,
+      student_answer: q.student_work
+        ? JSON.stringify(q.student_work)
+        : null,
+      expected_answer: q.correct_reference
+        ? JSON.stringify(q.correct_reference)
+        : null,
+      student_work: q.student_work ?? null,
+      correct_reference: q.correct_reference ?? null,
+      explanation: q.explanation ?? null,
+      page_number: q.page_number ?? null,
+      vertical_bounds: q.vertical_bounds ?? null,
+      model_id: input.modelId,
+      confidence: q.confidence ?? null,
+      attention_status: q.status,
+      status: input.hasMarkingScheme ? "ai_draft" : "ai_estimate",
+    };
+  });
 
   if (rows.length) {
     const { error } = await supabase.from("question_evaluations").insert(rows);
@@ -149,9 +158,14 @@ export async function markScriptFailed(
   scriptId: string,
   errorMessage: string
 ): Promise<void> {
-  await supabase
+  // Do not clobber a successful ready script if a racing duplicate job fails.
+  const { error } = await supabase
     .from("evaluated_scripts")
     .update({ status: "failed" })
-    .eq("id", scriptId);
+    .eq("id", scriptId)
+    .eq("status", "evaluating");
+  if (error) {
+    console.error(`Script ${scriptId} fail update error: ${error.message}`);
+  }
   console.error(`Script ${scriptId} failed: ${errorMessage}`);
 }

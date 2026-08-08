@@ -226,6 +226,10 @@ export type QuestionEvaluation = {
   id: string;
   script_id: string;
   question_number: string;
+  /** Section/part label when known (A, B, BLK1, …). */
+  section: string | null;
+  /** Unique within script — e.g. A:1, B:1, or bare 1. */
+  canonical_key: string | null;
   awarded: number | null;
   max: number | null;
   feedback: string | null;

@@ -13,6 +13,7 @@ import {
   compareQuestionLabels,
   normalizeQuestionLabel,
 } from "@/lib/evaluation/normalize-question";
+import { compareQuestionsForReview } from "@/lib/evaluation/question-identity";
 import {
   findContentHashDuplicateScriptIds,
 } from "@/lib/evaluation/upload-page-dedupe";
@@ -112,36 +113,51 @@ export async function listBatchScriptsForReview(
     }
 
     for (const [, list] of questionsByScript) {
-      list.sort((a, b) =>
-        compareQuestionLabels(a.question_number, b.question_number)
-      );
+      list.sort(compareQuestionsForReview);
     }
   }
 
   const result: ScriptReviewDto[] = [];
+
+  // Collect unique storage paths, then mint signed URLs in one batched call.
+  const uniquePaths: string[] = [];
+  const seenPaths = new Set<string>();
+  for (const script of rows) {
+    for (const page of asPages(script.page_order)) {
+      if (seenPaths.has(page.storagePath)) continue;
+      seenPaths.add(page.storagePath);
+      uniquePaths.push(page.storagePath);
+    }
+  }
+
   const signedUrlCache = new Map<string, string | null>();
+  if (uniquePaths.length > 0) {
+    const { data: signedBatch } = await supabase.storage
+      .from("student_submissions")
+      .createSignedUrls(uniquePaths, 3600);
+    for (const entry of signedBatch ?? []) {
+      if (entry.path) {
+        signedUrlCache.set(entry.path, entry.signedUrl ?? null);
+      }
+    }
+    // Fallback for any path missing from the batch response.
+    for (const path of uniquePaths) {
+      if (signedUrlCache.has(path)) continue;
+      const { data: signed } = await supabase.storage
+        .from("student_submissions")
+        .createSignedUrl(path, 3600);
+      signedUrlCache.set(path, signed?.signedUrl ?? null);
+    }
+  }
 
   for (const script of rows) {
     const pages = asPages(script.page_order);
-    const pageUrls: ScriptReviewDto["pageUrls"] = [];
-    for (const page of pages) {
-      let url: string | null;
-      if (signedUrlCache.has(page.storagePath)) {
-        url = signedUrlCache.get(page.storagePath) ?? null;
-      } else {
-        const { data: signed } = await supabase.storage
-          .from("student_submissions")
-          .createSignedUrl(page.storagePath, 3600);
-        url = signed?.signedUrl ?? null;
-        signedUrlCache.set(page.storagePath, url);
-      }
-      pageUrls.push({
-        storagePath: page.storagePath,
-        uploadIndex: page.uploadIndex,
-        fileName: page.fileName,
-        url,
-      });
-    }
+    const pageUrls: ScriptReviewDto["pageUrls"] = pages.map((page) => ({
+      storagePath: page.storagePath,
+      uploadIndex: page.uploadIndex,
+      fileName: page.fileName,
+      url: signedUrlCache.get(page.storagePath) ?? null,
+    }));
 
     const questions = questionsByScript.get(script.id) ?? [];
     result.push({

@@ -29,12 +29,16 @@ async function fetchBatchScripts(batchId: string) {
   );
   const payload = (await response.json()) as {
     scripts?: ScriptReviewDto[];
+    pageCount?: number;
     error?: string;
   };
   if (!response.ok) {
     throw new Error(payload.error ?? "Failed to load scripts");
   }
-  return payload.scripts ?? [];
+  return {
+    scripts: payload.scripts ?? [],
+    pageCount: payload.pageCount ?? 0,
+  };
 }
 
 function stageBadgeClass(label: string) {
@@ -45,10 +49,15 @@ function stageBadgeClass(label: string) {
       return "bg-muted text-muted-foreground animate-pulse";
     case "Identity":
       return "bg-amber-500/15 text-amber-950 dark:text-amber-100";
+    case "Duplicates":
     case "Duplicate":
       return "bg-orange-500/15 text-orange-950 dark:text-orange-100";
+    case "Ready":
+      return "bg-emerald-500/15 text-emerald-950 dark:text-emerald-100";
     case "Upload":
       return "bg-sky-500/15 text-sky-950 dark:text-sky-100";
+    case "Done":
+      return "bg-muted text-muted-foreground";
     default:
       return "bg-muted text-muted-foreground";
   }
@@ -93,14 +102,17 @@ export function ClassEvaluationsSection({ classId }: ClassEvaluationsSectionProp
 
   const rows: OpenBatchRow[] = useMemo(() => {
     return openBatches.map((batch, index) => {
-      const scripts = scriptQueries[index]?.data ?? [];
+      const queryData = scriptQueries[index]?.data;
+      const scripts = queryData?.scripts ?? [];
+      const pageCount = queryData?.pageCount ?? 0;
       const assessment = batch.assessment_id
         ? assessmentById.get(batch.assessment_id)
         : undefined;
+      const stage = deriveTeacherBatchStage(scripts, batch.status, pageCount);
       return {
         batch,
         assessmentTitle: assessment?.title?.trim() || "Evaluation",
-        stage: deriveTeacherBatchStage(scripts, batch.status),
+        stage,
       };
     });
   }, [assessmentById, openBatches, scriptQueries]);
@@ -163,7 +175,9 @@ export function ClassEvaluationsSection({ classId }: ClassEvaluationsSectionProp
               </div>
               <Link
                 href={`/classes/${classId}/evaluations/${batch.id}${
-                  stage.label === "Identity" || stage.label === "Duplicate"
+                  stage.label === "Identity" ||
+                  stage.label === "Duplicates" ||
+                  stage.label === "Duplicate"
                     ? "#identity-review"
                     : ""
                 }`}

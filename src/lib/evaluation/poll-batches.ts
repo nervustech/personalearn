@@ -6,6 +6,7 @@ import {
   getBatchJobStatus,
   submitBatchJob,
 } from "@/lib/evaluation/batch-client";
+import { evalPromptCacheKey } from "@/lib/evaluation/eval-provider";
 import {
   groupPagesByAdmission,
   type PageWithIndex,
@@ -58,6 +59,89 @@ async function downloadPageBase64(
   return result;
 }
 
+/** Parallelize storage downloads; LLM batch submit remains the only wait-till-complete step. */
+const DOWNLOAD_CONCURRENCY = 6;
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let index = 0;
+  async function worker(): Promise<void> {
+    while (index < items.length) {
+      const current = index;
+      index += 1;
+      results[current] = await mapper(items[current]!);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker())
+  );
+  return results;
+}
+
+/**
+ * Resume processing for an open session:
+ * - Unindexed pages → submit index batch
+ * - Else re-queue ready/failed scripts for evaluate (no new uploads needed)
+ */
+export async function startOrResumeBatchProcessing(
+  supabase: SupabaseClient,
+  batch: EvaluationBatch
+): Promise<{ job: GeminiBatchJob; phase: "index" | "evaluate" }> {
+  const { count: unindexedCount, error: countError } = await supabase
+    .from("evaluation_pages")
+    .select("*", { count: "exact", head: true })
+    .eq("batch_id", batch.id)
+    .is("admission_number", null);
+
+  if (countError) throw new Error(countError.message);
+
+  if ((unindexedCount ?? 0) > 0) {
+    const job = await submitIndexBatch(supabase, batch);
+    return { job, phase: "index" };
+  }
+
+  const { data: inflightEval, error: inflightError } = await supabase
+    .from("gemini_batch_jobs")
+    .select("id, state")
+    .eq("batch_id", batch.id)
+    .eq("phase", "evaluate")
+    .in("state", ["submitted", "running"])
+    .limit(1);
+
+  if (inflightError) throw new Error(inflightError.message);
+  if (inflightEval?.length) {
+    throw new Error(
+      "Evaluate already in progress — keep this page open; results will appear shortly."
+    );
+  }
+
+  const { error: resetError } = await supabase
+    .from("evaluated_scripts")
+    .update({ status: "evaluating" })
+    .eq("batch_id", batch.id)
+    .in("status", ["ready", "failed", "evaluating"]);
+
+  if (resetError) throw new Error(resetError.message);
+
+  const job = await submitEvaluateBatch(supabase, batch);
+  if (!job) {
+    throw new Error(
+      "No scripts to grade. Confirm identity for amber/unmatched scripts, or upload scans first."
+    );
+  }
+
+  await supabase
+    .from("evaluation_batches")
+    .update({ status: "processing" })
+    .eq("id", batch.id);
+
+  return { job, phase: "evaluate" };
+}
+
 export async function submitIndexBatch(
   supabase: SupabaseClient,
   batch: EvaluationBatch
@@ -75,22 +159,28 @@ export async function submitIndexBatch(
   }
 
   const cache = new Map<string, { base64: string; mimeType: string }>();
-  const lines = [];
-
-  for (const page of pages) {
-    const img = await downloadPageBase64(supabase, page.storage_path, cache);
-    lines.push(
-      buildIndexBatchLine({
+  const promptCacheKey = evalPromptCacheKey({
+    batchId: batch.id,
+    phase: "index",
+  });
+  const lines = await mapWithConcurrency(
+    pages,
+    DOWNLOAD_CONCURRENCY,
+    async (page) => {
+      const img = await downloadPageBase64(supabase, page.storage_path, cache);
+      return buildIndexBatchLine({
         key: page.id,
         imageBase64: img.base64,
         mimeType: img.mimeType,
-      })
-    );
-  }
+        promptCacheKey,
+      });
+    }
+  );
 
   const { providerBatchName } = await submitBatchJob({
     displayName: `index-${batch.id}`,
     lines,
+    promptCacheKey,
   });
 
   const { data: job, error: jobError } = await supabase
@@ -219,31 +309,36 @@ export async function submitEvaluateBatch(
   }
 
   const cache = new Map<string, { base64: string; mimeType: string }>();
-  const lines = [];
-
-  for (const script of scripts) {
-    const pageOrder = (script.page_order ?? []) as Array<{ storagePath: string }>;
-    const images = [];
-    for (const page of pageOrder) {
-      const img = await downloadPageBase64(supabase, page.storagePath, cache);
-      images.push(img);
-    }
-    if (!images.length) continue;
-
-    lines.push(
-      buildEvaluateBatchLine({
+  const promptCacheKey = evalPromptCacheKey({
+    batchId: batch.id,
+    phase: "evaluate",
+  });
+  const lines = (
+    await mapWithConcurrency(scripts, DOWNLOAD_CONCURRENCY, async (script) => {
+      const pageOrder = (script.page_order ?? []) as Array<{
+        storagePath: string;
+      }>;
+      if (!pageOrder.length) return null;
+      const images = await mapWithConcurrency(
+        pageOrder,
+        DOWNLOAD_CONCURRENCY,
+        (page) => downloadPageBase64(supabase, page.storagePath, cache)
+      );
+      return buildEvaluateBatchLine({
         key: script.id,
         images,
         markingScheme,
-      })
-    );
-  }
+        promptCacheKey,
+      });
+    })
+  ).filter((line): line is NonNullable<typeof line> => line != null);
 
   if (!lines.length) return null;
 
   const { providerBatchName } = await submitBatchJob({
     displayName: `evaluate-${batch.id}`,
     lines,
+    promptCacheKey,
   });
 
   const { data: job, error: jobError } = await supabase

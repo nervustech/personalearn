@@ -30,7 +30,8 @@ function aggregateFeedback(questions: QuestionEvaluation[]): {
 
   for (const q of questions) {
     if (!q.feedback) continue;
-    const line = `Q${q.question_number}: ${q.feedback}`;
+    const sectionPrefix = q.section ? `${q.section}.` : "";
+    const line = `Q${sectionPrefix}${q.question_number}: ${q.feedback}`;
     if (q.status === "teacher_edited" || q.status === "reevaluated") {
       teacherParts.push(line);
     } else {

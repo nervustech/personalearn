@@ -8,10 +8,23 @@ import {
   evaluateGeminiSchema,
 } from "@/lib/evaluation/evaluate-schema";
 import {
+  getEvalVisionProvider,
+  type EvalVisionProvider,
+} from "@/lib/evaluation/eval-provider";
+import {
   buildIndexPrompt,
   indexGeminiSchema,
 } from "@/lib/evaluation/index-schema";
 import { getDefaultModelId } from "@/lib/evaluation/escalate";
+import {
+  buildXaiEvaluateBatchLine,
+  buildXaiIndexBatchLine,
+  downloadXaiBatchResults,
+  getXaiBatchJobStatus,
+  submitXaiBatchJob,
+  XAI_BATCH_NAME_PREFIX,
+  type XaiBatchRequestLine,
+} from "@/lib/evaluation/xai-batch-client";
 
 export type BatchRequestLine = {
   key: string;
@@ -22,11 +35,23 @@ function createGenAiClient(): GoogleGenAI {
   return new GoogleGenAI({ apiKey: requireGoogleGenerativeAiApiKey() });
 }
 
+function provider(): EvalVisionProvider {
+  return getEvalVisionProvider();
+}
+
+function isXaiProviderBatch(providerBatchName: string): boolean {
+  return providerBatchName.startsWith(XAI_BATCH_NAME_PREFIX);
+}
+
 export function buildIndexBatchLine(input: {
   key: string;
   imageBase64: string;
   mimeType: string;
+  promptCacheKey?: string;
 }): BatchRequestLine {
+  if (provider() === "xai") {
+    return buildXaiIndexBatchLine(input);
+  }
   return {
     key: input.key,
     request: {
@@ -56,7 +81,12 @@ export function buildEvaluateBatchLine(input: {
   key: string;
   images: { base64: string; mimeType: string }[];
   markingScheme: string | null;
+  promptCacheKey?: string;
 }): BatchRequestLine {
+  if (provider() === "xai") {
+    return buildXaiEvaluateBatchLine(input);
+  }
+
   const imageParts = input.images.map((img) => ({
     inlineData: { mimeType: img.mimeType, data: img.base64 },
   }));
@@ -93,7 +123,21 @@ export async function submitBatchJob(input: {
   displayName: string;
   lines: BatchRequestLine[];
   modelId?: string;
+  /** Required for xAI prompt-cache sticky routing; ignored for Gemini. */
+  promptCacheKey?: string;
 }): Promise<{ providerBatchName: string }> {
+  if (provider() === "xai") {
+    if (!input.promptCacheKey) {
+      throw new Error("promptCacheKey is required for xAI eval batches");
+    }
+    return submitXaiBatchJob({
+      displayName: input.displayName,
+      lines: input.lines as XaiBatchRequestLine[],
+      modelId: input.modelId,
+      promptCacheKey: input.promptCacheKey,
+    });
+  }
+
   const ai = createGenAiClient();
   const modelId = input.modelId ?? getDefaultModelId();
   const jsonl = batchLinesToJsonl(input.lines);
@@ -125,6 +169,10 @@ export type BatchJobStatus = {
 export async function getBatchJobStatus(
   providerBatchName: string
 ): Promise<BatchJobStatus> {
+  if (isXaiProviderBatch(providerBatchName)) {
+    return getXaiBatchJobStatus(providerBatchName);
+  }
+
   const ai = createGenAiClient();
   const batch = await ai.batches.get({ name: providerBatchName });
   const state = batch.state ?? JobState.JOB_STATE_PENDING;
@@ -153,6 +201,10 @@ export type BatchResultLine = {
 export async function downloadBatchResults(
   providerBatchName: string
 ): Promise<BatchResultLine[]> {
+  if (isXaiProviderBatch(providerBatchName)) {
+    return downloadXaiBatchResults(providerBatchName);
+  }
+
   const ai = createGenAiClient();
   const batch = await ai.batches.get({ name: providerBatchName });
 

@@ -12,7 +12,7 @@ function authorizeCron(request: Request): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-/** Poll Gemini Batch jobs; advance index → evaluate phases. */
+/** Poll eval Batch jobs (xAI or Gemini); advance index → evaluate phases. */
 export async function GET(request: Request) {
   if (!authorizeCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

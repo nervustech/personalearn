@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { requireTeacherEvaluationBatch } from "@/lib/evaluation/batches";
-import { startOrResumeBatchProcessing } from "@/lib/evaluation/poll-batches";
+import { pollPendingBatchJobs } from "@/lib/evaluation/poll-batches";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 function authStatus(message: string) {
   if (message === "Not authenticated") return 401;
@@ -17,8 +20,8 @@ function authStatus(message: string) {
 }
 
 /**
- * Start or resume batch processing:
- * index unindexed pages, otherwise re-submit evaluate for existing scripts.
+ * Teacher-triggered advance of pending provider Batch jobs (index/evaluate).
+ * Used while the session UI is open so local/dev does not depend on Vercel Cron.
  */
 export async function POST(
   _request: Request,
@@ -31,11 +34,11 @@ export async function POST(
     await requireTeacherClass(supabase, batch.class_id);
 
     const service = createServiceClient();
-    const { job, phase } = await startOrResumeBatchProcessing(service, batch);
+    const processed = await pollPendingBatchJobs(service);
 
-    return NextResponse.json({ batchId, jobId: job.id, phase });
+    return NextResponse.json({ ok: true, processed });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Request failed";
+    const message = error instanceof Error ? error.message : "Poll failed";
     return NextResponse.json({ error: message }, { status: authStatus(message) });
   }
 }

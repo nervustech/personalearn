@@ -11,16 +11,31 @@ export type TeacherBatchStage = {
   cta: string;
 };
 
-/** Teacher-facing stage for an open evaluation session. */
+function pagesSummary(pageCount: number): string {
+  return `${pageCount} page${pageCount === 1 ? "" : "s"} uploaded`;
+}
+
+/**
+ * Teacher-facing stage for an open evaluation session.
+ * Pipeline: Upload → Ready → Identity/Duplicates → Grading → Review → Done.
+ */
 export function deriveTeacherBatchStage(
   scripts: ScriptReviewDto[],
-  batchStatus: EvaluationBatchStatus
+  batchStatus: EvaluationBatchStatus,
+  pageCount = 0
 ): TeacherBatchStage {
   if (scripts.length === 0) {
+    if (pageCount > 0) {
+      return {
+        label: "Ready",
+        summary: `${pagesSummary(pageCount)} — start grading when ready`,
+        cta: "Continue evaluation",
+      };
+    }
     return {
       label: "Upload",
       summary: "No scans uploaded yet",
-      cta: "Continue upload",
+      cta: "Upload scans",
     };
   }
 
@@ -37,7 +52,7 @@ export function deriveTeacherBatchStage(
 
   if (summary.blocked > 0) {
     return {
-      label: "Duplicate",
+      label: "Duplicates",
       summary: summaryText,
       cta: "Resolve duplicates",
     };
@@ -47,7 +62,7 @@ export function deriveTeacherBatchStage(
     return {
       label: "Grading",
       summary: summaryText,
-      cta: "Open session",
+      cta: "View progress",
     };
   }
 
@@ -68,9 +83,9 @@ export function deriveTeacherBatchStage(
   }
 
   return {
-    label: "Setup",
-    summary: summaryText,
-    cta: "Open session",
+    label: "Ready",
+    summary: summaryText ?? pagesSummary(Math.max(pageCount, scripts.length)),
+    cta: "Continue evaluation",
   };
 }
 

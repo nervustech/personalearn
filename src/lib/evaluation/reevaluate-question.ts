@@ -10,6 +10,7 @@ import {
   mimeFromStoragePath,
   pagesForQuestion,
 } from "@/lib/evaluation/page-images";
+import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reeval-constants";
 import { syncEvaluateScript } from "@/lib/evaluation/sync-client";
 import { computeScriptTotal, type ScriptTotal } from "@/lib/evaluation/script-totals";
 import type {
@@ -24,7 +25,7 @@ export type ReevaluateQuestionResult = {
   competencyPreview: CompetencyPreview | null;
 };
 
-export const MAX_REEVAL_INSTRUCTION_CHARS = 2000;
+export { MAX_REEVAL_INSTRUCTION_CHARS };
 
 export function normalizeReevalInstruction(
   instruction?: string | null

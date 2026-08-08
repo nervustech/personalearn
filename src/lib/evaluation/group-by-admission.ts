@@ -1,6 +1,7 @@
 import { normalizeAdmissionNumber } from "@/lib/evaluation/normalize-admission";
 import { shouldEscalateAdmission } from "@/lib/evaluation/escalate";
 import type { IndexResult } from "@/lib/evaluation/index-schema";
+import { sheetPageFromFileName } from "@/lib/evaluation/page-images";
 import type { EvaluatedScriptStatus } from "@/types/database";
 
 export type RosterStudent = {
@@ -42,6 +43,11 @@ function buildRosterMap(roster: RosterStudent[]): Map<string, RosterStudent> {
 
 function sortPages(pages: PageWithIndex[]): PageWithIndex[] {
   return [...pages].sort((a, b) => {
+    // Prefer filename sheet order (1196.1 before 1196.2) so evaluate packets
+    // match booklet page numbers teachers expect in review.
+    const fa = sheetPageFromFileName(a.fileName);
+    const fb = sheetPageFromFileName(b.fileName);
+    if (fa != null && fb != null && fa !== fb) return fa - fb;
     const pa = a.index.page_number ?? a.uploadIndex;
     const pb = b.index.page_number ?? b.uploadIndex;
     return pa - pb;

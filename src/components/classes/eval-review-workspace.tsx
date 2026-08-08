@@ -18,9 +18,12 @@ import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import {
   asScriptPages,
   pageUrlsForQuestion,
+  resolvePageNumberMode,
   reviewMarkerKind,
 } from "@/lib/evaluation/page-images";
-import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reevaluate-question";
+import { formatStructuredField } from "@/lib/evaluation/format-structured-field";
+import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reeval-constants";
+import { formatQuestionDisplayLabel } from "@/lib/evaluation/question-identity";
 import { scriptReviewPath } from "@/lib/evaluation/review-routes";
 import { computeScriptTotal } from "@/lib/evaluation/script-totals";
 import {
@@ -82,29 +85,6 @@ function statusLabel(status: QuestionEvaluation["status"]) {
   }
 }
 
-function formatStructuredField(
-  json: Record<string, unknown> | null | undefined,
-  legacyText: string | null | undefined
-): string | null {
-  if (json && typeof json === "object") {
-    const text =
-      typeof json.text === "string"
-        ? json.text
-        : typeof json.answer === "string"
-          ? json.answer
-          : typeof json.formula === "string"
-            ? json.formula
-            : null;
-    if (text?.trim()) return text.trim();
-    try {
-      return JSON.stringify(json, null, 2);
-    } catch {
-      return String(json);
-    }
-  }
-  const trimmed = legacyText?.trim();
-  return trimmed || null;
-}
 
 function parseMarkInput(
   raw: string,
@@ -247,7 +227,11 @@ function QuestionAnalysisPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium leading-tight">
-            Q{question.question_number}
+            Q
+            {formatQuestionDisplayLabel({
+              section: question.section,
+              questionNumber: question.question_number,
+            })}
             <span
               className={cn(
                 "ml-2 text-xs font-normal",
@@ -415,7 +399,10 @@ function QuestionAnalysisPanel({
       <Dialog
         open={reevalOpen}
         onOpenChange={setReevalOpen}
-        title={`Re-evaluate Q${question.question_number}`}
+        title={`Re-evaluate Q${formatQuestionDisplayLabel({
+          section: question.section,
+          questionNumber: question.question_number,
+        })}`}
         description="Optional instruction for the vision grader. Refreshes marks and comparison fields."
       >
         <div className="space-y-3">
@@ -518,15 +505,21 @@ export function SplitPaneScriptReview({
       : Math.min(questionIndex, questions.length - 1);
   const question = questions[safeIndex];
 
+  const pageNumberMode = useMemo(
+    () => resolvePageNumberMode(asScriptPages(script.page_order), questions),
+    [script.page_order, questions]
+  );
+
   const pages = useMemo(() => {
     if (!question) return script.pageUrls;
     return pageUrlsForQuestion(
       asScriptPages(script.page_order),
       script.pageUrls,
       question.question_number,
-      question.page_number
+      question.page_number,
+      pageNumberMode
     );
-  }, [question, script.page_order, script.pageUrls]);
+  }, [question, script.page_order, script.pageUrls, pageNumberMode]);
 
   const markerKind = reviewMarkerKind(
     question?.awarded ?? null,
@@ -617,7 +610,10 @@ export function SplitPaneScriptReview({
             pages={pages}
             markerKind={markerKind}
             markerStatus={question.status}
-            questionLabel={question.question_number}
+            questionLabel={formatQuestionDisplayLabel({
+              section: question.section,
+              questionNumber: question.question_number,
+            })}
             verticalBounds={question.vertical_bounds}
           />
           <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-card/90 shadow-sm backdrop-blur-sm">

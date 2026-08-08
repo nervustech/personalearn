@@ -97,7 +97,7 @@ export function EvalSessionToolbar({
         const phase = result.phase === "evaluate" ? "evaluate" : "index";
         setKickSummary(
           result.jobId
-            ? `Batch ${phase} job submitted — grading runs in the background.`
+            ? `Batch ${phase} job submitted — this page polls for results every few seconds.`
             : "Batch processing started."
         );
       }
@@ -118,7 +118,7 @@ export function EvalSessionToolbar({
       const phase = result.phase === "evaluate" ? "evaluate" : "index";
       setKickSummary(
         result.jobId
-          ? `Batch ${phase} job submitted — processing runs in the background (usually a few minutes).`
+          ? `Batch ${phase} job submitted — this page polls for results every few seconds.`
           : "Batch processing checked — watch progress dots for updates."
       );
       onUpdated?.();

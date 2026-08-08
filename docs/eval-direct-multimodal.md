@@ -69,7 +69,7 @@ Upload → evaluation_pages (content_hash dedupe)
 - `GOOGLE_GENERATIVE_AI_API_KEY` — required
 - `EVAL_VISION_MODEL` — default `gemini-3.1-flash-lite`
 - `EVAL_VISION_ESCALATION=1` — enable Flash/Pro retry
-- `CRON_SECRET` — batch poll cron auth
+- `CRON_SECRET` — auth for `/api/cron/eval-batch-poll` (GitHub Actions every 5m + teacher session poll)
 
 ## Status machine
 

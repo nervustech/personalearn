@@ -18,6 +18,7 @@ import { AddStudentDialog } from "@/components/classes/add-student-dialog";
 import { CsvImportDialog } from "@/components/classes/csv-import-dialog";
 import { ClassEditDialog } from "@/components/classes/class-edit-dialog";
 import { ClassResourcesSection } from "@/components/classes/class-resources-section";
+import { ClassEvaluationsSection } from "@/components/classes/class-evaluations-section";
 import { ClassDetailSkeleton } from "@/components/classes/class-detail-skeleton";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 
@@ -184,6 +185,8 @@ function ClassDetailContent({
           ) : null}
         </div>
       </div>
+
+      <ClassEvaluationsSection classId={classId} />
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <ClassResourcesSection

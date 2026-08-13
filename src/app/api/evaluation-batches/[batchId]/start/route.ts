@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { requireTeacherEvaluationBatch } from "@/lib/evaluation/batches";
-import { processBatchIdentity } from "@/lib/evaluation/identity";
+import { startOrResumeBatchProcessing } from "@/lib/evaluation/poll-batches";
+import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 
 function authStatus(message: string) {
@@ -15,6 +16,10 @@ function authStatus(message: string) {
   return 500;
 }
 
+/**
+ * Start or resume batch processing:
+ * index unindexed pages, otherwise re-submit evaluate for existing scripts.
+ */
 export async function POST(
   _request: Request,
   context: { params: Promise<{ batchId: string }> }
@@ -25,22 +30,12 @@ export async function POST(
     const batch = await requireTeacherEvaluationBatch(supabase, batchId);
     await requireTeacherClass(supabase, batch.class_id);
 
-    const scripts = await processBatchIdentity(
-      supabase,
-      batchId,
-      batch.class_id
-    );
+    const service = createServiceClient();
+    const { job, phase } = await startOrResumeBatchProcessing(service, batch);
 
-    return NextResponse.json({ scripts });
+    return NextResponse.json({ batchId, jobId: job.id, phase });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Identity processing failed";
-    const knownClient =
-      message.startsWith("No uploaded") ||
-      message.startsWith("Identity already");
-    return NextResponse.json(
-      { error: message },
-      { status: knownClient ? 400 : authStatus(message) }
-    );
+    const message = error instanceof Error ? error.message : "Request failed";
+    return NextResponse.json({ error: message }, { status: authStatus(message) });
   }
 }

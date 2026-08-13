@@ -25,6 +25,10 @@ function anonCandidates(): Array<[string, string | undefined]> {
   ];
 }
 
+function serviceRoleCandidates(): Array<[string, string | undefined]> {
+  return [["SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY]];
+}
+
 /** Keys checked in order — first match wins. */
 export const SUPABASE_URL_ENV_KEYS = [
   "NEXT_PUBLIC_SUPABASE_URL",
@@ -56,8 +60,11 @@ export function getSupabaseEnvDiagnostics() {
   const missing = (candidates: Array<[string, string | undefined]>) =>
     candidates.filter(([, value]) => clean(value) === undefined).map(([key]) => key);
 
+  const serviceRole = serviceRoleCandidates();
+
   return {
     configured: Boolean(firstValue(url) && firstValue(anon)),
+    serviceRoleConfigured: Boolean(firstValue(serviceRole)),
     url: {
       present: present(url),
       missing: missing(url),
@@ -65,6 +72,10 @@ export function getSupabaseEnvDiagnostics() {
     anonKey: {
       present: present(anon),
       missing: missing(anon),
+    },
+    serviceRole: {
+      present: present(serviceRole),
+      missing: missing(serviceRole),
     },
     vercelEnv: process.env.VERCEL_ENV ?? null,
   };
@@ -88,4 +99,19 @@ export function getSupabaseEnv() {
   }
 
   return { url, anonKey };
+}
+
+/** Server-only service role key for background workers (bypasses RLS). */
+export function getSupabaseServiceRoleKey(): string | undefined {
+  return firstValue(serviceRoleCandidates());
+}
+
+export function requireSupabaseServiceRoleKey(): string {
+  const key = getSupabaseServiceRoleKey();
+  if (!key) {
+    throw new Error(
+      "Missing SUPABASE_SERVICE_ROLE_KEY — required for async eval workers"
+    );
+  }
+  return key;
 }

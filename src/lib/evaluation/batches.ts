@@ -181,6 +181,7 @@ export async function createEvaluationBatch(
       assessment_id: assessmentId,
       marking_scheme_resource_id: markingSchemeResourceId,
       scoped_student_id: scopedStudentId,
+      mode: scopedStudentId ? "live" : "batch",
       status: "draft",
     })
     .select("*")

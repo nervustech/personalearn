@@ -1,0 +1,47 @@
+# Unattended eval Batch advance (xAI / Gemini).
+# Hobby Vercel cannot run minute crons — use this + teacher session poll instead.
+#
+# GitHub Actions schedule minimum is every 5 minutes (platform limit).
+# Open evaluation sessions still advance via POST /api/evaluation-batches/[id]/poll (~12s).
+#
+# Required repo secrets:
+#   EVAL_APP_URL  — production (or stable) app origin, e.g. https://personalearn.vercel.app
+#   CRON_SECRET   — same value as Vercel env CRON_SECRET
+#
+# Schedules only run from the default branch after merge; use workflow_dispatch to test earlier.
+
+name: Eval batch poll
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Poll eval batch jobs
+        env:
+          EVAL_APP_URL: ${{ secrets.EVAL_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EVAL_APP_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing secrets: set EVAL_APP_URL and CRON_SECRET on this repo."
+            exit 1
+          fi
+          BASE="${EVAL_APP_URL%/}"
+          URL="${BASE}/api/cron/eval-batch-poll"
+          echo "GET ${URL}"
+          HTTP_CODE=$(curl -sS -o /tmp/poll-body.txt -w "%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json" \
+            "$URL")
+          echo "status=${HTTP_CODE}"
+          head -c 500 /tmp/poll-body.txt || true
+          echo
+          if [ "$HTTP_CODE" != "200" ]; then
+            exit 1
+          fi

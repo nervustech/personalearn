@@ -1,10 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DraftPageImage } from "@/lib/evaluation/draft-question";
 import {
   compareQuestionLabels,
   normalizeQuestionLabel,
 } from "@/lib/evaluation/normalize-question";
 import type { EvaluatedScriptPage } from "@/types/database";
+
+export type PageImageBytes = {
+  bytes: Uint8Array;
+  mimeType: string;
+};
 
 export function mimeFromStoragePath(storagePath: string): string {
   return storagePath.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
@@ -48,8 +52,8 @@ export function pagesForQuestion(
 export async function downloadPageBytes(
   supabase: SupabaseClient,
   storagePath: string,
-  cache: Map<string, DraftPageImage>
-): Promise<DraftPageImage> {
+  cache: Map<string, PageImageBytes>
+): Promise<PageImageBytes> {
   const cached = cache.get(storagePath);
   if (cached) return cached;
 
@@ -62,7 +66,7 @@ export async function downloadPageBytes(
   }
 
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  const image: DraftPageImage = {
+  const image: PageImageBytes = {
     bytes,
     mimeType: mimeFromStoragePath(storagePath),
   };
@@ -77,14 +81,112 @@ export type ScriptPageUrl = {
   url: string | null;
 };
 
-/** Map pagesForQuestion results onto signed pageUrls for the review UI. */
+/** Sheet page from names like `1196.1.jpg` / `1990_2.png`. */
+export function sheetPageFromFileName(fileName: string): number | null {
+  const base = fileName.split(/[/\\]/).pop() ?? fileName;
+  const match = base.match(/(?:^|[._-])(\d+)\.[a-z0-9]+$/i);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
+export type PageNumberMode = "packet" | "sheet";
+
+/**
+ * Models sometimes number pages by evaluate-packet index, sometimes by sheet
+ * page on the filename. Prefer the convention that lands early-section work
+ * on the denser index page (more questions_found).
+ */
+export function resolvePageNumberMode(
+  pages: EvaluatedScriptPage[],
+  questions: Array<{
+    section?: string | null;
+    page_number?: number | null;
+  }>
+): PageNumberMode {
+  if (pages.length < 2) return "packet";
+
+  const denser = [...pages].sort(
+    (a, b) =>
+      coerceLabels(b.questionNumbers).length -
+      coerceLabels(a.questionNumbers).length
+  )[0];
+  if (!denser || coerceLabels(denser.questionNumbers).length === 0) {
+    return "packet";
+  }
+
+  const early = questions.filter((q) => {
+    const section = (q.section ?? "").trim().toUpperCase();
+    return section === "A" || section === "1" || section === "I";
+  });
+  const pool = early.length > 0 ? early : questions;
+  const pageCounts = new Map<number, number>();
+  for (const q of pool) {
+    const p = q.page_number;
+    if (p == null || !Number.isInteger(p) || p < 1) continue;
+    pageCounts.set(p, (pageCounts.get(p) ?? 0) + 1);
+  }
+  let modalPage: number | null = null;
+  let modalCount = 0;
+  for (const [page, count] of pageCounts) {
+    if (count > modalCount) {
+      modalPage = page;
+      modalCount = count;
+    }
+  }
+  if (modalPage == null) return "packet";
+
+  const packetPage = pages[modalPage - 1];
+  if (packetPage?.storagePath === denser.storagePath) return "packet";
+
+  const sheetPage = pages.find(
+    (p) => sheetPageFromFileName(p.fileName) === modalPage
+  );
+  if (sheetPage?.storagePath === denser.storagePath) return "sheet";
+
+  return "packet";
+}
+
+function pageForPageNumber(
+  pages: EvaluatedScriptPage[],
+  pageNumber: number,
+  mode: PageNumberMode
+): EvaluatedScriptPage | undefined {
+  if (mode === "sheet") {
+    const bySheet = pages.find(
+      (p) => sheetPageFromFileName(p.fileName) === pageNumber
+    );
+    if (bySheet) return bySheet;
+  }
+  if (pageNumber >= 1 && pageNumber <= pages.length) {
+    return pages[pageNumber - 1];
+  }
+  return undefined;
+}
+
+/**
+ * Map a graded question onto signed pageUrls for the review UI.
+ *
+ * Default: evaluate `page_number` is 1-based into `page_order` (packet order).
+ * When `pageNumberMode` is `"sheet"`, map via filename sheet page instead
+ * (needed when the model numbered by booklet page while packet order is reversed).
+ */
 export function pageUrlsForQuestion(
   pages: EvaluatedScriptPage[],
   pageUrls: ScriptPageUrl[],
-  questionLabel: string
+  questionLabel: string,
+  pageNumber?: number | null,
+  pageNumberMode: PageNumberMode = "packet"
 ): ScriptPageUrl[] {
-  const matchedPages = pagesForQuestion(pages, questionLabel);
   const byPath = new Map(pageUrls.map((p) => [p.storagePath, p]));
+
+  if (pageNumber != null && Number.isInteger(pageNumber) && pageNumber >= 1) {
+    const page = pageForPageNumber(pages, pageNumber, pageNumberMode);
+    const url = page ? byPath.get(page.storagePath) : undefined;
+    if (url) return [url];
+  }
+
+  const matchedPages = pagesForQuestion(pages, questionLabel);
   const urls: ScriptPageUrl[] = [];
   const seen = new Set<string>();
   for (const page of matchedPages) {

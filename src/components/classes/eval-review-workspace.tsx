@@ -1,20 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScriptPageViewer } from "@/components/classes/script-page-viewer";
+import {
+  EvalProgressDot,
+  evalDotStateFromScriptStatus,
+} from "@/components/classes/eval-progress-dot";
 import { previewCompetency } from "@/lib/evaluation/competency-map";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import {
   asScriptPages,
   pageUrlsForQuestion,
+  resolvePageNumberMode,
   reviewMarkerKind,
 } from "@/lib/evaluation/page-images";
-import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reevaluate-question";
+import { formatStructuredField } from "@/lib/evaluation/format-structured-field";
+import { MAX_REEVAL_INSTRUCTION_CHARS } from "@/lib/evaluation/reeval-constants";
+import { formatQuestionDisplayLabel } from "@/lib/evaluation/question-identity";
+import { scriptReviewPath } from "@/lib/evaluation/review-routes";
 import { computeScriptTotal } from "@/lib/evaluation/script-totals";
 import {
   useAssessments,
@@ -27,6 +37,10 @@ import type { QuestionEvaluation } from "@/types/database";
 import { cn } from "@/lib/utils";
 import type { UseMutationResult } from "@tanstack/react-query";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { EvalQueueSummaryBar } from "@/components/classes/eval-queue-summary";
+import { EvalUploadGradingBanner } from "@/components/classes/eval-upload-grading-banner";
+import { EvalSessionToolbar } from "@/components/classes/eval-session-toolbar";
+import { useEvalScriptRealtime } from "@/lib/hooks/use-eval-script-realtime";
 
 type EvalReviewWorkspaceProps = {
   classId: string;
@@ -70,6 +84,7 @@ function statusLabel(status: QuestionEvaluation["status"]) {
       return "AI draft";
   }
 }
+
 
 function parseMarkInput(
   raw: string,
@@ -131,9 +146,16 @@ function QuestionAnalysisPanel({
     setLocalError(null);
   }, [question.id, question.awarded, question.max, question.feedback]);
 
+  const studentDisplay = formatStructuredField(
+    question.student_work,
+    question.student_answer
+  );
+  const expectedDisplay = formatStructuredField(
+    question.correct_reference,
+    question.expected_answer
+  );
   const hasStructuredAnalysis =
-    Boolean(question.student_answer?.trim()) ||
-    Boolean(question.expected_answer?.trim());
+    Boolean(studentDisplay) || Boolean(expectedDisplay);
 
   async function saveEdits() {
     setLocalError(null);
@@ -205,7 +227,11 @@ function QuestionAnalysisPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium leading-tight">
-            Q{question.question_number}
+            Q
+            {formatQuestionDisplayLabel({
+              section: question.section,
+              questionNumber: question.question_number,
+            })}
             <span
               className={cn(
                 "ml-2 text-xs font-normal",
@@ -214,8 +240,12 @@ function QuestionAnalysisPanel({
                   : "text-muted-foreground"
               )}
             >
-              {statusLabel(question.status)} · {questionIndex + 1}/
-              {questionCount}
+              {statusLabel(question.status)}
+              {question.attention_status === "ATTENTION_NEEDED" ? (
+                <span className="ml-1 text-amber-700">· needs review</span>
+              ) : null}
+              {" · "}
+              {questionIndex + 1}/{questionCount}
             </span>
           </p>
         </div>
@@ -287,16 +317,16 @@ function QuestionAnalysisPanel({
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Student
             </p>
-            <p className="mt-0.5 max-h-28 overflow-y-auto whitespace-pre-wrap text-xs leading-snug">
-              {question.student_answer?.trim() || "—"}
+            <p className="mt-0.5 whitespace-pre-wrap text-xs leading-snug">
+              {studentDisplay || "—"}
             </p>
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Expected
             </p>
-            <p className="mt-0.5 max-h-28 overflow-y-auto whitespace-pre-wrap text-xs leading-snug">
-              {question.expected_answer?.trim() ||
+            <p className="mt-0.5 whitespace-pre-wrap text-xs leading-snug">
+              {expectedDisplay ||
                 (question.status === "ai_estimate"
                   ? "No scheme — estimate only"
                   : "—")}
@@ -309,6 +339,17 @@ function QuestionAnalysisPanel({
           {!readOnly ? " Re-evaluate to refresh." : null}
         </p>
       )}
+
+      {question.explanation?.trim() ? (
+        <div className="text-sm">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Explanation
+          </p>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs leading-snug">
+            {question.explanation.trim()}
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-0.5">
         <Label htmlFor={`feedback-${question.id}`} className="text-xs">
@@ -358,7 +399,10 @@ function QuestionAnalysisPanel({
       <Dialog
         open={reevalOpen}
         onOpenChange={setReevalOpen}
-        title={`Re-evaluate Q${question.question_number}`}
+        title={`Re-evaluate Q${formatQuestionDisplayLabel({
+          section: question.section,
+          questionNumber: question.question_number,
+        })}`}
         description="Optional instruction for the vision grader. Refreshes marks and comparison fields."
       >
         <div className="space-y-3">
@@ -393,19 +437,36 @@ function QuestionAnalysisPanel({
   );
 }
 
-function ScriptWorkspace({
+function scriptNeedsAttention(questions: QuestionEvaluation[]): boolean {
+  return questions.some((q) => {
+    const kind = reviewMarkerKind(q.awarded, q.max);
+    return kind !== "correct" || q.status === "ai_estimate";
+  });
+}
+
+export function SplitPaneScriptReview({
   script,
   classId,
   batchId,
+  assessmentId,
   strand,
   subStrand,
+  siblings = [],
 }: {
   script: ScriptReviewDto;
   classId: string;
   batchId: string;
+  assessmentId?: string | null;
   strand: string;
   subStrand: string | null;
+  siblings?: {
+    id: string;
+    student_name: string | null;
+    read_admission_number: string | null;
+    status: string;
+  }[];
 }) {
+  const router = useRouter();
   const [questionIndex, setQuestionIndex] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const signOff = useSignOffScript(classId, batchId);
@@ -425,60 +486,117 @@ function ScriptWorkspace({
     setQuestionIndex(0);
   }, [script.id]);
 
+  const siblingIndex = siblings.findIndex((s) => s.id === script.id);
+  const prevSibling =
+    siblingIndex > 0 ? siblings[siblingIndex - 1] : undefined;
+  const nextSibling =
+    siblingIndex >= 0 && siblingIndex < siblings.length - 1
+      ? siblings[siblingIndex + 1]
+      : undefined;
+
+  function goToSibling(siblingId: string) {
+    if (!assessmentId) return;
+    router.push(scriptReviewPath(classId, assessmentId, siblingId));
+  }
+
   const safeIndex =
     questions.length === 0
       ? 0
       : Math.min(questionIndex, questions.length - 1);
   const question = questions[safeIndex];
 
+  const pageNumberMode = useMemo(
+    () => resolvePageNumberMode(asScriptPages(script.page_order), questions),
+    [script.page_order, questions]
+  );
+
   const pages = useMemo(() => {
     if (!question) return script.pageUrls;
     return pageUrlsForQuestion(
       asScriptPages(script.page_order),
       script.pageUrls,
-      question.question_number
+      question.question_number,
+      question.page_number,
+      pageNumberMode
     );
-  }, [question, script.page_order, script.pageUrls]);
+  }, [question, script.page_order, script.pageUrls, pageNumberMode]);
 
   const markerKind = reviewMarkerKind(
     question?.awarded ?? null,
     question?.max ?? null
   );
+  const attentionNeeded = scriptNeedsAttention(questions);
 
   return (
-    <div className="min-w-0 space-y-2">
-      <header className="flex items-center justify-between gap-2">
+    <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:h-[calc(100dvh-7.5rem)]">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold tracking-tight">
-            {script.student_name ?? "Unassigned student"}
-          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-sm font-semibold tracking-tight">
+              {script.student_name ?? "Unassigned student"}
+            </h3>
+            {attentionNeeded ? (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                Attention needed
+              </span>
+            ) : null}
+          </div>
           <p className="truncate text-xs text-muted-foreground">
             {script.read_admission_number ?? "—"} ·{" "}
             <span className="font-medium text-foreground">
               {totals.awarded ?? "—"}/{totals.max ?? "—"}
             </span>{" "}
             · {competency.status.replaceAll("_", " ")}
+            {siblings.length > 1 && siblingIndex >= 0
+              ? ` · student ${siblingIndex + 1}/${siblings.length}`
+              : ""}
           </p>
         </div>
-        {script.status === "drafted" ? (
-          <Button
-            type="button"
-            size="sm"
-            className="h-7 shrink-0"
-            disabled={!script.student_id || signOff.isPending}
-            onClick={() => setConfirmOpen(true)}
-          >
-            Sign off
-          </Button>
-        ) : (
-          <span className="shrink-0 text-xs capitalize text-muted-foreground">
-            {script.status.replaceAll("_", " ")}
-          </span>
-        )}
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          {siblings.length > 1 && assessmentId ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-7 px-2"
+                disabled={!prevSibling}
+                onClick={() => prevSibling && goToSibling(prevSibling.id)}
+              >
+                Prev student
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-7 px-2"
+                disabled={!nextSibling}
+                onClick={() => nextSibling && goToSibling(nextSibling.id)}
+              >
+                Next student
+              </Button>
+            </>
+          ) : null}
+          {(script.status === "ready" || script.status === "drafted") ? (
+            <Button
+              type="button"
+              size="sm"
+              className="h-7"
+              disabled={!script.student_id || signOff.isPending}
+              onClick={() => setConfirmOpen(true)}
+            >
+              Sign off
+            </Button>
+          ) : (
+            <span className="text-xs capitalize text-muted-foreground">
+              {script.status.replaceAll("_", " ")}
+            </span>
+          )}
+        </div>
       </header>
 
       {signOff.isError ? (
-        <p className="text-xs text-destructive">
+        <p className="shrink-0 text-xs text-destructive">
           {signOff.error instanceof Error
             ? signOff.error.message
             : "Sign-off failed"}
@@ -486,27 +604,36 @@ function ScriptWorkspace({
       ) : null}
 
       {question ? (
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(16rem,1fr)] lg:items-start">
+        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(16rem,1fr)] lg:items-stretch">
           <ScriptPageViewer
+            key={`${script.id}-${question.id}`}
             pages={pages}
             markerKind={markerKind}
             markerStatus={question.status}
-            questionLabel={question.question_number}
+            questionLabel={formatQuestionDisplayLabel({
+              section: question.section,
+              questionNumber: question.question_number,
+            })}
+            verticalBounds={question.vertical_bounds}
           />
-          <aside className="rounded-2xl bg-card/90 p-3 shadow-sm backdrop-blur-sm lg:sticky lg:top-3">
-            <QuestionAnalysisPanel
-              script={script}
-              question={question}
-              questionIndex={safeIndex}
-              questionCount={questions.length}
-              readOnly={readOnly}
-              updateQuestion={updateQuestion}
-              reevaluate={reevaluate}
-              onPrev={() => setQuestionIndex((i) => Math.max(0, i - 1))}
-              onNext={() =>
-                setQuestionIndex((i) => Math.min(questions.length - 1, i + 1))
-              }
-            />
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl bg-card/90 shadow-sm backdrop-blur-sm">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+              <QuestionAnalysisPanel
+                script={script}
+                question={question}
+                questionIndex={safeIndex}
+                questionCount={questions.length}
+                readOnly={readOnly}
+                updateQuestion={updateQuestion}
+                reevaluate={reevaluate}
+                onPrev={() => setQuestionIndex((i) => Math.max(0, i - 1))}
+                onNext={() =>
+                  setQuestionIndex((i) =>
+                    Math.min(questions.length - 1, i + 1)
+                  )
+                }
+              />
+            </div>
           </aside>
         </div>
       ) : (
@@ -553,14 +680,16 @@ export function EvalReviewWorkspace({
   classLabel = "Class",
   classSubject = "General",
 }: EvalReviewWorkspaceProps) {
-  const { data, isLoading, error } = useEvaluationScripts(batchId);
+  const router = useRouter();
+  const { data, isLoading, error, refetch } = useEvaluationScripts(batchId);
+  useEvalScriptRealtime(batchId);
   const { data: assessments } = useAssessments(classId);
-  const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null);
 
   const assessmentMeta = useMemo(() => {
     const assessmentId = data?.batch?.assessment_id;
     if (!assessmentId || !assessments?.length) {
       return {
+        id: assessmentId ?? null,
         title: "Evaluation",
         strand: classSubject,
         subStrand: null as string | null,
@@ -570,64 +699,55 @@ export function EvalReviewWorkspace({
     const strand =
       assessment?.linked_strand?.trim() || classSubject || "General";
     return {
+      id: assessmentId,
       title: assessment?.title?.trim() || "Evaluation",
       strand,
       subStrand: assessment?.linked_sub_strand ?? null,
     };
   }, [assessments, classSubject, data?.batch?.assessment_id]);
 
-  const reviewScripts = useMemo(() => {
-    const scripts = data?.scripts ?? [];
-    return scripts.filter(
-      (s) => s.status === "drafted" || s.status === "signed_off"
-    );
-  }, [data?.scripts]);
+  const allScripts = data?.scripts ?? [];
 
-  const draftingInProgress = useMemo(() => {
-    const scripts = data?.scripts ?? [];
-    return scripts.some((s) => s.status === "identity_cleared");
-  }, [data?.scripts]);
+  const readyScripts = useMemo(
+    () =>
+      allScripts.filter(
+        (s) => s.status === "ready" || s.status === "drafted" || s.status === "signed_off"
+      ),
+    [allScripts]
+  );
 
-  const awaitingIdentity = useMemo(() => {
-    const scripts = data?.scripts ?? [];
-    return scripts.some(
-      (s) => s.status === "pending" || s.status === "identity_amber"
-    );
-  }, [data?.scripts]);
+  const draftingInProgress = useMemo(
+    () =>
+      allScripts.some((s) =>
+        ["identity_cleared", "queued_draft", "drafting", "parsing", "indexing", "evaluating"].includes(
+          s.status
+        )
+      ),
+    [allScripts]
+  );
 
-  useEffect(() => {
-    if (reviewScripts.length === 0) {
-      setSelectedScriptId(null);
+  const awaitingIdentity = useMemo(
+    () =>
+      allScripts.some(
+        (s) => s.status === "pending" || s.status === "identity_amber"
+      ),
+    [allScripts]
+  );
+
+  function openScriptReview(script: ScriptReviewDto) {
+    if (assessmentMeta.id) {
+      router.push(scriptReviewPath(classId, assessmentMeta.id, script.id));
       return;
     }
-    if (
-      selectedScriptId &&
-      reviewScripts.some((s) => s.id === selectedScriptId)
-    ) {
-      return;
-    }
-    const firstDrafted = reviewScripts.find((s) => s.status === "drafted");
-    setSelectedScriptId((firstDrafted ?? reviewScripts[0]).id);
-  }, [reviewScripts, selectedScriptId]);
-
-  const selectedScript =
-    reviewScripts.find((s) => s.id === selectedScriptId) ?? null;
+    // Batches without an assessment stay on the session page (inline fallback).
+    router.push(
+      `/classes/${classId}/evaluations/${batchId}?script=${script.id}`
+    );
+  }
 
   const breadcrumbItems = [
     { label: classLabel, href: `/classes/${classId}` },
-    {
-      label: assessmentMeta.title,
-      href: selectedScript
-        ? `/classes/${classId}/evaluations/${batchId}`
-        : undefined,
-    },
-    ...(selectedScript
-      ? [
-          {
-            label: selectedScript.student_name?.trim() || "Student",
-          },
-        ]
-      : []),
+    { label: assessmentMeta.title },
   ];
 
   if (isLoading) {
@@ -661,91 +781,148 @@ export function EvalReviewWorkspace({
     );
   }
 
-  if (reviewScripts.length === 0) {
-    return (
-      <div className="space-y-3">
-        <Breadcrumbs
-          items={[
-            { label: classLabel, href: `/classes/${classId}` },
-            { label: assessmentMeta.title },
-          ]}
-        />
-        <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
-          <p className="text-sm font-medium">
-            {draftingInProgress
-              ? "Drafting marks…"
-              : awaitingIdentity
-                ? "Waiting on identity"
-                : "No scripts to review yet"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {draftingInProgress
-              ? "Cleared scripts are drafting in the background — this page will fill as they finish."
-              : awaitingIdentity
-                ? "Confirm amber identities below, then drafting starts automatically."
-                : "Upload scans from the class page to begin."}
-          </p>
-        </section>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3">
       <Breadcrumbs items={breadcrumbItems} />
-      <section className="grid gap-3 lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start">
-      <nav
-        aria-label="Scripts"
-        className="max-h-48 overflow-y-auto rounded-xl bg-card/95 shadow-sm backdrop-blur-sm lg:sticky lg:top-3 lg:max-h-[calc(100vh-5.5rem)]"
-      >
-        <div className="sticky top-0 z-10 bg-card/95 px-2.5 py-1.5 backdrop-blur-sm">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Students · {reviewScripts.length}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">
+            {assessmentMeta.title}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Grading session — confirm amber identities in the panel above when
+            needed, then review scripts as they turn ready.
           </p>
         </div>
-        <ul className="divide-y divide-border/70">
-          {reviewScripts.map((script) => {
-            const totals =
-              script.totals ?? computeScriptTotal(script.questions ?? []);
-            const selected = script.id === selectedScriptId;
-            const signed = script.status === "signed_off";
-            return (
-              <li key={script.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedScriptId(script.id)}
-                  className={cn(
-                    "w-full px-2.5 py-1.5 text-left transition-colors",
-                    selected
-                      ? "bg-primary/10 ring-1 ring-inset ring-primary/35"
-                      : "hover:bg-muted/50"
-                  )}
-                >
-                  <p className="truncate text-xs font-medium leading-snug">
-                    {script.student_name ?? "Unassigned"}
-                  </p>
-                  <p className="truncate text-[11px] leading-snug text-muted-foreground">
-                    {script.read_admission_number ?? "—"} ·{" "}
-                    {totals.awarded ?? "—"}/{totals.max ?? "—"}
-                    {signed ? " · ✓" : ""}
-                  </p>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+        <Link
+          href={`/classes/${classId}`}
+          className="text-xs text-muted-foreground underline underline-offset-2"
+        >
+          Back to class
+        </Link>
+      </div>
+      <EvalQueueSummaryBar scripts={allScripts} />
+      <EvalUploadGradingBanner batchId={batchId} />
+      <EvalSessionToolbar
+        classId={classId}
+        batchId={batchId}
+        batchSignedOff={data?.batch?.status === "signed_off"}
+        scripts={allScripts}
+        pageCount={data?.pageCount ?? 0}
+        isLive={data?.batch?.mode === "live"}
+        onUpdated={() => {
+          void refetch();
+        }}
+      />
 
-      {selectedScript ? (
-        <ScriptWorkspace
-          script={selectedScript}
-          classId={classId}
-          batchId={batchId}
-          strand={assessmentMeta.strand}
-          subStrand={assessmentMeta.subStrand}
-        />
-      ) : null}
-    </section>
+      {allScripts.length === 0 && (data?.pageCount ?? 0) === 0 ? (
+        <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+          <p className="text-sm font-medium">No pages yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Use <span className="font-medium">Add pages</span> above to upload
+            scans for this session.
+          </p>
+        </section>
+      ) : allScripts.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+          <p className="text-sm font-medium">Pages uploaded</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Start grading when uploads finish — scripts appear here as identity
+            is matched and marks are drafted.
+          </p>
+        </section>
+      ) : (
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-3 py-2">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Students · {allScripts.length}
+              {draftingInProgress ? " · grading in background" : ""}
+              {awaitingIdentity ? " · confirm identity above" : ""}
+            </p>
+          </div>
+          <ul className="divide-y divide-border">
+            {allScripts.map((script) => {
+              const totals =
+                script.totals ?? computeScriptTotal(script.questions ?? []);
+              const dot = evalDotStateFromScriptStatus(script.status);
+              const canReview =
+                script.status === "ready" ||
+                script.status === "drafted" ||
+                script.status === "signed_off";
+              return (
+                <li
+                  key={script.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <EvalProgressDot
+                      state={dot}
+                      title={script.status}
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {script.student_name ?? "Unassigned"}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {script.read_admission_number ?? "—"}
+                        {canReview
+                          ? ` · ${totals.awarded ?? "—"}/${totals.max ?? "—"}`
+                          : ""}
+                        {script.status === "signed_off" ? " · signed off" : ""}
+                        {script.status === "identity_amber"
+                          ? " · needs identity"
+                          : ""}
+                        {["queued_draft", "drafting", "parsing", "indexing", "evaluating", "identity_cleared"].includes(
+                          script.status
+                        )
+                          ? " · grading…"
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {canReview ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={
+                        script.status === "ready" || script.status === "drafted"
+                          ? "primary"
+                          : "secondary"
+                      }
+                      onClick={() => openScriptReview(script)}
+                    >
+                      {script.status === "signed_off"
+                        ? "View review"
+                        : "Open review"}
+                    </Button>
+                  ) : script.status === "identity_amber" &&
+                    !script.alreadyEvaluated ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        document
+                          .getElementById("identity-review")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                    >
+                      Confirm student
+                    </Button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {readyScripts.length === 0 && draftingInProgress ? (
+            <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+              Cleared scripts are drafting in the background. Open review as soon
+              as a student turns ready — you do not have to wait for the whole
+              class.
+            </p>
+          ) : null}
+        </section>
+      )}
     </div>
   );
 }

@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useStudents } from "@/lib/hooks/use-classes";
 import {
   useAssignEvaluationScript,
   useEvaluationScripts,
-  useProcessDrafts,
   useProcessEvaluationIdentity,
+  useRemoveEvaluationScript,
+  useStartEvaluationProcessing,
 } from "@/lib/hooks/use-evaluation";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import { Button } from "@/components/ui/button";
@@ -27,16 +28,27 @@ type PreviewState = {
 
 function scriptStatusLabel(status: ScriptReviewDto["status"]) {
   switch (status) {
+    case "uploaded":
     case "pending":
-      return "Pending processing";
+      return "Uploaded";
+    case "indexing":
+    case "parsing":
+      return "Indexing…";
     case "identity_amber":
+    case "unmatched":
       return "Needs confirm";
+    case "evaluating":
+    case "queued_draft":
+    case "drafting":
     case "identity_cleared":
-      return "Identity cleared";
+      return "Grading…";
+    case "ready":
     case "drafted":
-      return "Drafted";
+      return "Ready to review";
     case "signed_off":
       return "Signed off";
+    case "failed":
+      return "Failed";
     default:
       return status;
   }
@@ -48,19 +60,25 @@ function ScriptRow({
   script,
   students,
   onIdentityCleared,
+  onRemoved,
 }: {
   classId: string;
   batchId: string;
   script: ScriptReviewDto;
   students: { id: string; full_name: string; admission_number: string | null }[];
   onIdentityCleared: () => void;
+  onRemoved: () => void;
 }) {
   const assign = useAssignEvaluationScript(classId, batchId);
+  const remove = useRemoveEvaluationScript(classId, batchId);
   const [studentId, setStudentId] = useState(script.student_id ?? "");
   const [preview, setPreview] = useState<PreviewState | null>(null);
-  const isAmber = script.status === "identity_amber";
-  const isPending = script.status === "pending";
-  const isDrafted = script.status === "drafted";
+  const isAmber = script.status === "identity_amber" || script.status === "unmatched";
+  const isPending =
+    script.status === "pending" ||
+    script.status === "uploaded" ||
+    script.status === "indexing";
+  const isDrafted = script.status === "ready" || script.status === "drafted";
 
   const previewPage =
     preview != null ? script.pageUrls[preview.index] : undefined;
@@ -77,9 +95,14 @@ function ScriptRow({
       scriptId: script.id,
       studentId,
     });
-    if (updated.status === "identity_cleared") {
+    if (updated.status === "evaluating" || updated.status === "ready") {
       onIdentityCleared();
     }
+  }
+
+  async function handleRemove() {
+    await remove.mutateAsync(script.id);
+    onRemoved();
   }
 
   return (
@@ -116,27 +139,43 @@ function ScriptRow({
       </div>
 
       {script.alreadyEvaluated ? (
-        <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
-          Already evaluated — this student already has an evaluation for this
-          assessment. Do not draft again; open their existing review or
-          signed-off feedback instead.
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium text-amber-950 dark:text-amber-100">
+            Already evaluated — this student already has an evaluation for this
+            assessment. Remove this duplicate upload to continue.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={remove.isPending}
+            onClick={handleRemove}
+          >
+            {remove.isPending ? "Removing…" : "Remove duplicate"}
+          </Button>
+          {remove.isError ? (
+            <p className="w-full text-sm text-destructive">
+              {remove.error instanceof Error
+                ? remove.error.message
+                : "Remove failed"}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {script.hasByteDuplicate ? (
-        <p className="text-sm text-amber-900 dark:text-amber-100">
-          Duplicate scan (same file stored once) — confirm identity before
-          grading.
+        <p className="text-sm text-muted-foreground">
+          Duplicate scan (same file stored once) — kept as one page for grading.
         </p>
       ) : null}
 
       {script.hasConflict &&
       !script.hasByteDuplicate &&
       !script.alreadyEvaluated ? (
-        <p className="text-sm text-amber-900 dark:text-amber-100">
-          Conflict: two pages share the same admission number and question
-          number. Both pages are kept — confirm the correct student before
-          grading.
+        <p className="text-sm text-muted-foreground">
+          Some pages share question labels or only the cover page shows an
+          admission number. Pages stay grouped — grading uses the parse cache to
+          attribute working; confirm only if the student looks wrong.
         </p>
       ) : null}
 
@@ -299,90 +338,88 @@ export function IdentityReviewPanel({
   const { data, isLoading, error, refetch } = useEvaluationScripts(batchId);
   const { data: students } = useStudents(classId);
   const processIdentity = useProcessEvaluationIdentity(classId);
-  const processDrafts = useProcessDrafts(classId, batchId);
-  const draftMutateAsync = processDrafts.mutateAsync;
-  const [draftSummary, setDraftSummary] = useState<string | null>(null);
+  const startProcessing = useStartEvaluationProcessing(classId);
+  const [processingSummary, setProcessingSummary] = useState<string | null>(
+    null
+  );
 
   const scripts = useMemo(() => data?.scripts ?? [], [data?.scripts]);
-  const hasPending = scripts.some((s) => s.status === "pending");
-  const amberCount = scripts.filter((s) => s.status === "identity_amber").length;
-  const clearedCount = scripts.filter(
-    (s) => s.status === "identity_cleared"
+  const hasPending = scripts.some(
+    (s) => s.status === "pending" || s.status === "uploaded"
+  );
+  const amberCount = scripts.filter(
+    (s) =>
+      (s.status === "identity_amber" || s.status === "unmatched") &&
+      !s.alreadyEvaluated
   ).length;
-  const draftedCount = scripts.filter((s) => s.status === "drafted").length;
+  const blockedCount = scripts.filter(
+    (s) =>
+      s.alreadyEvaluated &&
+      (s.status === "identity_amber" ||
+        s.status === "unmatched" ||
+        s.status === "pending" ||
+        s.status === "uploaded")
+  ).length;
+  const clearedCount = scripts.filter((s) =>
+    ["evaluating", "ready", "drafted", "identity_cleared"].includes(s.status)
+  ).length;
+  const inFlightCount = scripts.filter((s) =>
+    ["queued_draft", "drafting", "parsing", "indexing", "evaluating"].includes(
+      s.status
+    )
+  ).length;
+  const draftedCount = scripts.filter(
+    (s) => s.status === "ready" || s.status === "drafted"
+  ).length;
   const signedOffCount = scripts.filter((s) => s.status === "signed_off").length;
 
   const roster = useMemo(() => students ?? [], [students]);
 
-  /** Only amber + pending need a visible panel; cleared drafts silently. */
+  /** Amber, pending, and duplicate uploads that need teacher action. */
   const identityFocusScripts = useMemo(() => {
-    const priority = (status: string) => {
-      if (status === "identity_amber") return 0;
-      if (status === "pending") return 1;
-      return 2;
+    const priority = (script: ScriptReviewDto) => {
+      if (script.status === "identity_amber" && !script.alreadyEvaluated) return 0;
+      if (script.status === "unmatched" && !script.alreadyEvaluated) return 0;
+      if (script.status === "pending" || script.status === "uploaded") return 1;
+      if (script.alreadyEvaluated) return 2;
+      return 3;
     };
     return [...scripts]
       .filter(
-        (s) => s.status === "identity_amber" || s.status === "pending"
+        (s) =>
+          s.status === "identity_amber" ||
+          s.status === "unmatched" ||
+          s.status === "pending" ||
+          s.status === "uploaded" ||
+          s.alreadyEvaluated
       )
-      .sort((a, b) => priority(a.status) - priority(b.status));
+      .sort((a, b) => priority(a) - priority(b));
   }, [scripts]);
 
-  const needsTeacherAttention = hasPending || amberCount > 0;
+  const needsTeacherAttention =
+    hasPending || amberCount > 0 || blockedCount > 0;
+  const needsGradingKick =
+    startProcessing.isError ||
+    (clearedCount > 0 && !hasPending && inFlightCount === 0);
 
-  const runDrafts = useCallback(async () => {
-    setDraftSummary(null);
-    const summary = await draftMutateAsync(batchId);
+  const retryAsyncProcessing = useCallback(async () => {
+    setProcessingSummary(null);
+    const result = await startProcessing.mutateAsync(batchId);
     await refetch();
-    const errorNote =
-      summary.errors.length > 0
-        ? ` · ${summary.errors.length} error${summary.errors.length === 1 ? "" : "s"}`
-        : "";
-    setDraftSummary(
-      `Drafted ${summary.drafted} script${summary.drafted === 1 ? "" : "s"}` +
-        (summary.skippedAmber > 0
-          ? ` · skipped ${summary.skippedAmber} amber`
-          : "") +
-        (summary.skippedAlreadyDrafted > 0
-          ? ` · ${summary.skippedAlreadyDrafted} already drafted`
-          : "") +
-        errorNote +
-        (summary.errors[0]
-          ? ` — ${summary.errors[0].message}${
-              summary.errors.length > 1 ? " (and more)" : ""
-            }`
-          : "")
+    setProcessingSummary(
+      result.jobId
+        ? `Batch ${result.phase ?? "index"} job submitted — grading continues in the background.`
+        : "Batch processing restarted."
     );
-  }, [draftMutateAsync, batchId, refetch]);
-
-  // Auto-draft cleared scripts on load so teachers never hand-trigger the
-  // happy path. Each cleared id is attempted once; the Draft marks button
-  // stays as an explicit retry if a run errors.
-  const clearedIds = useMemo(
-    () =>
-      scripts.filter((s) => s.status === "identity_cleared").map((s) => s.id),
-    [scripts]
-  );
-  const autoDraftedRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (processIdentity.isPending || processDrafts.isPending) return;
-    const toDraft = clearedIds.filter((id) => !autoDraftedRef.current.has(id));
-    if (toDraft.length === 0) return;
-    for (const id of toDraft) autoDraftedRef.current.add(id);
-    void runDrafts();
-  }, [clearedIds, processIdentity.isPending, processDrafts.isPending, runDrafts]);
+  }, [startProcessing, batchId, refetch]);
 
   async function handleProcess() {
-    const result = await processIdentity.mutateAsync(batchId);
+    await processIdentity.mutateAsync(batchId);
     await refetch();
-    if (result.some((s) => s.status === "identity_cleared")) {
-      await runDrafts();
-    }
   }
 
-  async function handleDraftMarks() {
-    await runDrafts();
+  async function handleRetryProcessing() {
+    await retryAsyncProcessing();
   }
 
   if (isLoading) {
@@ -404,7 +441,7 @@ export function IdentityReviewPanel({
 
   // Happy path: cleared scripts draft in the background; don't surface a
   // setup panel before review. Only interrupt when identity needs a human.
-  if (!needsTeacherAttention && !processDrafts.isError) {
+  if (!needsTeacherAttention && !needsGradingKick) {
     return null;
   }
 
@@ -415,18 +452,25 @@ export function IdentityReviewPanel({
           <h2 className="text-sm font-semibold tracking-tight">
             {amberCount > 0
               ? `${amberCount} identity exception${amberCount === 1 ? "" : "s"}`
-              : hasPending
-                ? "Pages awaiting identity"
-                : "Drafting issue"}
+              : blockedCount > 0
+                ? `${blockedCount} duplicate upload${blockedCount === 1 ? "" : "s"}`
+                : hasPending
+                  ? "Pages awaiting identity"
+                  : "Grading queue issue"}
           </h2>
           <p className="text-xs text-muted-foreground">
             {amberCount > 0
-              ? "Confirm the student before marks can draft."
-              : hasPending
-                ? "Process identity to match admission numbers."
-                : "Auto-draft failed — retry below."}
+              ? "Confirm the student — cleared scripts keep grading in the background."
+              : blockedCount > 0
+                ? "Remove duplicate scans for students who were already evaluated."
+                : hasPending
+                  ? "Process identity to match admission numbers. Cleared scripts then grade automatically."
+                  : clearedCount > 0
+                    ? "Scripts are cleared but grading has not started — retry below."
+                    : "Background grading failed — retry below."}
+            {inFlightCount > 0 ? ` · ${inFlightCount} grading` : ""}
             {draftedCount + signedOffCount > 0
-              ? ` · ${draftedCount + signedOffCount} already in review`
+              ? ` · ${draftedCount + signedOffCount} ready or done`
               : ""}
           </p>
         </div>
@@ -435,7 +479,9 @@ export function IdentityReviewPanel({
             <Button
               type="button"
               size="sm"
-              disabled={processIdentity.isPending || processDrafts.isPending}
+              disabled={
+                processIdentity.isPending || startProcessing.isPending
+              }
               onClick={handleProcess}
             >
               {processIdentity.isPending
@@ -443,15 +489,17 @@ export function IdentityReviewPanel({
                 : "Process identity"}
             </Button>
           ) : null}
-          {processDrafts.isError || clearedCount > 0 ? (
+          {needsGradingKick ? (
             <Button
               type="button"
               size="sm"
               variant="secondary"
-              disabled={processDrafts.isPending || processIdentity.isPending}
-              onClick={handleDraftMarks}
+              disabled={
+                startProcessing.isPending || processIdentity.isPending
+              }
+              onClick={handleRetryProcessing}
             >
-              {processDrafts.isPending ? "Retrying…" : "Retry draft"}
+              {startProcessing.isPending ? "Retrying…" : "Retry grading"}
             </Button>
           ) : null}
         </div>
@@ -465,16 +513,16 @@ export function IdentityReviewPanel({
         </p>
       ) : null}
 
-      {processDrafts.isError ? (
+      {startProcessing.isError ? (
         <p className="text-sm text-destructive">
-          {processDrafts.error instanceof Error
-            ? processDrafts.error.message
-            : "Drafting failed"}
+          {startProcessing.error instanceof Error
+            ? startProcessing.error.message
+            : "Grading queue failed"}
         </p>
       ) : null}
 
-      {draftSummary ? (
-        <p className="text-xs text-muted-foreground">{draftSummary}</p>
+      {processingSummary ? (
+        <p className="text-xs text-muted-foreground">{processingSummary}</p>
       ) : null}
 
       {scripts.length === 0 ? (
@@ -495,7 +543,10 @@ export function IdentityReviewPanel({
               script={script}
               students={roster}
               onIdentityCleared={() => {
-                void runDrafts();
+                void refetch();
+              }}
+              onRemoved={() => {
+                void refetch();
               }}
             />
           ))}

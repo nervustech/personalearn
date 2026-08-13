@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
 import type { StudentEvalProfile } from "@/lib/evaluation/student-profile";
@@ -8,6 +9,15 @@ import type {
   EvaluationBatch,
   StudentSubmission,
 } from "@/types/database";
+
+const ACTIVE_GRADING_STATUSES = new Set([
+  "indexing",
+  "evaluating",
+  "parsing",
+  "queued_draft",
+  "drafting",
+  "identity_cleared",
+]);
 
 export const assessmentsQueryKey = (classId: string) =>
   ["assessments", classId] as const;
@@ -93,7 +103,7 @@ export function useEvaluationBatches(classId: string | undefined) {
 }
 
 export function useEvaluationScripts(batchId: string | undefined) {
-  return useQuery({
+  const query = useQuery({
     queryKey: evaluationScriptsQueryKey(batchId ?? ""),
     enabled: Boolean(batchId),
     queryFn: async () => {
@@ -103,6 +113,7 @@ export function useEvaluationScripts(batchId: string | undefined) {
       const payload = (await response.json()) as {
         scripts?: ScriptReviewDto[];
         batch?: EvaluationBatch;
+        pageCount?: number;
         error?: string;
       };
       if (!response.ok) {
@@ -111,9 +122,75 @@ export function useEvaluationScripts(batchId: string | undefined) {
       return {
         scripts: payload.scripts ?? [],
         batch: payload.batch,
+        pageCount: payload.pageCount ?? 0,
       };
     },
+    // Keep the session fresh while provider Batch jobs may still be in flight.
+    refetchInterval: (q) => {
+      const scripts = q.state.data?.scripts ?? [];
+      const batchStatus = q.state.data?.batch?.status;
+      const grading =
+        batchStatus === "processing" ||
+        scripts.some((s) => ACTIVE_GRADING_STATUSES.has(s.status));
+      return grading ? 8_000 : false;
+    },
   });
+
+  useEvalBatchBackgroundPoll(batchId, query.data?.scripts, query.data?.batch);
+  return query;
+}
+
+/**
+ * While scripts/batch look in-flight, POST /poll so completed xAI/Gemini jobs
+ * are ingested without waiting on Vercel Cron (critical for local `next dev`).
+ */
+export function useEvalBatchBackgroundPoll(
+  batchId: string | undefined,
+  scripts: ScriptReviewDto[] | undefined,
+  batch?: EvaluationBatch | null
+) {
+  const queryClient = useQueryClient();
+  const inFlight = useRef(false);
+
+  const shouldPoll = useMemo(() => {
+    if (!batchId) return false;
+    if (batch?.status === "processing") return true;
+    return (scripts ?? []).some((s) => ACTIVE_GRADING_STATUSES.has(s.status));
+  }, [batch?.status, batchId, scripts]);
+
+  useEffect(() => {
+    if (!batchId || !shouldPoll) return;
+
+    let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled || inFlight.current) return;
+      inFlight.current = true;
+      try {
+        const response = await fetch(
+          `/api/evaluation-batches/${encodeURIComponent(batchId)}/poll`,
+          { method: "POST" }
+        );
+        if (!response.ok) return;
+        if (!cancelled) {
+          await queryClient.invalidateQueries({
+            queryKey: evaluationScriptsQueryKey(batchId),
+          });
+        }
+      } catch {
+        // Ignore transient poll failures; interval retries.
+      } finally {
+        inFlight.current = false;
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(tick, 12_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [batchId, queryClient, shouldPoll]);
 }
 
 export function useStudentEvalProfile(
@@ -258,6 +335,8 @@ export function useUploadEvaluationPages(classId: string) {
         const confirmPayload = (await confirmRes.json()) as {
           pageCount?: number;
           queued?: boolean;
+          skippedAll?: boolean;
+          message?: string;
           warnings?: {
             fileName: string;
             duplicateOfFileName: string;
@@ -283,6 +362,8 @@ export function useUploadEvaluationPages(classId: string) {
       const payload = (await response.json()) as {
         pageCount?: number;
         queued?: boolean;
+        skippedAll?: boolean;
+        message?: string;
         warnings?: {
           fileName: string;
           duplicateOfFileName: string;
@@ -305,23 +386,22 @@ export function useUploadEvaluationPages(classId: string) {
   });
 }
 
-export function useStartEvaluationProcessing(classId: string) {
+export function useStartBatchIndex(classId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (batchId: string) => {
       const response = await fetch(
-        `/api/evaluation-batches/${batchId}/process-async`,
+        `/api/evaluation-batches/${batchId}/start`,
         { method: "POST" }
       );
       const payload = (await response.json()) as {
-        started?: boolean;
-        reviewHref?: string;
-        status?: string;
+        jobId?: string;
+        phase?: string;
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Could not start grading");
+        throw new Error(payload.error ?? "Could not start batch indexing");
       }
       return payload;
     },
@@ -336,33 +416,45 @@ export function useStartEvaluationProcessing(classId: string) {
   });
 }
 
-export function useProcessEvaluationIdentity(classId: string) {
+/** @deprecated Use useStartBatchIndex — kept for call-site compatibility */
+export const useStartEvaluationProcessing = useStartBatchIndex;
+
+export function useEvaluateLive(classId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (batchId: string) => {
+    mutationFn: async (input: { batchId: string; scriptId?: string | null }) => {
       const response = await fetch(
-        `/api/evaluation-batches/${batchId}/process-identity`,
-        { method: "POST" }
+        `/api/evaluation-batches/${input.batchId}/evaluate-live`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scriptId: input.scriptId ?? null }),
+        }
       );
       const payload = (await response.json()) as {
-        scripts?: ScriptReviewDto[];
+        status?: string;
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Identity processing failed");
+        throw new Error(payload.error ?? "Live evaluation failed");
       }
-      return payload.scripts ?? [];
+      return payload;
     },
-    onSuccess: (_data, batchId) => {
+    onSuccess: (_data, input) => {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });
       queryClient.invalidateQueries({
-        queryKey: evaluationScriptsQueryKey(batchId),
+        queryKey: evaluationScriptsQueryKey(input.batchId),
       });
     },
   });
+}
+
+/** Bulk class upload: submit index Batch job after pages uploaded. */
+export function useProcessEvaluationIdentity(classId: string) {
+  return useStartBatchIndex(classId);
 }
 
 export function useAssignEvaluationScript(classId: string, batchId: string) {
@@ -398,41 +490,23 @@ export function useAssignEvaluationScript(classId: string, batchId: string) {
   });
 }
 
-export type ProcessDraftsSummary = {
-  drafted: number;
-  skippedAmber: number;
-  skippedPending: number;
-  skippedAlreadyDrafted: number;
-  skippedOther: number;
-  errors: { scriptId: string; message: string }[];
-};
-
-export function useProcessDrafts(classId: string, batchId: string) {
+export function useRemoveEvaluationScript(classId: string, batchId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (overrideBatchId?: string) => {
-      const targetBatchId = overrideBatchId || batchId;
-      if (!targetBatchId) {
-        throw new Error("Batch id is required for draft processing");
-      }
+    mutationFn: async (scriptId: string) => {
       const response = await fetch(
-        `/api/evaluation-batches/${targetBatchId}/process-drafts`,
-        { method: "POST" }
+        `/api/evaluation-batches/${batchId}/scripts/${scriptId}`,
+        { method: "DELETE" }
       );
-      const payload = (await response.json()) as {
-        summary?: ProcessDraftsSummary;
-        error?: string;
-      };
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Draft processing failed");
+        throw new Error(payload.error ?? "Could not remove script");
       }
-      return payload.summary!;
     },
-    onSuccess: (_summary, overrideBatchId) => {
-      const targetBatchId = overrideBatchId || batchId;
+    onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: evaluationScriptsQueryKey(targetBatchId),
+        queryKey: evaluationScriptsQueryKey(batchId),
       });
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
@@ -504,6 +578,7 @@ export function useUpdateQuestionEvaluation(classId: string, batchId: string) {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });
+      queryClient.invalidateQueries({ queryKey: ["script-review"] });
     },
   });
 }
@@ -542,6 +617,7 @@ export function useReevaluateQuestion(classId: string, batchId: string) {
       queryClient.invalidateQueries({
         queryKey: evaluationBatchesQueryKey(classId),
       });
+      queryClient.invalidateQueries({ queryKey: ["script-review"] });
     },
   });
 }
@@ -585,6 +661,7 @@ export function useSignOffScript(classId: string, batchId: string) {
       queryClient.invalidateQueries({
         queryKey: ["student-eval-profile", classId],
       });
+      queryClient.invalidateQueries({ queryKey: ["script-review"] });
     },
   });
 }

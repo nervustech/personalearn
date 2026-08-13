@@ -6,6 +6,10 @@ import { useStudentEvalProfile } from "@/lib/hooks/use-evaluation";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  EvalProgressDot,
+  type EvalDotState,
+} from "@/components/classes/eval-progress-dot";
 import { cn } from "@/lib/utils";
 
 type StudentEvalProfileDialogProps = {
@@ -15,7 +19,11 @@ type StudentEvalProfileDialogProps = {
   onOpenChange: (open: boolean) => void;
   onEvaluateAssessment: (assessmentId: string) => void;
   /** Open existing review when status is in_review. */
-  onContinueReview?: (batchId: string) => void;
+  onContinueReview?: (input: {
+    batchId: string;
+    assessmentId: string;
+    scriptId?: string | null;
+  }) => void;
 };
 
 const STATUS_LABEL: Record<StudentAssessmentStatus, string> = {
@@ -24,18 +32,30 @@ const STATUS_LABEL: Record<StudentAssessmentStatus, string> = {
   signed_off: "Signed off",
 };
 
+function statusToDot(status: StudentAssessmentStatus): EvalDotState {
+  switch (status) {
+    case "signed_off":
+      return "done";
+    case "in_review":
+      return "ready";
+    default:
+      return "none";
+  }
+}
+
 function StatusBadge({ status }: { status: StudentAssessmentStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex rounded-md px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium",
         status === "signed_off" &&
           "bg-emerald-500/15 text-emerald-900 dark:text-emerald-100",
         status === "in_review" &&
-          "bg-amber-500/15 text-amber-950 dark:text-amber-100",
+          "bg-indigo-500/15 text-indigo-950 dark:text-indigo-100",
         status === "not_started" && "bg-muted text-muted-foreground"
       )}
     >
+      <EvalProgressDot state={statusToDot(status)} />
       {STATUS_LABEL[status]}
     </span>
   );
@@ -114,6 +134,7 @@ export function StudentEvalProfileDialog({
                 markSummary,
                 feedback,
                 reviewBatchId,
+                reviewScriptId,
               } = row;
               const isExpanded = expandedId === assessment.id;
               const markText =
@@ -156,7 +177,13 @@ export function StudentEvalProfileDialog({
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => onContinueReview(reviewBatchId)}
+                        onClick={() =>
+                          onContinueReview?.({
+                            batchId: reviewBatchId,
+                            assessmentId: assessment.id,
+                            scriptId: reviewScriptId,
+                          })
+                        }
                       >
                         Continue review
                       </Button>

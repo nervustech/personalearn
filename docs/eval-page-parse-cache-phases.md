@@ -1,6 +1,8 @@
 # Evaluation page parse cache — three-phase design
 
-**Status:** Proposed (design doc)  
+**Status:** Superseded by [ADR-005](adr-005-eval-direct-multimodal.md) (2026-08-02). Direct multimodal grading replaces parse-cache architecture.
+
+**Status (historical):** Proposed (design doc)  
 **Related:** ADR-003 (vision tiering), Epic F (evaluation rehaul), PSL-8 family (Sprint 5 eval)  
 **Audience:** Engineering — implementation planning for post–Sprint 5 eval pipeline improvements
 

@@ -60,6 +60,8 @@ Schedules run from the default branch after merge; use **Actions → Eval batch 
 
 ### 3. Set up Supabase
 
+Dev and production are **separate** projects ([PSL-40](https://nervustechnologies.atlassian.net/browse/PSL-40)). Local and Vercel Preview use **dev**; Vercel Production uses **prod**. Full checklist: [docs/production-deploy-checklist.md](docs/production-deploy-checklist.md).
+
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run migrations in `supabase/migrations/` via the SQL Editor (at minimum `20260621_init_schema.sql`; for evaluation, also `20260802_eval_direct_multimodal.sql` — ADR-005 direct multimodal pipeline)
 3. **Auth (PSL-18):** Enable Google OAuth under Authentication → Providers
@@ -69,9 +71,10 @@ Schedules run from the default branch after merge; use **Actions → Eval batch 
      - `http://localhost:3000/**`
      - `https://personalearndev.vercel.app/**`
      - `https://*-.vercel.app/**`
-5. Prod Supabase: Site URL `https://personalearn.vercel.app`, redirect `https://personalearn.vercel.app/**`
+5. Prod project (`personalearn-prod` / `ecwivelanrcjdgkyvbos`): Site URL `https://personalearn.vercel.app`, redirect `https://personalearn.vercel.app/**`
 6. In **Google Cloud Console** (APIs & Services → Credentials → OAuth 2.0 Client), set **Authorized redirect URIs** to your Supabase callback — **not** `localhost`:
-   - `https://<your-project-ref>.supabase.co/auth/v1/callback`
+   - Dev: `https://wrxnkipfmpxcouwtncvq.supabase.co/auth/v1/callback`
+   - Prod: `https://ecwivelanrcjdgkyvbos.supabase.co/auth/v1/callback`
    - Copy the same Client ID and Client Secret into Supabase → Authentication → Providers → Google
 7. Confirm `handle_new_user` trigger is active (included in migration)
 

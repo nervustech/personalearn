@@ -30,13 +30,16 @@ Unit (Vitest)        — Zod schemas, parsers, pure functions
 
 ## Environments (MVP)
 
-For MVP we do **not** run a separate staging stack. Treat these as one pre-production lane:
+For MVP we do **not** run a separate staging stack. Treat these as one pre-production lane; production uses a **dedicated** Supabase project ([PSL-40](https://nervustechnologies.atlassian.net/browse/PSL-40)):
 
 | Layer | What it is |
 |-------|------------|
 | **Integration** | `develop` branch on GitHub |
 | **Deploy / manual QA** | Vercel preview URLs for PRs and `develop` |
-| **Data** | Shared Supabase **dev** project (same as local `.env.local`) |
+| **Data (pre-prod)** | Shared Supabase **dev** project (`personalearn-dev` / `wrxnkipfmpxcouwtncvq`) — same as local `.env.local` |
+| **Production** | `main` on Vercel + Supabase **prod** (`personalearn-prod` / `ecwivelanrcjdgkyvbos`) — never point local or Preview at prod |
+
+See [production-deploy-checklist.md](./production-deploy-checklist.md) for Auth URLs, Vercel env names, and RLS smoke. Do not commit keys.
 
 `main` is production when we ship. Until then, validate features on `develop` previews before merge.
 

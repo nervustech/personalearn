@@ -7,6 +7,7 @@ const mockRequireBatch = vi.fn();
 const mockUpload = vi.fn();
 const mockInsert = vi.fn();
 const mockSelect = vi.fn();
+const mockUpdate = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -18,6 +19,7 @@ vi.mock("@/lib/supabase/server", () => ({
     from: vi.fn(() => ({
       select: (...args: unknown[]) => mockSelect(...args),
       insert: (...args: unknown[]) => mockInsert(...args),
+      update: (...args: unknown[]) => mockUpdate(...args),
     })),
   })),
 }));
@@ -47,13 +49,9 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
     mockSelect.mockReturnValue({
       eq: vi.fn().mockResolvedValue({ data: [], error: null }),
     });
-    mockInsert.mockReturnValue({
-      select: vi.fn(() => ({
-        single: vi.fn().mockResolvedValue({
-          data: { id: "script-1" },
-          error: null,
-        }),
-      })),
+    mockInsert.mockResolvedValue({ error: null });
+    mockUpdate.mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
     });
   });
 
@@ -101,7 +99,7 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
     expect(payload.error).toContain("Unsupported file type");
   });
 
-  it("uploads images and queues a pending script", async () => {
+  it("uploads images and stores evaluation pages", async () => {
     const formData = new FormData();
     formData.append(
       "files",
@@ -126,7 +124,7 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
     expect(response.status).toBe(200);
     expect(payload.queued).toBe(true);
     expect(payload.pageCount).toBe(2);
-    expect(payload.scriptId).toBe("script-1");
+    expect(payload.pages).toHaveLength(2);
     expect(payload.warnings).toEqual([]);
     expect(mockUpload).toHaveBeenCalledTimes(2);
     expect(mockRequireTeacherClass).toHaveBeenCalledWith(
@@ -169,14 +167,13 @@ describe("/api/evaluation-batches/[batchId]/upload", () => {
     expect(payload.warnings[0].fileName).toBe("scan-a-copy.jpg");
     expect(payload.warnings[0].duplicateOfFileName).toBe("scan-a.jpg");
 
-    const insertArg = mockInsert.mock.calls[0]?.[0] as {
-      page_order: {
-        storagePath: string;
-        duplicate?: boolean;
-        contentHash?: string;
-      }[];
-    };
-    expect(insertArg.page_order).toHaveLength(1);
-    expect(insertArg.page_order[0]!.duplicate).toBeUndefined();
+    const insertArg = mockInsert.mock.calls[0]?.[0] as Array<{
+      file_name: string;
+      content_hash: string;
+      script_id: string | null;
+    }>;
+    expect(insertArg).toHaveLength(1);
+    expect(insertArg[0]!.file_name).toBe("scan-a.jpg");
+    expect(insertArg[0]!.script_id).toBeNull();
   });
 });

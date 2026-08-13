@@ -58,7 +58,7 @@ Project Settings → Environment Variables → **Production** (not Preview). Pre
 
 After saving `NEXT_PUBLIC_*` vars, **redeploy** Production. Check `GET /api/health`.
 
-GitHub Actions eval poll (after `develop` → `main`): repo secret `EVAL_APP_URL=https://personalearn.vercel.app`.
+GitHub Actions eval poll (after `develop` → `main`): repo secret `EVAL_APP_URL_PROD` or `EVAL_APP_URL` = `https://personalearn.vercel.app`. `CRON_SECRET` must match Vercel Production.
 
 ## RLS smoke
 
@@ -71,6 +71,28 @@ SQL-level isolation was verified on prod during PSL-40 (two synthetic teachers, 
 
 ## Promote (PSL-41)
 
-1. Confirm this checklist.
-2. Set Vercel Production env to **prod** Supabase.
-3. Merge `develop` → `main`, tag `v1.0.0`.
+`origin/main` is still the initial commit until this promote. `https://personalearn.vercel.app` returning Vercel `NOT_FOUND` is expected until the first Production deployment from `main`. Confirm in Vercel: Production Branch = `main`, domain = `personalearn.vercel.app`.
+
+1. Vercel **Production** env points at `personalearn-prod` (not the shared dev project). Redeploy Production after any `NEXT_PUBLIC_*` change.
+2. GitHub repo secrets: `CRON_SECRET` plus `EVAL_APP_URL_PROD` (or `EVAL_APP_URL`) = `https://personalearn.vercel.app`.
+3. Open `develop` → `main` PR. Merge only after the regression checklist below passes (human gate).
+4. Tag `v1.0.0` on `main`: `git tag -a v1.0.0 <sha> && git push origin v1.0.0`.
+5. `GET https://personalearn.vercel.app/api/health` returns `status: ok` and prod Supabase (not the dev ref).
+6. Run **Actions → Eval batch poll → Run workflow** once against production.
+7. Slack `#personalearn-dev` ship announcement.
+
+PSL-10 (report export) and PSL-39 (PWA) are backlog — not required for `v1.0.0`.
+
+### Regression (production URL)
+
+Run on `https://personalearn.vercel.app` after the first Production deploy:
+
+1. Teacher signs in (Google or email) — new prod account, not a reused dev user.
+2. Creates a class; uploads a resource; ingest succeeds.
+3. AI Hub: query with citation; generate + save a resource on confirm.
+4. Class resources section shows uploaded + AI-generated items.
+5. Evaluation: upload stack → review → sign off → results saved.
+6. Dashboard shows competency for students in that class.
+7. `npm test` + `npm run build` green on the `develop` → `main` PR (CI).
+
+Auth dashboard (if login redirects fail): prod Site URL `https://personalearn.vercel.app`, redirect `https://personalearn.vercel.app/**`, Google callback `https://ecwivelanrcjdgkyvbos.supabase.co/auth/v1/callback`.

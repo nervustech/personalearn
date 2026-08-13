@@ -53,10 +53,10 @@ Missing Preview vars cause `MIDDLEWARE_INVOCATION_FAILED` on PR deployments. **R
 
 | Secret | Value |
 |--------|--------|
-| `EVAL_APP_URL` | App origin, e.g. `https://personalearn.vercel.app` |
+| `EVAL_APP_URL_PROD` (or `EVAL_APP_URL`) | Production origin, e.g. `https://personalearn.vercel.app` |
 | `CRON_SECRET` | Same as Vercel `CRON_SECRET` |
 
-Schedules run from the default branch after merge; use **Actions → Eval batch poll → Run workflow** to test sooner.
+Schedules run from the default branch (`main`) after merge; use **Actions → Eval batch poll → Run workflow** to test sooner.
 
 ### 3. Set up Supabase
 

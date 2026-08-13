@@ -1,0 +1,72 @@
+name: Feature request
+description: Suggest a new capability or improvement. Ideas are triaged into the Jira backlog.
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. We'll review fit against the roadmap and create a **Jira story (`PSL-N`)** if we commit to building it.
+
+        Feature requests are **not implemented directly from GitHub Issues** — Jira is the system of record.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / opportunity
+      description: What pain does this solve for educators?
+      placeholder: "Teachers spend 20+ minutes manually copying CBC rubric levels into lesson plans..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like PersonaLearn to do?
+      placeholder: "As a teacher, I want AI to draft rubric-aligned feedback from a photo of student work..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: value
+    attributes:
+      label: User value
+      description: Why does this matter? Time saved, better outcomes, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope notes
+      description: Must-haves vs nice-to-haves; what can wait for a follow-up ticket?
+      placeholder: |
+        In scope:
+        - ...
+
+        Out of scope (later):
+        - ...
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Suggested priority
+      options:
+        - Nice to have — backlog
+        - Important — consider next sprint
+        - Strategic — aligns with current sprint goal
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      placeholder: "Pilot teacher feedback / internal roadmap / competitive research"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Mockups, related features, dependencies, links.

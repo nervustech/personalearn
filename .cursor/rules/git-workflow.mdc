@@ -1,0 +1,91 @@
+---
+description: Branching, commits, and PR workflow for Jira-ticketed work (PersonaLearn)
+alwaysApply: true
+---
+
+# Git workflow (PersonaLearn)
+
+## Before starting work
+
+Confirm you are on the **correct branch** for the task. Never implement on `develop` or `main` directly.
+
+1. Identify the **Jira ticket** (`PSL-N`) and work type (feature, bug, chore, docs).
+2. **Fetch and branch** from latest `origin/develop` (or the merged prerequisite for dependent work).
+3. If a branch for that ticket already exists locally or on origin, check it out instead of creating a duplicate.
+
+| Work type | Branch prefix | When to use | Commit prefix |
+|-----------|---------------|-------------|---------------|
+| Feature | `feature/` | New capability or user-facing story | `feat:` |
+| Bug | `fix/` | Defect fix (broken behaviour) | `fix:` |
+| Chore | `chore/` | Tooling, deps, refactors, CI — no user-facing change | `chore:` |
+| Documentation | `docs/` | README, setup guides, comments-only docs | `docs:` |
+
+**Branch naming:** `{prefix}/PSL-{ticket}-{short-kebab-description}`
+
+Examples: `feature/PSL-4-teacher-auth`, `fix/PSL-42-login-redirect`, `chore/PSL-30-eslint-flat-config`, `docs/PSL-18-supabase-auth-config`
+
+## Branches
+
+- **Integration branch:** `develop` — all PRs target `develop`, not `main`.
+- **Production branch:** `main` — release via `develop` → `main` when shipping.
+- **One Jira ticket → one branch → one PR.** Do not bundle multiple tickets in a single commit or PR.
+- Delete branches after merge (`gh pr merge --squash --delete-branch`).
+
+## Commits
+
+- **Conventional prefix + ticket:** `feat:`, `fix:`, `chore:`, `docs:` — each with `(PSL-N)`
+- **Focus on why** in the message body when useful.
+- **Stage only ticket-scoped files** — never `git add -A` when splitting or committing; exclude unrelated changes (e.g. `.cursor/`).
+- **Never commit secrets** (`.env.local`, credentials).
+
+### Multiple commits on the feature branch (preferred)
+
+Prefer **several focused commits as work lands**, not one mega-commit at the end of the ticket.
+
+- **Align commits to ACs or coherent slices** when practical (e.g. AC-5.3 grouping, then AC-5.4 amber path, then tests). ACs are a guide, not a hard 1:1 rule — a commit may cover one AC, part of an AC, or a vertical slice that still builds/tests.
+- **Commit when a slice is green** (builds, relevant tests pass) so history supports logging, bisect, and PR review.
+- **One ticket only** — every commit on the branch still belongs to the same `PSL-N`; do not mix tickets.
+- **Squash merge still applies** — intermediate commits are for branch/PR history and agent logging; `develop` keeps **one** squashed commit per ticket/PR.
+
+```
+feat: group eval pages by admission number (PSL-45)
+
+AC-5.3 — Lite vision read + roster validate + per-student grouping.
+```
+
+```
+feat: amber identity confirm before grading (PSL-45)
+
+AC-5.4 / AC-5.8 — flag low-confidence matches; teacher reassign dropdown.
+```
+
+## Pull requests
+
+1. **Rebase** feature branch onto `origin/develop` before opening/updating the PR (required after squash merges on stacked work).
+2. **Verify diff** — PR should only contain files for that ticket.
+3. **Open PR** targeting `develop` with title matching the commit style (`PSL-N` in title).
+4. **Labels** — apply `area-*` + `type-*` matching the Jira ticket before review; set sprint milestone when applicable (see `sdlc-ecosystem.mdc`).
+5. **Body** must include `## Summary` and `## Test plan` (checkboxes).
+6. **Review before merge** — follow **`sdlc-pr-lifecycle`** skill: verify labels, post GitHub review with verdict, mirror on Jira; wait for CI green.
+7. **Merge** with squash; do not merge your own PR with `--approve` (GitHub blocks self-approval).
+
+## Merge order (when tickets depend on each other)
+
+Merge to `develop` sequentially. Sprint 1 example:
+
+`PSL-25` → `PSL-18` → `PSL-4` → `PSL-26` → `PSL-28` → `PSL-5` (`PSL-19` can merge after `PSL-25`, parallel with the stack).
+
+Independent tickets can PR to `develop` in parallel; dependent tickets wait for their prerequisite to merge, then rebase.
+
+## Agent checklist
+
+- [ ] Correct branch type and name (`feature/`, `fix/`, `chore/`, or `docs/` + `PSL-N`)
+- [ ] Branched from current `develop` (not working on `develop`/`main`)
+- [ ] Single-ticket scope in diff
+- [ ] Multiple focused commits as ACs/slices land (not one mega-commit at the end)
+- [ ] Rebased on current `develop` before PR
+- [ ] PR targets `develop`, not `main`
+- [ ] `area-*` + `type-*` labels on PR and Jira (synced) — see **`sdlc-pr-lifecycle`** skill
+- [ ] GitHub review + matching Jira comment (`PSL-N`, verdict, labels)
+- [ ] CI passing
+- [ ] Squash merge + delete branch

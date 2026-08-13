@@ -1,0 +1,309 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-hero-accent: var(--hero-accent);
+  --color-hero-muted: var(--hero-muted);
+  --color-hero-surface: var(--hero-surface);
+  --color-hero-surface-border: var(--hero-surface-border);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display-family);
+  --shadow-xs: var(--shadow-xs-value);
+  --shadow-sm: var(--shadow-sm-value);
+  --shadow-md: var(--shadow-md-value);
+  --shadow-lg: var(--shadow-lg-value);
+  --shadow-card: var(--shadow-card-value);
+}
+
+:root {
+  --radius: 0.875rem;
+
+  /* Pure white surfaces + pure black text */
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+
+  /* Electric indigo/violet — single rare accent */
+  --primary: #5b5bd6;
+  --primary-foreground: #ffffff;
+
+  --secondary: #ececec;
+  --secondary-foreground: #000000;
+  --muted: #ebebeb;
+  --muted-foreground: #737373;
+
+  /* Accent mirrors primary (no terracotta) */
+  --accent: #5b5bd6;
+  --accent-foreground: #ffffff;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #5b5bd6;
+
+  /* Muted semantics — status only */
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --info: #2563eb;
+  --info-foreground: #ffffff;
+
+  --hero-overlay-from: rgb(0 0 0 / 0.92);
+  --hero-overlay-via: rgb(0 0 0 / 0.78);
+  --hero-overlay-to: rgb(0 0 0 / 0.45);
+  --hero-overlay-bottom: rgb(0 0 0 / 0.65);
+  --hero-accent: #a5a5f5;
+  --hero-muted: #d4d4d4;
+  --hero-surface: rgb(255 255 255 / 0.92);
+  --hero-surface-border: rgb(0 0 0 / 0.08);
+
+  /* Soft floating elevation — hairline edge via 1px ring (not a hard border) */
+  --shadow-xs-value: 0 1px 2px rgb(0 0 0 / 0.04), 0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-sm-value: 0 2px 8px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04),
+    0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-md-value: 0 8px 24px rgb(0 0 0 / 0.08), 0 2px 6px rgb(0 0 0 / 0.04),
+    0 0 0 1px rgb(0 0 0 / 0.04);
+  --shadow-lg-value: 0 16px 40px rgb(0 0 0 / 0.1), 0 4px 12px rgb(0 0 0 / 0.05),
+    0 0 0 1px rgb(0 0 0 / 0.05);
+  --shadow-card-value: 0 4px 16px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.04),
+    0 0 0 1px rgb(0 0 0 / 0.04);
+}
+
+.dark {
+  /* Pure black surfaces + pure white text */
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #000000;
+  --card-foreground: #ffffff;
+  --popover: #000000;
+  --popover-foreground: #ffffff;
+
+  --primary: #6e56cf;
+  --primary-foreground: #ffffff;
+
+  --secondary: #262626;
+  --secondary-foreground: #ffffff;
+  --muted: #1f1f1f;
+  --muted-foreground: #a3a3a3;
+
+  --accent: #6e56cf;
+  --accent-foreground: #ffffff;
+
+  --destructive: #f87171;
+  --destructive-foreground: #000000;
+  --border: #2a2a2a;
+  --input: #2a2a2a;
+  --ring: #6e56cf;
+
+  --success: #4ade80;
+  --success-foreground: #000000;
+  --warning: #fbbf24;
+  --warning-foreground: #000000;
+  --info: #60a5fa;
+  --info-foreground: #000000;
+
+  --hero-overlay-from: rgb(0 0 0 / 0.94);
+  --hero-overlay-via: rgb(0 0 0 / 0.86);
+  --hero-overlay-to: rgb(0 0 0 / 0.55);
+  --hero-overlay-bottom: rgb(0 0 0 / 0.75);
+  --hero-accent: #a78bfa;
+  --hero-muted: #a3a3a3;
+  --hero-surface: rgb(0 0 0 / 0.9);
+  --hero-surface-border: rgb(255 255 255 / 0.08);
+
+  --shadow-xs-value: 0 1px 2px rgb(0 0 0 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-sm-value: 0 2px 8px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3),
+    0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-md-value: 0 8px 24px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3),
+    0 0 0 1px rgb(255 255 255 / 0.05);
+  --shadow-lg-value: 0 16px 40px rgb(0 0 0 / 0.55), 0 4px 12px rgb(0 0 0 / 0.35),
+    0 0 0 1px rgb(255 255 255 / 0.06);
+  --shadow-card-value: 0 4px 20px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--primary) 25%, transparent);
+    color: var(--foreground);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display tracking-tight;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--primary) 35%, var(--border))
+      transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Resource pages: print the rendered markdown (tables included), not chrome. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: white !important;
+    color: #171717 !important;
+  }
+
+  .resource-print-root {
+    max-width: none !important;
+  }
+
+  .resource-print-body {
+    overflow: visible !important;
+    color: #171717 !important;
+  }
+
+  .resource-print-body table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  .resource-print-body thead {
+    display: table-header-group;
+  }
+
+  .resource-print-body tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .resource-print-body th,
+  .resource-print-body td {
+    border: 1px solid #d4d4d4 !important;
+    padding: 6px 8px !important;
+    background: transparent !important;
+    color: #171717 !important;
+  }
+
+  .resource-print-body th {
+    font-weight: 600;
+    background: #f5f5f5 !important;
+  }
+
+  .resource-print-body .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .resource-print-body .katex {
+    font-size: 1em !important;
+  }
+}
+
+@layer utilities {
+  .hero-overlay {
+    background:
+      linear-gradient(
+        to right,
+        var(--hero-overlay-from),
+        var(--hero-overlay-via),
+        var(--hero-overlay-to)
+      ),
+      linear-gradient(
+        to top,
+        var(--hero-overlay-bottom),
+        transparent 50%,
+        var(--hero-overlay-via)
+      );
+  }
+
+  .hero-glass {
+    @apply border border-hero-surface-border bg-hero-surface shadow-lg backdrop-blur-xl;
+  }
+
+  .surface-elevated {
+    @apply bg-card/95 backdrop-blur-sm;
+    box-shadow: var(--shadow-card-value);
+  }
+
+  .surface-float {
+    @apply rounded-2xl bg-card/95 backdrop-blur-xl;
+    box-shadow: var(--shadow-card-value);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}

@@ -64,10 +64,10 @@ AC-5.4 / AC-5.8 — flag low-confidence matches; teacher reassign dropdown.
 1. **Rebase** feature branch onto `origin/develop` before opening/updating the PR (required after squash merges on stacked work).
 2. **Verify diff** — PR should only contain files for that ticket.
 3. **Open PR** targeting `develop` with title matching the commit style (`PSL-N` in title).
-4. **Labels** — apply `area-*` + `type-*` matching the Jira ticket before review; set sprint milestone when applicable (see `sdlc-ecosystem.mdc`).
-5. **Body** must include `## Summary` and `## Test plan` (checkboxes).
-6. **Review before merge** — follow **`sdlc-pr-lifecycle`** skill: verify labels, post GitHub review with verdict, mirror on Jira; wait for CI green.
-7. **Merge** with squash; do not merge your own PR with `--approve` (GitHub blocks self-approval).
+4. **Labels + metadata** — apply `area-*` + `type-*` matching the Jira ticket; assign `nervustech` (or the owner); set sprint milestone (or `Backlog`); request a reviewer other than the author when one exists (see `sdlc-ecosystem.mdc`).
+5. **Body** must include `## Summary` and `## Test plan` (checkboxes). Keep boxes `[ ]` until the step is actually run.
+6. **Review before merge** — follow **`sdlc-pr-lifecycle`** skill: verify labels, assignee, milestone, reviewer, and that **every Test plan item is `[x]`** (or N/A with a reason); post GitHub review with verdict, mirror on Jira; wait for CI green.
+7. **Merge** with squash; do not merge your own PR with `--approve` (GitHub blocks self-approval). Do not merge while Test plan items remain `[ ]`. Close the linked GitHub Issue as `completed`.
 
 ## Merge order (when tickets depend on each other)
 
@@ -85,7 +85,8 @@ Independent tickets can PR to `develop` in parallel; dependent tickets wait for 
 - [ ] Multiple focused commits as ACs/slices land (not one mega-commit at the end)
 - [ ] Rebased on current `develop` before PR
 - [ ] PR targets `develop`, not `main`
-- [ ] `area-*` + `type-*` labels on PR and Jira (synced) — see **`sdlc-pr-lifecycle`** skill
-- [ ] GitHub review + matching Jira comment (`PSL-N`, verdict, labels)
+- [ ] `area-*` + `type-*` labels on PR and Jira (synced); assignee + milestone set — see **`sdlc-pr-lifecycle`** skill
+- [ ] Reviewer requested (or solo-dev review comment) + matching Jira comment (`PSL-N`, verdict, labels)
 - [ ] CI passing
+- [ ] PR Test plan boxes checked (`[x]` or N/A + reason) before Approve / merge
 - [ ] Squash merge + delete branch

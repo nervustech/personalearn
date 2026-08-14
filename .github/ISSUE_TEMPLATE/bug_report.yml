@@ -1,7 +1,9 @@
 name: Bug report
 description: Report broken behavior. The team will create a Jira ticket (PSL-N) for tracking.
 title: "[Bug] "
-labels: ["bug", "needs-triage"]
+labels: ["needs-triage", "type-bug"]
+assignees:
+  - nervustech
 body:
   - type: markdown
     attributes:
@@ -10,6 +12,8 @@ body:
         For urgent production issues, contact the team directly.
 
         **Do not paste secrets** (passwords, API keys, `.env` values).
+
+        On create this issue is assigned to **nervustech**, labelled `needs-triage` + `type-bug`, and should get a **milestone** (current sprint or Backlog) at triage.
 
   - type: textarea
     id: summary

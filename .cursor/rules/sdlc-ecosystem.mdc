@@ -26,7 +26,7 @@ Every unit of work traces to `PSL-N` via mandatory GitHub Issue intake:
 GitHub Issue → Jira ticket (PSL-N) → Confluence spec → GitHub branch/PR → Slack notification
 ```
 
-A **GitHub Issue is REQUIRED** for every feature and bug **before** a Jira `PSL-N` is created, a branch is opened, or implementation begins. The Issue carries `needs-triage` + best-guess `type-*` until mirrored to `PSL-N` with `area-*` + `type-*` copied across.
+A **GitHub Issue is REQUIRED** for every feature and bug **before** a Jira `PSL-N` is created, a branch is opened, or implementation begins. The Issue carries `needs-triage` + best-guess `type-*`, an **assignee**, and a **milestone** until mirrored to `PSL-N` with `area-*` + `type-*` copied across.
 
 If work does not link to a GitHub Issue and `PSL-N`, treat it as unofficial until triaged.
 
@@ -44,28 +44,36 @@ Complements `git-workflow.mdc`. For step-by-step delivery (branch → PR → rev
 
 ## Labels & tagging (Jira + GitHub)
 
-Labels are required on **every** tracked item. Use the same vocabulary on Jira tickets and GitHub PRs.
+Labels, assignee, and sprint metadata are required on **every** tracked item. Use the same `area-*` / `type-*` vocabulary on Jira tickets, GitHub Issues, and GitHub PRs.
 
 **Area (exactly one):** `area-auth`, `area-dashboard`, `area-classes`, `area-ai-rag`, `area-infra`, `area-docs`
 
 **Type (exactly one):** `type-feature`, `type-bug`, `type-chore`, `type-tech-debt`
 
-**GitHub Issue intake (mandatory):** Every feature and bug **must** start as a GitHub Issue with `needs-triage` + best-guess `type-*` (and best-guess `area-*` when known). A Jira `PSL-N` is created only after that Issue exists; labels are then copied to the ticket and the Issue is linked. No branch or implementation without Issue → `PSL-N`.
+Do **not** use GitHub’s default `bug` / `enhancement` labels — use `type-bug` / `type-feature`.
 
-**Sprint:** Jira **Sprint** field (primary). GitHub PR **milestone** = current sprint when in active sprint.
+**GitHub Issue intake (mandatory):** Every feature and bug **must** start as a GitHub Issue with `needs-triage` + best-guess `type-*` (and best-guess `area-*` when known). Assign **`nervustech`** (or the owner if different). Set milestone to the **current sprint**, or **Backlog** if unscheduled. A Jira `PSL-N` is created only after that Issue exists; labels + assignee are copied to the ticket and the Issue is linked. Remove `needs-triage` when triaged. No branch or implementation without Issue → `PSL-N`.
+
+**Sprint:** Jira **Sprint** field (primary). GitHub Issue **and** PR **milestone** = current sprint when in an active sprint; otherwise `Backlog`.
+
+**Default GitHub assignee:** `nervustech` whenever the item has no assignee.
+
+**PR reviewer:** Request a reviewer **other than the author** when a second collaborator exists. Solo-dev: skip the request (GitHub blocks self-review); post a review **comment** with verdict per `sdlc-pr-lifecycle`.
 
 Reference vocabulary: Jira PSL-35 (do not delete).
 
-### When labels are required
+### When labels and fields are required
 
-| Artifact | When | Labels |
-|----------|------|--------|
-| **GitHub Issue** | On create (**mandatory**, precedes Jira) | `needs-triage` + best-guess `type-*` (+ `area-*` when known) |
-| **Jira ticket** | On create or triage (only after Issue exists) | `area-*` + `type-*` before leaving To Do; link Issue |
-| **GitHub PR** | Before review | Same `area-*` + `type-*` as `PSL-N`; sprint milestone |
+| Artifact | When | Required |
+|----------|------|----------|
+| **GitHub Issue** | On create (**mandatory**, precedes Jira) | `needs-triage` + best-guess `type-*` (+ `area-*` when known); **assignee**; **milestone** (sprint or Backlog) |
+| **Jira ticket** | On create or triage (only after Issue exists) | `area-*` + `type-*` before leaving To Do; **assignee**; link Issue |
+| **GitHub PR** | On open / before review | Same `area-*` + `type-*` as `PSL-N`; **assignee**; **sprint milestone**; **reviewer** (or solo-dev review comment); `## Test plan` in body |
+| **GitHub PR** | Before Approve / merge | **Test plan boxes checked** (`[x]`). Run the listed steps, then edit the PR body. Leave unchecked only if marked N/A with a reason |
+| **GitHub Issue** | When `PSL-N` is **Done** / PR merged | Close with `state_reason=completed`; keep labels + assignee + milestone |
 | **Jira ticket** | After PR review | Re-verify; add follow-up ticket with `type-tech-debt` if needed |
 
-Fix missing or wrong labels **before** review verdicts or merge.
+Fix missing or wrong labels, assignee, milestone, or reviewer **before** review verdicts or merge. Do **not** Approve or merge while any Test plan item is still `[ ]` unless it is marked N/A with a reason. Do not leave a shipped ticket’s GitHub Issue open.
 
 ### Comment tagging
 
@@ -74,8 +82,8 @@ Every cross-system comment must include `PSL-N` and a link where applicable.
 | Where | When | Include |
 |-------|------|---------|
 | **Jira** | Branch / PR open / review / merge | `PSL-N`, branch or PR URL, verdict on review |
-| **GitHub PR** | Review | `PSL-N`, verdict, label confirmation |
-| **GitHub Issue** | Triage reply | `PSL-N` link, labels on ticket |
+| **GitHub PR** | Review | `PSL-N`, verdict, label confirmation, Test plan checked |
+| **GitHub Issue** | Triage reply | `PSL-N` link, labels, assignee, milestone |
 | **Slack** | PR open / merge | `PSL-N`, PR URL, one-line summary |
 
 Use `@mention` only when someone must act.
@@ -88,6 +96,8 @@ Use `@mention` only when someone must act.
 - [ ] Acceptance criteria defined
 - [ ] No open blocker links
 - [ ] Area + type labels set
+- [ ] Assignee set
+- [ ] Sprint (Jira) / milestone (GitHub) set
 
 ## Acceptance criteria
 - ...
@@ -111,15 +121,20 @@ Populate per ticket/sprint, not bulk upfront. Hub: [PLEARN](https://nervustechno
 
 ## GitHub
 
-- **Milestone:** current sprint on PRs
+- **Assignee:** `nervustech` on every Issue and PR that has none
+- **Milestone:** current sprint on Issues and PRs in that sprint; `Backlog` otherwise
+- **Reviewer:** requested on every PR when a non-author collaborator exists
+- **Test plan:** PR body `## Test plan` checkboxes must be `[x]` (or N/A + reason) before Approve / merge
 - **Release tags:** `v0.x.0` on `main` when promoting `develop` → `main`
 - **GitHub Projects:** not used — Jira board is the backlog
+- **Close Issues** when the linked `PSL-N` is Done (do not leave intake Issues open after ship)
 
 ## Human gates
 
 Agents must stop and ask for:
 
 - Merge approval
+- Merge while Test plan items are still unchecked
 - Commit (unless user explicitly requests)
 - Scope changes beyond ticket ACs
 - Creating new Jira tickets without triage (use `triage-issue` skill for bugs)

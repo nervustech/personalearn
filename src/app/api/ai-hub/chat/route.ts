@@ -18,6 +18,7 @@ import { generateAiConversationTitle } from "@/lib/ai-hub/generate-conversation-
 import { materializeAttachmentText } from "@/lib/ai-hub/chat-attachments-server";
 import { getMessageText } from "@/lib/ai-hub/message-content";
 import { getChatModel } from "@/lib/ai/llm";
+import { assertChatConfigured } from "@/lib/ai/env";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
     const { classId, conversationId, truncateFromMessageIndex } = parsed.data;
     const messages = await materializeAttachmentText(parsed.data.messages);
     const user = await requireTeacherClass(supabase, classId);
+    assertChatConfigured();
     const classContext = await getClassContext(supabase, classId);
     const systemPrompt = buildClassAssistantSystemPrompt(classContext);
 
@@ -159,7 +161,16 @@ export async function POST(request: Request) {
           await updateConversationTitle(supabase, activeConversationId!, title);
         }
       },
-      onError: () => "The assistant could not respond. Please try again.",
+      onError: (error) => {
+        const message = error instanceof Error ? error.message : "";
+        if (
+          /Missing (DEEPSEEK|XAI)_API_KEY/i.test(message) ||
+          /CHAT_PROVIDER/i.test(message)
+        ) {
+          return message;
+        }
+        return "The assistant could not respond. Please try again.";
+      },
     });
   } catch (error) {
     const { message, status } = mapApiError(error);

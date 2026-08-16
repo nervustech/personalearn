@@ -38,6 +38,7 @@ import {
   conversationMessagesQueryKey,
   fetchConversationMessages,
 } from "@/lib/hooks/use-conversation-messages";
+import { getMessageText } from "@/lib/ai-hub/message-content";
 import {
   conversationsQueryKey,
   useConversations,
@@ -231,6 +232,16 @@ export function AiHubChat() {
           finishedMessages
         );
         patchConversationList(conversationIdRef.current);
+      }
+
+      const last = finishedMessages[finishedMessages.length - 1];
+      if (
+        last?.role === "assistant" &&
+        !getMessageText(last).trim()
+      ) {
+        setActionError(
+          "The assistant returned an empty reply. Confirm DEEPSEEK_API_KEY (or CHAT_PROVIDER + matching key) is set in Vercel Production, then redeploy."
+        );
       }
 
       if (activeClass?.id) {
@@ -755,6 +766,9 @@ export function AiHubChat() {
                 <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2">
                   <p className="text-sm text-destructive">
                     {actionError ??
+                      (error instanceof Error
+                        ? error.message
+                        : null) ??
                       "The assistant could not respond. Please try again."}
                   </p>
                   {error ? (

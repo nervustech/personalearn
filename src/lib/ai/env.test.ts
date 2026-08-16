@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_CHAT_PROVIDER,
   DEFAULT_VOYAGE_MODEL,
+  assertChatConfigured,
   getChatProvider,
   getVoyageEmbeddingModel,
   requireChatApiKey,
@@ -54,5 +55,9 @@ describe("ai env", () => {
 
   it("throws when xai key missing", () => {
     expect(() => requireChatApiKey("xai")).toThrow(/XAI_API_KEY/);
+  });
+
+  it("assertChatConfigured fails without DEEPSEEK_API_KEY", () => {
+    expect(() => assertChatConfigured()).toThrow(/DEEPSEEK_API_KEY/);
   });
 });

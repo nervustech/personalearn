@@ -54,7 +54,8 @@ Project Settings → Environment Variables → **Production** (not Preview). Pre
 | `SUPABASE_ANON_KEY` | Same as anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Prod **service_role** (server-only; never client or git) |
 | `CRON_SECRET` | Same secret as GitHub Actions `CRON_SECRET` |
-| AI keys (`VOYAGE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `XAI_API_KEY`, …) | Same providers as Preview, Production scope |
+| AI keys (`VOYAGE_API_KEY`, `DEEPSEEK_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, optional `XAI_API_KEY`) | Same providers as Preview, Production scope |
+| `CHAT_PROVIDER` | Usually `deepseek` (default). Use `xai` only if `XAI_API_KEY` is set for chat |
 
 After saving `NEXT_PUBLIC_*` vars, **redeploy** Production. Check `GET /api/health`.
 

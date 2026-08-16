@@ -37,7 +37,7 @@ export function requireChatApiKey(provider: ChatProvider) {
     const key = clean(process.env.XAI_API_KEY);
     if (!key) {
       throw new Error(
-        "Missing XAI_API_KEY for Grok chat. Set CHAT_PROVIDER=deepseek or add XAI_API_KEY."
+        "Missing XAI_API_KEY for Grok chat. Set CHAT_PROVIDER=deepseek (and DEEPSEEK_API_KEY) or add XAI_API_KEY in this environment (e.g. Vercel Production)."
       );
     }
     return key;
@@ -46,8 +46,13 @@ export function requireChatApiKey(provider: ChatProvider) {
   const key = clean(process.env.DEEPSEEK_API_KEY);
   if (!key) {
     throw new Error(
-      "Missing DEEPSEEK_API_KEY. Set it in .env.local (server-only)."
+      "Missing DEEPSEEK_API_KEY for AI Hub chat. Set DEEPSEEK_API_KEY (and optionally CHAT_PROVIDER=deepseek) in this environment (e.g. Vercel Production)."
     );
   }
   return key;
+}
+
+/** Fail before streaming so the client gets a JSON error instead of an empty SSE body. */
+export function assertChatConfigured() {
+  requireChatApiKey(getChatProvider());
 }

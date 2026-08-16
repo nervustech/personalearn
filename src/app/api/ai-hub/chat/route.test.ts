@@ -57,6 +57,16 @@ vi.mock("@/lib/ai/llm", () => ({
   getChatModel: vi.fn(() => ({ modelId: "mock" })),
 }));
 
+vi.mock("@/lib/ai/env", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/ai/env")>(
+    "@/lib/ai/env"
+  );
+  return {
+    ...actual,
+    assertChatConfigured: vi.fn(),
+  };
+});
+
 const mockCreateAgentTools = vi.fn(() => ({
   search_class_resources: { description: "search" },
   generate_learning_resource: { description: "generate" },
@@ -202,6 +212,35 @@ describe("POST /api/ai-hub/chat", () => {
 
     expect(response.status).toBe(403);
     expect(payload.error).toBe("Class not found");
+    expect(mockStreamText).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when chat API key is missing", async () => {
+    const { assertChatConfigured } = await import("@/lib/ai/env");
+    vi.mocked(assertChatConfigured).mockImplementationOnce(() => {
+      throw new Error("Missing DEEPSEEK_API_KEY for AI Hub chat.");
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/ai-hub/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId,
+          messages: [
+            {
+              id: "user-1",
+              role: "user",
+              parts: [{ type: "text", text: "Hello" }],
+            },
+          ],
+        }),
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.error).toMatch(/DEEPSEEK_API_KEY/);
     expect(mockStreamText).not.toHaveBeenCalled();
   });
 });

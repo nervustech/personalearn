@@ -2,11 +2,13 @@
 
 PSL-__ — [link](https://nervustechnologies.atlassian.net/browse/PSL-__)
 
-## Labels
+## Labels / metadata (required before review)
 
 - **Area:** area-auth | area-dashboard | area-classes | area-ai-rag | area-infra | area-docs
 - **Type:** type-feature | type-bug | type-chore | type-tech-debt
-- **Milestone:** Sprint 2 (when in current sprint)
+- **Assignee:** nervustech (or the owner of the work)
+- **Milestone:** current sprint, or Backlog if unscheduled
+- **Reviewer:** request someone other than the author when a collaborator exists (solo-dev: post a review comment with verdict)
 
 ## Summary
 
@@ -20,6 +22,8 @@ PSL-__ — [link](https://nervustechnologies.atlassian.net/browse/PSL-__)
 - [ ] docs
 
 ## Test plan
+
+Check each box **after** the step is actually run. Do not Approve or merge while any item is still `[ ]` unless it is marked N/A with a reason.
 
 - [ ] `npm run lint`
 - [ ] `npm test`

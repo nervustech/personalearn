@@ -1,7 +1,9 @@
 name: Feature request
 description: Suggest a new capability or improvement. Ideas are triaged into the Jira backlog.
 title: "[Feature] "
-labels: ["enhancement", "needs-triage"]
+labels: ["needs-triage", "type-feature"]
+assignees:
+  - nervustech
 body:
   - type: markdown
     attributes:
@@ -9,6 +11,8 @@ body:
         Thanks for the suggestion. We'll review fit against the roadmap and create a **Jira story (`PSL-N`)** if we commit to building it.
 
         Feature requests are **not implemented directly from GitHub Issues** — Jira is the system of record.
+
+        On create this issue is assigned to **nervustech**, labelled `needs-triage` + `type-feature`, and should get a **milestone** (current sprint or Backlog) at triage.
 
   - type: textarea
     id: problem

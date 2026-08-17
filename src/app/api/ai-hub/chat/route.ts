@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         sessionId: "6b0137",
-        runId: "pre-fix",
+        runId: "post-fix",
         hypothesisId: "E",
         location: "chat/route.ts:POST",
         message: "chat route reached",

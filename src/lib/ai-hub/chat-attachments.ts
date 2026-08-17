@@ -7,6 +7,10 @@ import {
 } from "@/lib/ai/resource-format";
 
 const MAX_ATTACHMENTS = 5;
+/** Stay under Vercel Functions' 4.5 MB request body (FUNCTION_PAYLOAD_TOO_LARGE). */
+export const MAX_CHAT_REQUEST_BYTES = 4 * 1024 * 1024;
+/** Raw file cap so base64 JSON plus chat metadata fits in MAX_CHAT_REQUEST_BYTES. */
+export const MAX_CHAT_FILE_BYTES = 2 * 1024 * 1024;
 
 export type PendingAttachment = {
   id: string;
@@ -19,10 +23,10 @@ export function validateChatAttachment(file: File): string | null {
     return unsupportedTypeMessage();
   }
 
-  const maxBytes = maxBytesForFormat(format);
+  const maxBytes = Math.min(maxBytesForFormat(format), MAX_CHAT_FILE_BYTES);
   if (file.size > maxBytes) {
     const limitMb = maxBytes / (1024 * 1024);
-    return `${file.name} must be ${limitMb} MB or smaller.`;
+    return `${file.name} must be ${limitMb} MB or smaller for chat.`;
   }
 
   return null;
@@ -92,4 +96,81 @@ async function fileToFileUIPart(file: File): Promise<FileUIPart> {
 function toDataUrl(mediaType: string, bytes: Uint8Array): string {
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
   return `data:${mediaType};base64,${btoa(binary)}`;
+}
+
+type ChatTransportMessage = {
+  role?: string;
+  parts?: Array<{
+    type?: string;
+    filename?: string;
+    url?: string;
+    mediaType?: string;
+  }>;
+};
+
+export function compactChatTransportBody(bodyStr: string): {
+  bodyStr: string;
+  beforeBytes: number;
+  afterBytes: number;
+  strippedFileParts: number;
+} {
+  const beforeBytes = bodyStr.length;
+  let parsed: { messages?: ChatTransportMessage[] };
+  try {
+    parsed = JSON.parse(bodyStr) as { messages?: ChatTransportMessage[] };
+  } catch {
+    return {
+      bodyStr,
+      beforeBytes,
+      afterBytes: beforeBytes,
+      strippedFileParts: 0,
+    };
+  }
+
+  const messages = parsed.messages;
+  if (!Array.isArray(messages)) {
+    return {
+      bodyStr,
+      beforeBytes,
+      afterBytes: beforeBytes,
+      strippedFileParts: 0,
+    };
+  }
+
+  let lastUserIndex = -1;
+  for (let i = 0; i < messages.length; i += 1) {
+    if (messages[i]?.role === "user") lastUserIndex = i;
+  }
+
+  let strippedFileParts = 0;
+  parsed.messages = messages.map((message, index) => {
+    if (index === lastUserIndex || !message.parts) return message;
+    return {
+      ...message,
+      parts: message.parts.map((part) => {
+        if (
+          part.type === "file" &&
+          typeof part.url === "string" &&
+          part.url.length > 32
+        ) {
+          strippedFileParts += 1;
+          return { ...part, url: "data:," };
+        }
+        return part;
+      }),
+    };
+  });
+
+  const next = JSON.stringify(parsed);
+  return {
+    bodyStr: next,
+    beforeBytes,
+    afterBytes: next.length,
+    strippedFileParts,
+  };
+}
+
+export function chatPayloadTooLargeMessage(bodyBytes: number): string {
+  const mb = (bodyBytes / (1024 * 1024)).toFixed(1);
+  return `This file is too large to send in chat (${mb} MB request; Vercel limit is 4.5 MB). Attach a scan of about 2 MB or smaller.`;
 }

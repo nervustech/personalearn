@@ -30,7 +30,10 @@ import type { ConversationRow } from "@/lib/ai-hub/conversations";
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import {
   chatAttachmentAccept,
+  chatPayloadTooLargeMessage,
+  compactChatTransportBody,
   filesToFileUIParts,
+  MAX_CHAT_REQUEST_BYTES,
   validateChatAttachments,
   type PendingAttachment,
 } from "@/lib/ai-hub/chat-attachments";
@@ -189,8 +192,14 @@ export function AiHubChat() {
           conversationId: conversationIdRef.current,
         }),
         fetch: async (input, init) => {
+          const rawBody = typeof init?.body === "string" ? init.body : "";
+          const compacted = compactChatTransportBody(rawBody);
+          const nextInit =
+            compacted.bodyStr !== rawBody
+              ? { ...init, body: compacted.bodyStr }
+              : init;
+          const bodyStr = compacted.bodyStr;
           // #region agent log
-          const bodyStr = typeof init?.body === "string" ? init.body : "";
           let messageCount = 0;
           const fileParts: Array<{
             filename?: string;
@@ -231,12 +240,16 @@ export function AiHubChat() {
             },
             body: JSON.stringify({
               sessionId: "6b0137",
-              runId: "pre-fix",
+              runId: "post-fix",
               hypothesisId: "A,C,D,E",
               location: "ai-hub-chat.tsx:transport",
               message: "chat request payload before fetch",
               data: {
                 bodyBytes: bodyStr.length,
+                beforeBytes: compacted.beforeBytes,
+                afterBytes: compacted.afterBytes,
+                strippedFileParts: compacted.strippedFileParts,
+                blocked: compacted.afterBytes > MAX_CHAT_REQUEST_BYTES,
                 messageCount,
                 filePartCount: fileParts.length,
                 fileUrlBytes: fileParts.reduce((sum, part) => sum + part.urlLen, 0),
@@ -246,7 +259,13 @@ export function AiHubChat() {
             }),
           }).catch(() => {});
           // #endregion
-          const response = await globalThis.fetch(input, init);
+          if (compacted.afterBytes > MAX_CHAT_REQUEST_BYTES) {
+            throw new Error(chatPayloadTooLargeMessage(compacted.afterBytes));
+          }
+          const response = await globalThis.fetch(input, nextInit);
+          if (response.status === 413) {
+            throw new Error(chatPayloadTooLargeMessage(compacted.afterBytes));
+          }
           // #region agent log
           fetch("http://127.0.0.1:7694/ingest/053193cf-8fbd-4352-9a1e-8dfaa3517019", {
             method: "POST",
@@ -256,7 +275,7 @@ export function AiHubChat() {
             },
             body: JSON.stringify({
               sessionId: "6b0137",
-              runId: "pre-fix",
+              runId: "post-fix",
               hypothesisId: "E",
               location: "ai-hub-chat.tsx:transport-response",
               message: "chat response status",
@@ -525,7 +544,7 @@ export function AiHubChat() {
       },
       body: JSON.stringify({
         sessionId: "6b0137",
-        runId: "pre-fix",
+        runId: "post-fix",
         hypothesisId: "A,B",
         location: "ai-hub-chat.tsx:handleFilesSelected",
         message: "files selected",
@@ -634,7 +653,7 @@ export function AiHubChat() {
         },
         body: JSON.stringify({
           sessionId: "6b0137",
-          runId: "pre-fix",
+          runId: "post-fix",
           hypothesisId: "A,B,C,D",
           location: "ai-hub-chat.tsx:submitMessage",
           message: "prepared file parts vs history",
@@ -685,7 +704,7 @@ export function AiHubChat() {
         },
         body: JSON.stringify({
           sessionId: "6b0137",
-          runId: "pre-fix",
+          runId: "post-fix",
           hypothesisId: "E",
           location: "ai-hub-chat.tsx:submitMessage-catch",
           message: "sendMessage threw",

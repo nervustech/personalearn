@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { upsertScriptFromGroup } from "./persist-results";
+import {
+  resolveScriptIdentityOnUpsert,
+  upsertScriptFromGroup,
+} from "./persist-results";
 import type { GroupedScript } from "./group-by-admission";
 
 function group(overrides: Partial<GroupedScript> = {}): GroupedScript {
@@ -119,5 +122,53 @@ describe("upsertScriptFromGroup", () => {
 
     expect(id).toBe("script-new");
     expect(insert).toHaveBeenCalled();
+  });
+});
+
+describe("resolveScriptIdentityOnUpsert", () => {
+  const unmatchedGroup = {
+    studentId: null,
+    status: "unmatched" as const,
+    matchConfidence: null,
+    admissionNumber: null,
+  };
+
+  it("keeps a settled student when regroup would drop identity", () => {
+    const next = resolveScriptIdentityOnUpsert({
+      existing: {
+        student_id: "stu-1",
+        status: "evaluating",
+        match_confidence: "high",
+        read_admission_number: "1196",
+      },
+      group: unmatchedGroup,
+    });
+
+    expect(next).toEqual({
+      studentId: "stu-1",
+      status: "evaluating",
+      matchConfidence: "high",
+      admissionNumber: "1196",
+    });
+  });
+
+  it("upgrades unmatched to evaluating when the roster later matches", () => {
+    const next = resolveScriptIdentityOnUpsert({
+      existing: {
+        student_id: null,
+        status: "unmatched",
+        match_confidence: null,
+        read_admission_number: null,
+      },
+      group: {
+        studentId: "stu-1",
+        status: "evaluating",
+        matchConfidence: "high",
+        admissionNumber: "1196",
+      },
+    });
+
+    expect(next.status).toBe("evaluating");
+    expect(next.studentId).toBe("stu-1");
   });
 });

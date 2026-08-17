@@ -8,6 +8,7 @@ import {
 } from "@/lib/evaluation/batch-client";
 import { evalPromptCacheKey } from "@/lib/evaluation/eval-provider";
 import {
+  coalesceLivePacketGroups,
   groupPagesByAdmission,
   type PageWithIndex,
 } from "@/lib/evaluation/group-by-admission";
@@ -258,7 +259,8 @@ async function processCompletedIndexBatch(
     contentHash: p.content_hash,
     index: {
       admission_number: p.admission_number,
-      admission_confidence: Number(p.admission_confidence ?? 0),
+      admission_confidence:
+        p.admission_confidence == null ? 0 : Number(p.admission_confidence),
       page_number: p.page_number,
       total_pages: p.total_pages,
       questions_found: (p.questions_found as string[]) ?? [],
@@ -529,6 +531,12 @@ export async function runLiveEvaluation(
   if (pagesError) throw new Error(pagesError.message);
   if (!pages?.length) throw new Error("No pages for script");
 
+  await supabase
+    .from("evaluated_scripts")
+    .update({ status: "indexing" })
+    .eq("id", resolvedScriptId)
+    .in("status", ["uploaded", "pending"]);
+
   const { syncIndexPage, syncEvaluateScript } = await import(
     "@/lib/evaluation/sync-client"
   );
@@ -567,7 +575,7 @@ export async function runLiveEvaluation(
     roster: roster ?? [],
   });
 
-  const group = groups[0];
+  const group = coalesceLivePacketGroups(groups);
   if (!group) throw new Error("Could not group pages");
 
   await upsertScriptFromGroup(supabase, {

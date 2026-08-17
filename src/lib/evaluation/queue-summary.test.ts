@@ -25,6 +25,16 @@ describe("summarizeEvalQueue", () => {
     );
   });
 
+  it("does not treat uploaded pages as an identity exception", () => {
+    const summary = summarizeEvalQueue([
+      { status: "uploaded" } as never,
+      { status: "pending" } as never,
+      { status: "ready" } as never,
+    ]);
+    expect(summary.identity).toBe(0);
+    expect(summary.ready).toBe(1);
+  });
+
   it("counts already-evaluated amber as blocked, not identity", () => {
     const summary = summarizeEvalQueue([
       { status: "identity_amber", alreadyEvaluated: true } as never,

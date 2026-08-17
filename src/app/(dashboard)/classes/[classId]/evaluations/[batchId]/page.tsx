@@ -22,8 +22,6 @@ export default function EvaluationBatchReviewPage({
       (s) =>
         s.status === "identity_amber" ||
         s.status === "unmatched" ||
-        s.status === "pending" ||
-        s.status === "uploaded" ||
         s.alreadyEvaluated
     );
   }, [data?.scripts]);

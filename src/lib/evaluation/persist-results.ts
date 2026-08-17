@@ -46,7 +46,45 @@ export async function upsertScriptFromGroup(
     readAdmissionNumber: p.index.admission_number,
   }));
 
-  if (input.existingScriptId) {
+  let scriptId = input.existingScriptId ?? null;
+
+  if (!scriptId && input.group.studentId) {
+    const { data, error } = await supabase
+      .from("evaluated_scripts")
+      .select("id")
+      .eq("batch_id", input.batchId)
+      .eq("student_id", input.group.studentId)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    scriptId = (data?.id as string | undefined) ?? null;
+  }
+
+  if (!scriptId && input.group.admissionNumber) {
+    const { data, error } = await supabase
+      .from("evaluated_scripts")
+      .select("id")
+      .eq("batch_id", input.batchId)
+      .eq("read_admission_number", input.group.admissionNumber)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    scriptId = (data?.id as string | undefined) ?? null;
+  }
+
+  if (!scriptId && input.group.status === "unmatched") {
+    const { data, error } = await supabase
+      .from("evaluated_scripts")
+      .select("id")
+      .eq("batch_id", input.batchId)
+      .eq("status", "unmatched")
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    scriptId = (data?.id as string | undefined) ?? null;
+  }
+
+  if (scriptId) {
     const { error } = await supabase
       .from("evaluated_scripts")
       .update({
@@ -56,17 +94,17 @@ export async function upsertScriptFromGroup(
         page_order: pageOrder,
         status: input.group.status,
       })
-      .eq("id", input.existingScriptId);
+      .eq("id", scriptId);
 
     if (error) throw new Error(error.message);
 
     for (const page of input.group.pages) {
       await supabase
         .from("evaluation_pages")
-        .update({ script_id: input.existingScriptId })
+        .update({ script_id: scriptId })
         .eq("id", page.pageId);
     }
-    return input.existingScriptId;
+    return scriptId;
   }
 
   const { data, error } = await supabase

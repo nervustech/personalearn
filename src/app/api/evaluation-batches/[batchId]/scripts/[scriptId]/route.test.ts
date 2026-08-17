@@ -27,10 +27,15 @@ vi.mock("@/lib/evaluation/identity", () => ({
 }));
 
 const mockSubmitEvaluate = vi.fn();
+const mockFindInflight = vi.fn();
 
 vi.mock("@/lib/evaluation/poll-batches", () => ({
   runLiveEvaluation: vi.fn(),
   submitEvaluateBatch: (...args: unknown[]) => mockSubmitEvaluate(...args),
+}));
+
+vi.mock("@/lib/evaluation/batch-jobs", () => ({
+  findInflightGeminiJob: (...args: unknown[]) => mockFindInflight(...args),
 }));
 
 describe("PATCH /api/evaluation-batches/[batchId]/scripts/[scriptId]", () => {
@@ -54,6 +59,7 @@ describe("PATCH /api/evaluation-batches/[batchId]/scripts/[scriptId]", () => {
       match_confidence: "high",
     });
     mockSubmitEvaluate.mockResolvedValue(null);
+    mockFindInflight.mockResolvedValue(null);
   });
 
   it("returns 403 for non-owner", async () => {
@@ -96,5 +102,29 @@ describe("PATCH /api/evaluation-batches/[batchId]/scripts/[scriptId]", () => {
       expect.objectContaining({ studentId: "s1", scriptId, batchId })
     );
     expect(mockSubmitEvaluate).toHaveBeenCalled();
+  });
+
+  it("does not submit evaluate when an evaluate job is already inflight", async () => {
+    mockFindInflight.mockResolvedValue({
+      id: "job-eval-1",
+      phase: "evaluate",
+      state: "running",
+    });
+
+    const response = await PATCH(
+      new Request(
+        `http://localhost/api/evaluation-batches/${batchId}/scripts/${scriptId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ studentId: "s1" }),
+        }
+      ),
+      { params: Promise.resolve({ batchId, scriptId }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockAssign).toHaveBeenCalled();
+    expect(mockSubmitEvaluate).not.toHaveBeenCalled();
   });
 });

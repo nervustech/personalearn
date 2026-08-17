@@ -1,5 +1,8 @@
-import { normalizeAdmissionNumber } from "@/lib/evaluation/normalize-admission";
-import { shouldEscalateAdmission } from "@/lib/evaluation/escalate";
+import {
+  admissionLookupKeys,
+  compactAdmissionNumber,
+  normalizeAdmissionNumber,
+} from "@/lib/evaluation/normalize-admission";
 import type { IndexResult } from "@/lib/evaluation/index-schema";
 import { sheetPageFromFileName } from "@/lib/evaluation/page-images";
 import type { EvaluatedScriptStatus } from "@/types/database";
@@ -32,13 +35,29 @@ export type GroupedScript = {
   hasAdmissionCollision: boolean;
 };
 
-function buildRosterMap(roster: RosterStudent[]): Map<string, RosterStudent> {
-  const map = new Map<string, RosterStudent>();
+function buildRosterLookup(
+  roster: RosterStudent[]
+): (raw: string | null | undefined) => RosterStudent | null {
+  const byKey = new Map<string, RosterStudent | "ambiguous">();
+
   for (const student of roster) {
-    const key = normalizeAdmissionNumber(student.admission_number);
-    if (key) map.set(key, student);
+    for (const key of admissionLookupKeys(student.admission_number)) {
+      const existing = byKey.get(key);
+      if (existing && existing !== student) {
+        byKey.set(key, "ambiguous");
+      } else if (!existing) {
+        byKey.set(key, student);
+      }
+    }
   }
-  return map;
+
+  return (raw) => {
+    for (const key of admissionLookupKeys(raw)) {
+      const hit = byKey.get(key);
+      if (hit && hit !== "ambiguous") return hit;
+    }
+    return null;
+  };
 }
 
 function sortPages(pages: PageWithIndex[]): PageWithIndex[] {
@@ -55,55 +74,69 @@ function sortPages(pages: PageWithIndex[]): PageWithIndex[] {
 }
 
 /**
- * Group indexed pages by admission number with amber/unmatched rules.
+ * Group indexed pages by admission number.
+ *
+ * Roster hits auto-proceed to grading (PSL-108). Model-reported confidence is
+ * not a teacher-confirm gate — amber only when the number is missing, not on
+ * the roster, or collides across students.
  */
 export function groupPagesByAdmission(input: {
   pages: PageWithIndex[];
   roster: RosterStudent[];
 }): GroupedScript[] {
-  const rosterMap = buildRosterMap(input.roster);
-  const byAdmission = new Map<string, PageWithIndex[]>();
+  const lookup = buildRosterLookup(input.roster);
+  const byKey = new Map<string, PageWithIndex[]>();
+  const studentByKey = new Map<string, RosterStudent | null>();
   const unmatched: PageWithIndex[] = [];
 
   for (const page of input.pages) {
     const raw = page.index.admission_number?.trim() ?? "";
     const normalized = normalizeAdmissionNumber(raw);
-    if (!normalized || shouldEscalateAdmission(page.index.admission_confidence)) {
+    if (!normalized) {
       unmatched.push(page);
       continue;
     }
-    const list = byAdmission.get(normalized) ?? [];
+    const student = lookup(raw);
+    const groupKey =
+      student?.id ?? compactAdmissionNumber(normalized) ?? normalized;
+    const list = byKey.get(groupKey) ?? [];
     list.push(page);
-    byAdmission.set(normalized, list);
+    byKey.set(groupKey, list);
+    if (!studentByKey.has(groupKey)) studentByKey.set(groupKey, student);
   }
 
   const groups: GroupedScript[] = [];
 
-  for (const [admissionKey, pages] of byAdmission.entries()) {
-    const student = rosterMap.get(admissionKey) ?? null;
+  for (const [groupKey, pages] of byKey.entries()) {
+    const student = studentByKey.get(groupKey) ?? null;
     const sorted = sortPages(pages);
-    const lowConfidence = sorted.some((p) =>
-      shouldEscalateAdmission(p.index.admission_confidence)
-    );
+    const admissionNumber =
+      normalizeAdmissionNumber(student?.admission_number) ??
+      compactAdmissionNumber(sorted[0]?.index.admission_number) ??
+      groupKey;
 
     groups.push({
-      groupKey: admissionKey,
-      admissionNumber: admissionKey,
+      groupKey,
+      admissionNumber,
       studentId: student?.id ?? null,
-      matchConfidence: student ? (lowConfidence ? "low" : "high") : null,
-      status: !student || lowConfidence ? "identity_amber" : "evaluating",
+      matchConfidence: student ? "high" : "low",
+      status: student ? "evaluating" : "identity_amber",
       pages: sorted,
       hasAdmissionCollision: false,
     });
   }
 
-  // Detect duplicate admission groups (same number on unrelated uploads)
   const admissionCounts = new Map<string, number>();
   for (const g of groups) {
-    admissionCounts.set(g.groupKey, (admissionCounts.get(g.groupKey) ?? 0) + 1);
+    if (!g.admissionNumber) continue;
+    admissionCounts.set(
+      g.admissionNumber,
+      (admissionCounts.get(g.admissionNumber) ?? 0) + 1
+    );
   }
   for (const g of groups) {
-    if ((admissionCounts.get(g.groupKey) ?? 0) > 1) {
+    if (!g.admissionNumber) continue;
+    if ((admissionCounts.get(g.admissionNumber) ?? 0) > 1) {
       g.hasAdmissionCollision = true;
       g.status = "identity_amber";
       g.matchConfidence = "low";

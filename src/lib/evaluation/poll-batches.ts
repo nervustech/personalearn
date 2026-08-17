@@ -258,7 +258,8 @@ async function processCompletedIndexBatch(
     contentHash: p.content_hash,
     index: {
       admission_number: p.admission_number,
-      admission_confidence: Number(p.admission_confidence ?? 0),
+      admission_confidence:
+        p.admission_confidence == null ? 0 : Number(p.admission_confidence),
       page_number: p.page_number,
       total_pages: p.total_pages,
       questions_found: (p.questions_found as string[]) ?? [],

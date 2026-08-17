@@ -43,6 +43,26 @@ const bodySchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    // #region agent log
+    fetch("http://127.0.0.1:7694/ingest/053193cf-8fbd-4352-9a1e-8dfaa3517019", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "6b0137",
+      },
+      body: JSON.stringify({
+        sessionId: "6b0137",
+        runId: "pre-fix",
+        hypothesisId: "E",
+        location: "chat/route.ts:POST",
+        message: "chat route reached",
+        data: {
+          contentLength: request.headers.get("content-length"),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     const supabase = await createClient();
     const json = await request.json();
     const parsed = bodySchema.safeParse(json);

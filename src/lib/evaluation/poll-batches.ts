@@ -22,6 +22,10 @@ import {
   markScriptFailed,
 } from "@/lib/evaluation/persist-results";
 import { refreshBatchStatusRollup } from "@/lib/evaluation/batch-status";
+import {
+  findInflightGeminiJob,
+  insertGeminiBatchJob,
+} from "@/lib/evaluation/batch-jobs";
 import { withRetries } from "@/lib/evaluation/retries";
 import type { EvaluationBatch, GeminiBatchJob } from "@/types/database";
 
@@ -100,23 +104,21 @@ export async function startOrResumeBatchProcessing(
   if (countError) throw new Error(countError.message);
 
   if ((unindexedCount ?? 0) > 0) {
+    const inflightIndex = await findInflightGeminiJob(supabase, {
+      batchId: batch.id,
+      phase: "index",
+    });
+    if (inflightIndex) return { job: inflightIndex, phase: "index" };
     const job = await submitIndexBatch(supabase, batch);
     return { job, phase: "index" };
   }
 
-  const { data: inflightEval, error: inflightError } = await supabase
-    .from("gemini_batch_jobs")
-    .select("id, state")
-    .eq("batch_id", batch.id)
-    .eq("phase", "evaluate")
-    .in("state", ["submitted", "running"])
-    .limit(1);
-
-  if (inflightError) throw new Error(inflightError.message);
-  if (inflightEval?.length) {
-    throw new Error(
-      "Evaluate already in progress — keep this page open; results will appear shortly."
-    );
+  const inflightEval = await findInflightGeminiJob(supabase, {
+    batchId: batch.id,
+    phase: "evaluate",
+  });
+  if (inflightEval) {
+    return { job: inflightEval, phase: "evaluate" };
   }
 
   const { error: resetError } = await supabase
@@ -158,6 +160,12 @@ export async function submitIndexBatch(
     throw new Error("No pages to index");
   }
 
+  const inflight = await findInflightGeminiJob(supabase, {
+    batchId: batch.id,
+    phase: "index",
+  });
+  if (inflight) return inflight;
+
   const cache = new Map<string, { base64: string; mimeType: string }>();
   const promptCacheKey = evalPromptCacheKey({
     batchId: batch.id,
@@ -183,20 +191,14 @@ export async function submitIndexBatch(
     promptCacheKey,
   });
 
-  const { data: job, error: jobError } = await supabase
-    .from("gemini_batch_jobs")
-    .insert({
-      batch_id: batch.id,
-      phase: "index",
-      provider_batch_name: providerBatchName,
-      state: "submitted",
-      page_count: pages.length,
-      submitted_at: new Date().toISOString(),
-    })
-    .select("*")
-    .single();
-
-  if (jobError || !job) throw new Error(jobError?.message ?? "Job insert failed");
+  const job = await insertGeminiBatchJob(supabase, {
+    batch_id: batch.id,
+    phase: "index",
+    provider_batch_name: providerBatchName,
+    state: "submitted",
+    page_count: pages.length,
+    submitted_at: new Date().toISOString(),
+  });
 
   await supabase
     .from("evaluated_scripts")
@@ -294,6 +296,12 @@ export async function submitEvaluateBatch(
   supabase: SupabaseClient,
   batch: EvaluationBatch
 ): Promise<GeminiBatchJob | null> {
+  const inflight = await findInflightGeminiJob(supabase, {
+    batchId: batch.id,
+    phase: "evaluate",
+  });
+  if (inflight) return inflight;
+
   const markingScheme = await loadMarkingSchemeText(supabase, batch);
 
   const { data: scripts, error } = await supabase
@@ -341,21 +349,14 @@ export async function submitEvaluateBatch(
     promptCacheKey,
   });
 
-  const { data: job, error: jobError } = await supabase
-    .from("gemini_batch_jobs")
-    .insert({
-      batch_id: batch.id,
-      phase: "evaluate",
-      provider_batch_name: providerBatchName,
-      state: "submitted",
-      script_count: lines.length,
-      submitted_at: new Date().toISOString(),
-    })
-    .select("*")
-    .single();
-
-  if (jobError || !job) throw new Error(jobError?.message ?? "Job insert failed");
-  return job as GeminiBatchJob;
+  return insertGeminiBatchJob(supabase, {
+    batch_id: batch.id,
+    phase: "evaluate",
+    provider_batch_name: providerBatchName,
+    state: "submitted",
+    script_count: lines.length,
+    submitted_at: new Date().toISOString(),
+  });
 }
 
 async function processCompletedEvaluateBatch(

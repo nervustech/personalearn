@@ -480,7 +480,9 @@ export function IdentityReviewPanel({
               type="button"
               size="sm"
               disabled={
-                processIdentity.isPending || startProcessing.isPending
+                processIdentity.isPending ||
+                startProcessing.isPending ||
+                inFlightCount > 0
               }
               onClick={handleProcess}
             >
@@ -495,7 +497,9 @@ export function IdentityReviewPanel({
               size="sm"
               variant="secondary"
               disabled={
-                startProcessing.isPending || processIdentity.isPending
+                startProcessing.isPending ||
+                processIdentity.isPending ||
+                inFlightCount > 0
               }
               onClick={handleRetryProcessing}
             >

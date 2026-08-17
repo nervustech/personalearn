@@ -30,12 +30,16 @@ export function summarizeEvalQueue(
         break;
       case "identity_amber":
       case "unmatched":
-      case "pending":
-      case "uploaded":
         if (script.alreadyEvaluated) {
           summary.blocked += 1;
         } else {
           summary.identity += 1;
+        }
+        break;
+      case "pending":
+      case "uploaded":
+        if (script.alreadyEvaluated) {
+          summary.blocked += 1;
         }
         break;
       case "indexing":

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { groupPagesByAdmission } from "@/lib/evaluation/group-by-admission";
+import {
+  coalesceLivePacketGroups,
+  groupPagesByAdmission,
+} from "@/lib/evaluation/group-by-admission";
 import type { PageWithIndex, RosterStudent } from "@/lib/evaluation/group-by-admission";
 import type { IndexResult } from "@/lib/evaluation/index-schema";
 
@@ -114,5 +117,54 @@ describe("groupPagesByAdmission", () => {
     const byStudent = new Map(groups.map((g) => [g.studentId, g]));
     expect(byStudent.get("stu-1")?.status).toBe("evaluating");
     expect(byStudent.get("stu-2")?.status).toBe("evaluating");
+  });
+
+  it("matches OCR extra digits to a unique roster prefix", () => {
+    const classRoster: RosterStudent[] = [
+      ...roster,
+      { id: "sally", admission_number: "8149", full_name: "Sally" },
+    ];
+    const groups = groupPagesByAdmission({
+      pages: [
+        page("p1", "814910", 0.8, { uploadIndex: 0, fileName: "8149.1.jpg" }),
+        page("p2", "8149", 0.9, { uploadIndex: 1, fileName: "8149.2.jpg" }),
+      ],
+      roster: classRoster,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      studentId: "sally",
+      status: "evaluating",
+      matchConfidence: "high",
+      admissionNumber: "8149",
+    });
+    expect(groups[0]!.pages.map((p) => p.pageId)).toEqual(["p1", "p2"]);
+  });
+});
+
+describe("coalesceLivePacketGroups", () => {
+  it("prefers the roster-matched group and keeps every page", () => {
+    const groups = groupPagesByAdmission({
+      pages: [
+        page("p1", "8888", 0.8, { uploadIndex: 0 }),
+        page("p2", "1196", 0.9, { uploadIndex: 1 }),
+      ],
+      roster,
+    });
+    expect(groups).toHaveLength(2);
+
+    const coalesced = coalesceLivePacketGroups(groups);
+    expect(coalesced?.status).toBe("evaluating");
+    expect(coalesced?.studentId).toBe("stu-1");
+    expect(coalesced?.pages.map((p) => p.pageId).sort()).toEqual(["p1", "p2"]);
+  });
+
+  it("leaves a fully unknown packet amber", () => {
+    const groups = groupPagesByAdmission({
+      pages: [page("p1", "8888", 0.95)],
+      roster,
+    });
+    expect(coalesceLivePacketGroups(groups)?.status).toBe("identity_amber");
   });
 });

@@ -3,6 +3,7 @@ import {
   admissionDigits,
   admissionLookupKeys,
   compactAdmissionNumber,
+  findUniqueDigitPrefixStudent,
   normalizeAdmissionNumber,
 } from "@/lib/evaluation/normalize-admission";
 
@@ -32,5 +33,30 @@ describe("admissionLookupKeys", () => {
       "ADM1196",
       "1196",
     ]);
+  });
+});
+
+describe("findUniqueDigitPrefixStudent", () => {
+  const roster = [
+    { id: "sally", admission_number: "8149" },
+    { id: "ada", admission_number: "1196" },
+  ];
+
+  it("recovers a glued page suffix onto a unique roster number", () => {
+    expect(findUniqueDigitPrefixStudent("814910", roster)?.id).toBe("sally");
+  });
+
+  it("does not match an unknown number that is not a roster prefix", () => {
+    expect(findUniqueDigitPrefixStudent("8888", roster)).toBeNull();
+  });
+
+  it("keeps the longest unique prefix when several roster numbers match", () => {
+    const overlapping = [
+      { id: "short", admission_number: "814" },
+      { id: "sally", admission_number: "8149" },
+    ];
+    expect(findUniqueDigitPrefixStudent("814910", overlapping)?.id).toBe(
+      "sally"
+    );
   });
 });

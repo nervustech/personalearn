@@ -1,6 +1,7 @@
 import {
   admissionLookupKeys,
   compactAdmissionNumber,
+  findUniqueDigitPrefixStudent,
   normalizeAdmissionNumber,
 } from "@/lib/evaluation/normalize-admission";
 import type { IndexResult } from "@/lib/evaluation/index-schema";
@@ -56,7 +57,7 @@ function buildRosterLookup(
       const hit = byKey.get(key);
       if (hit && hit !== "ambiguous") return hit;
     }
-    return null;
+    return findUniqueDigitPrefixStudent(raw, roster);
   };
 }
 
@@ -156,4 +157,25 @@ export function groupPagesByAdmission(input: {
   }
 
   return groups;
+}
+
+/**
+ * Live N=1 packets are one student's pages. Prefer the roster-matched group
+ * and keep every page on that script instead of taking Map insertion order.
+ */
+export function coalesceLivePacketGroups(
+  groups: GroupedScript[]
+): GroupedScript | null {
+  if (groups.length === 0) return null;
+  if (groups.length === 1) return groups[0]!;
+
+  const matched = groups.find((g) => g.status === "evaluating" && g.studentId);
+  const primary = matched ?? groups[0]!;
+  return {
+    ...primary,
+    pages: sortPages(groups.flatMap((g) => g.pages)),
+    status: primary.studentId ? "evaluating" : primary.status,
+    matchConfidence: primary.studentId ? "high" : primary.matchConfidence,
+    hasAdmissionCollision: groups.some((g) => g.hasAdmissionCollision),
+  };
 }

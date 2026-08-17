@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   chatAttachmentAccept,
+  filesToFileUIParts,
+  mediaTypeForFile,
   validateChatAttachment,
   validateChatAttachments,
 } from "@/lib/ai-hub/chat-attachments";
@@ -57,5 +59,32 @@ describe("validateChatAttachments", () => {
   it("exposes the class-upload accept list", () => {
     expect(chatAttachmentAccept()).toContain(".pdf");
     expect(chatAttachmentAccept()).toContain(".png");
+  });
+});
+
+describe("filesToFileUIParts", () => {
+  it("converts files to data-URL file parts", async () => {
+    const parts = await filesToFileUIParts([
+      new File(["hello notes"], "notes.txt", { type: "text/plain" }),
+    ]);
+
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toMatchObject({
+      type: "file",
+      mediaType: "text/plain",
+      filename: "notes.txt",
+    });
+    expect(parts[0].url).toMatch(/^data:text\/plain;base64,/);
+    expect(atob(parts[0].url.split(",")[1] ?? "")).toBe("hello notes");
+  });
+
+  it("falls back to a filename mime type when File.type is empty", async () => {
+    const file = new File(["png-bytes"], "scan.png");
+    expect(file.type).toBe("");
+    expect(mediaTypeForFile(file)).toBe("image/png");
+
+    const [part] = await filesToFileUIParts([file]);
+    expect(part.mediaType).toBe("image/png");
+    expect(part.url).toMatch(/^data:image\/png;base64,/);
   });
 });

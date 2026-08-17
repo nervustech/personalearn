@@ -30,6 +30,7 @@ import type { ConversationRow } from "@/lib/ai-hub/conversations";
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import {
   chatAttachmentAccept,
+  filesToFileUIParts,
   validateChatAttachments,
   type PendingAttachment,
 } from "@/lib/ai-hub/chat-attachments";
@@ -507,15 +508,12 @@ export function AiHubChat() {
       setDraft("");
       setPendingAttachments([]);
 
-      const dataTransfer = new DataTransfer();
-      for (const file of files) {
-        dataTransfer.items.add(file);
-      }
+      const fileParts = hasFiles ? await filesToFileUIParts(files) : [];
 
       await sendMessage(
         {
           text: trimmed || "Please review the attached file(s).",
-          ...(hasFiles ? { files: dataTransfer.files } : {}),
+          ...(hasFiles ? { files: fileParts } : {}),
         },
         {
           body: {
@@ -818,7 +816,7 @@ export function AiHubChat() {
                   type="file"
                   accept={chatAttachmentAccept()}
                   multiple
-                  className="hidden"
+                  className="sr-only"
                   onChange={(event) => handleFilesSelected(event.target.files)}
                 />
                 <div

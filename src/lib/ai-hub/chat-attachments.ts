@@ -1,3 +1,4 @@
+import type { FileUIPart } from "ai";
 import {
   detectResourceFormat,
   maxBytesForFormat,
@@ -58,4 +59,37 @@ export function formatAttachmentLabel(format: ResourceFormat): string {
   if (format === "txt") return "text";
   if (format === "pdf") return "pdf";
   return "image";
+}
+
+export function mediaTypeForFile(file: File): string {
+  if (file.type) return file.type;
+
+  const format = detectResourceFormat(file.name, "");
+  if (format === "txt") return "text/plain";
+  if (format === "pdf") return "application/pdf";
+  if (format === "image") {
+    return file.name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+  }
+
+  return "application/octet-stream";
+}
+
+export async function filesToFileUIParts(files: File[]): Promise<FileUIPart[]> {
+  return Promise.all(files.map(fileToFileUIPart));
+}
+
+async function fileToFileUIPart(file: File): Promise<FileUIPart> {
+  const mediaType = mediaTypeForFile(file);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return {
+    type: "file",
+    mediaType,
+    filename: file.name,
+    url: toDataUrl(mediaType, bytes),
+  };
+}
+
+function toDataUrl(mediaType: string, bytes: Uint8Array): string {
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  return `data:${mediaType};base64,${btoa(binary)}`;
 }

@@ -31,6 +31,32 @@ export function formatResourceType(resourceType: ResourceType | null) {
   return RESOURCE_TYPE_LABELS[resourceType] ?? "Resource";
 }
 
+export function stripResourceTypeTitlePrefix(
+  title: string,
+  resourceType: string
+): string {
+  const trimmed = title.trim();
+  if (!trimmed) return trimmed;
+
+  const labels = new Set<string>();
+  if (isResourceType(resourceType)) {
+    labels.add(RESOURCE_TYPE_LABELS[resourceType]);
+  }
+  labels.add(resourceType.replace(/_/g, " "));
+
+  let next = trimmed;
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    next = next.replace(
+      new RegExp(`^${escaped}\\s*[:\\-–—]\\s*`, "i"),
+      ""
+    );
+  }
+
+  const cleaned = next.trim();
+  return cleaned.length > 0 ? cleaned : trimmed;
+}
+
 export function formatResourceDate(iso: string) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",

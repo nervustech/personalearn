@@ -42,7 +42,7 @@ import {
   conversationMessagesQueryKey,
   fetchConversationMessages,
 } from "@/lib/hooks/use-conversation-messages";
-import { getMessageText } from "@/lib/ai-hub/message-content";
+import { getMessageText, getVisibleDrafts } from "@/lib/ai-hub/message-content";
 import {
   conversationsQueryKey,
   useConversations,
@@ -253,7 +253,8 @@ export function AiHubChat() {
       const last = finishedMessages[finishedMessages.length - 1];
       if (
         last?.role === "assistant" &&
-        !getMessageText(last).trim()
+        !getMessageText(last).trim() &&
+        getVisibleDrafts(last).length === 0
       ) {
         setActionError(
           "The assistant returned an empty reply. Confirm DEEPSEEK_API_KEY (or CHAT_PROVIDER + matching key) is set in Vercel Production, then redeploy."

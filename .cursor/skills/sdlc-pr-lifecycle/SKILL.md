@@ -13,14 +13,14 @@ Follow `git-workflow.mdc` and `sdlc-ecosystem.mdc` for constraints. This skill i
 
 ## Pre-flight
 
-1. `getJiraIssue(PSL-N)` with fields including `customfield_10001` (Team), `customfield_10016` (points), `customfield_10015` (start), `duedate`, `priority`, `customfield_10020` (sprint) — read summary, ACs, labels, sprint, blockers, linked spec.
+1. `getJiraIssue(PSL-N)` — read summary, ACs, labels, sprint, blockers, linked spec.
 2. Abort if **blocks** prerequisites are not **Done** (unless user overrides).
-3. Confirm ticket is in sprint or explicitly prioritized. If Team, points, priority, start, or due is empty, fill them **before** branching (`editJiraIssue`).
+3. Confirm ticket is in sprint or explicitly prioritized.
 
 ## Branch and start
 
 4. Fetch `origin/develop`; branch `{feature|fix|chore|docs}/PSL-N-short-description`.
-5. `transitionJiraIssue` → **In Progress**. Set **Start date** (`customfield_10015`) to today if still empty.
+5. `transitionJiraIssue` → **In Progress**.
 6. `addCommentToJiraIssue`:
 
 ```text
@@ -117,13 +117,13 @@ When triaging a GitHub Issue before a Jira ticket exists:
 
 1. Apply `needs-triage` + best-guess `type-*` (+ `area-*` when known). Assign `nervustech`. Set milestone to the current sprint or `Backlog`.
 2. Use `triage-issue` skill to find duplicates and create/link `PSL-N`.
-3. Copy `area-*` + `type-*` + assignee to the Jira ticket. On `createJiraIssue`, always pass `additional_fields` for **Team (Gunners)**, **priority**, **story points**, **start date**, **due date**, and **Sprint** (numeric id) when the work is scheduled. Remove `needs-triage` from the issue when triaged.
+3. Copy `area-*` + `type-*` + assignee to the Jira ticket; remove `needs-triage` from the issue when triaged.
 4. Reply on the issue with `PSL-N` link, labels, assignee, and milestone applied.
 
 ## Checklist
 
 ```
-- [ ] Jira pre-flight (ACs, blocks, labels, assignee, team, priority, points, dates, sprint)
+- [ ] Jira pre-flight (ACs, blocks, labels, assignee)
 - [ ] Branch + In Progress + Jira comment
 - [ ] PR open with PSL-N in title
 - [ ] area-* + type-* on PR and Jira (synced); assignee + milestone

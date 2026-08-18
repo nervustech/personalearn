@@ -56,35 +56,6 @@ Do **not** use GitHub’s default `bug` / `enhancement` labels — use `type-bug
 
 **Sprint:** Jira **Sprint** field (primary). GitHub Issue **and** PR **milestone** = current sprint when in an active sprint; otherwise `Backlog`.
 
-## Jira ticket fields (always set)
-
-Board cards stay empty unless these are written on **create** (via `createJiraIssue` `additional_fields`) and **re-checked** on sprint pull / In Progress. Do not leave them null on sprint work.
-
-| Field | Jira id | Default |
-|-------|---------|---------|
-| **Assignee** | `assignee` | Nervus Technologies (`712020:c1d17dc9-f4f4-4763-9dcc-7d64c231367f`) |
-| **Team** | `customfield_10001` | Gunners (`b21ba389-5329-45c7-abf3-2b0f63d2baea`) |
-| **Sprint** | `customfield_10020` | Numeric sprint id (e.g. PSL Sprint 7 = `105`), never the name |
-| **Priority** | `priority` | Map severity: P0 → Highest, P1 → High, P2 → Medium, P3 → Low |
-| **Story point estimate** | `customfield_10016` | Fibonacci `1`, `2`, `3`, `5`, or `8` (relative effort) |
-| **Start date** | `customfield_10015` | Sprint start (`YYYY-MM-DD`). On **In Progress**, set to today if empty |
-| **Due date** | `duedate` | Sprint end (`YYYY-MM-DD`); GitHub milestone due date if that is the source of truth |
-| **Labels** | `labels` | Exactly one `area-*` + one `type-*` |
-
-`additional_fields` example:
-
-```json
-{
-  "labels": ["area-ai-rag", "type-bug"],
-  "priority": { "name": "Highest" },
-  "customfield_10001": "b21ba389-5329-45c7-abf3-2b0f63d2baea",
-  "customfield_10016": 3,
-  "customfield_10015": "2026-08-14",
-  "duedate": "2026-08-28",
-  "customfield_10020": 105
-}
-```
-
 **Default GitHub assignee:** `nervustech` whenever the item has no assignee.
 
 **PR reviewer:** Request a reviewer **other than the author** when a second collaborator exists. Solo-dev: skip the request (GitHub blocks self-review); post a review **comment** with verdict per `sdlc-pr-lifecycle`.
@@ -96,7 +67,7 @@ Reference vocabulary: Jira PSL-35 (do not delete).
 | Artifact | When | Required |
 |----------|------|----------|
 | **GitHub Issue** | On create (**mandatory**, precedes Jira) | `needs-triage` + best-guess `type-*` (+ `area-*` when known); **assignee**; **milestone** (sprint or Backlog) |
-| **Jira ticket** | On create or triage (only after Issue exists) | `area-*` + `type-*`; **assignee**; **Team (Gunners)**; **priority**; **story points**; **start + due dates**; **Sprint** when scheduled; link Issue |
+| **Jira ticket** | On create or triage (only after Issue exists) | `area-*` + `type-*` before leaving To Do; **assignee**; link Issue |
 | **GitHub PR** | On open / before review | Same `area-*` + `type-*` as `PSL-N`; **assignee**; **sprint milestone**; **reviewer** (or solo-dev review comment); `## Test plan` in body |
 | **GitHub PR** | Before Approve / merge | **Test plan boxes checked** (`[x]`). Run the listed steps, then edit the PR body. Leave unchecked only if marked N/A with a reason |
 | **GitHub Issue** | When `PSL-N` is **Done** / PR merged | Close with `state_reason=completed`; keep labels + assignee + milestone |
@@ -126,10 +97,6 @@ Use `@mention` only when someone must act.
 - [ ] No open blocker links
 - [ ] Area + type labels set
 - [ ] Assignee set
-- [ ] Team set (Gunners)
-- [ ] Priority set (P0 Highest / P1 High / P2 Medium)
-- [ ] Story point estimate set
-- [ ] Start date + due date set
 - [ ] Sprint (Jira) / milestone (GitHub) set
 
 ## Acceptance criteria

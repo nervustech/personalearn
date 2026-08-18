@@ -11,7 +11,6 @@ import {
   useStartEvaluationProcessing,
 } from "@/lib/hooks/use-evaluation";
 import type { ScriptReviewDto } from "@/lib/evaluation/identity";
-import { identityPanelState } from "@/lib/evaluation/identity-panel-state";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -345,39 +344,63 @@ export function IdentityReviewPanel({
   );
 
   const scripts = useMemo(() => data?.scripts ?? [], [data?.scripts]);
-  const {
-    hasPending,
-    amberCount,
-    blockedCount,
-    identityClearedWaiting,
-    inFlightCount,
-    draftedCount,
-    signedOffCount,
-    needsTeacherAttention,
-    needsGradingKick,
-  } = identityPanelState(scripts, {
-    processingError: startProcessing.isError,
-  });
+  const hasPending = scripts.some(
+    (s) => s.status === "pending" || s.status === "uploaded"
+  );
+  const amberCount = scripts.filter(
+    (s) =>
+      (s.status === "identity_amber" || s.status === "unmatched") &&
+      !s.alreadyEvaluated
+  ).length;
+  const blockedCount = scripts.filter(
+    (s) =>
+      s.alreadyEvaluated &&
+      (s.status === "identity_amber" ||
+        s.status === "unmatched" ||
+        s.status === "pending" ||
+        s.status === "uploaded")
+  ).length;
+  const clearedCount = scripts.filter((s) =>
+    ["evaluating", "ready", "drafted", "identity_cleared"].includes(s.status)
+  ).length;
+  const inFlightCount = scripts.filter((s) =>
+    ["queued_draft", "drafting", "parsing", "indexing", "evaluating"].includes(
+      s.status
+    )
+  ).length;
+  const draftedCount = scripts.filter(
+    (s) => s.status === "ready" || s.status === "drafted"
+  ).length;
+  const signedOffCount = scripts.filter((s) => s.status === "signed_off").length;
 
   const roster = useMemo(() => students ?? [], [students]);
 
-  /** Amber exceptions and duplicate uploads that need teacher action. */
+  /** Amber, pending, and duplicate uploads that need teacher action. */
   const identityFocusScripts = useMemo(() => {
     const priority = (script: ScriptReviewDto) => {
       if (script.status === "identity_amber" && !script.alreadyEvaluated) return 0;
       if (script.status === "unmatched" && !script.alreadyEvaluated) return 0;
-      if (script.alreadyEvaluated) return 1;
-      return 2;
+      if (script.status === "pending" || script.status === "uploaded") return 1;
+      if (script.alreadyEvaluated) return 2;
+      return 3;
     };
     return [...scripts]
       .filter(
         (s) =>
           s.status === "identity_amber" ||
           s.status === "unmatched" ||
+          s.status === "pending" ||
+          s.status === "uploaded" ||
           s.alreadyEvaluated
       )
       .sort((a, b) => priority(a) - priority(b));
   }, [scripts]);
+
+  const needsTeacherAttention =
+    hasPending || amberCount > 0 || blockedCount > 0;
+  const needsGradingKick =
+    startProcessing.isError ||
+    (clearedCount > 0 && !hasPending && inFlightCount === 0);
 
   const retryAsyncProcessing = useCallback(async () => {
     setProcessingSummary(null);
@@ -442,7 +465,7 @@ export function IdentityReviewPanel({
                 ? "Remove duplicate scans for students who were already evaluated."
                 : hasPending
                   ? "Process identity to match admission numbers. Cleared scripts then grade automatically."
-                  : identityClearedWaiting > 0
+                  : clearedCount > 0
                     ? "Scripts are cleared but grading has not started — retry below."
                     : "Background grading failed — retry below."}
             {inFlightCount > 0 ? ` · ${inFlightCount} grading` : ""}
@@ -457,9 +480,7 @@ export function IdentityReviewPanel({
               type="button"
               size="sm"
               disabled={
-                processIdentity.isPending ||
-                startProcessing.isPending ||
-                inFlightCount > 0
+                processIdentity.isPending || startProcessing.isPending
               }
               onClick={handleProcess}
             >
@@ -474,9 +495,7 @@ export function IdentityReviewPanel({
               size="sm"
               variant="secondary"
               disabled={
-                startProcessing.isPending ||
-                processIdentity.isPending ||
-                inFlightCount > 0
+                startProcessing.isPending || processIdentity.isPending
               }
               onClick={handleRetryProcessing}
             >

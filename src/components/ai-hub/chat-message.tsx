@@ -1,18 +1,9 @@
 "use client";
 
 import { isFileUIPart, type UIMessage } from "ai";
-import { FileText, Paperclip, Pencil } from "lucide-react";
+import { Paperclip, Pencil } from "lucide-react";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
-import {
-  getAssistantDisplayBlocks,
-  getMessageText,
-  getVisibleDrafts,
-  stripDatabaseIdsFromTeacherText,
-} from "@/lib/ai-hub/message-content";
-import {
-  formatResourceType,
-  isResourceType,
-} from "@/lib/resources/format";
+import { getMessageText } from "@/lib/ai-hub/message-content";
 import { cn } from "@/lib/utils";
 
 type ChatMessageProps = {
@@ -26,14 +17,11 @@ export function ChatMessage({
   canEdit = false,
   onEdit,
 }: ChatMessageProps) {
-  const isUser = message.role === "user";
-  const rawText = getMessageText(message);
-  const text = isUser ? rawText : stripDatabaseIdsFromTeacherText(rawText);
-  const drafts = getVisibleDrafts(message);
-  const displayBlocks = isUser ? [] : getAssistantDisplayBlocks(message);
+  const text = getMessageText(message);
   const fileParts = message.parts.filter(isFileUIPart);
+  const isUser = message.role === "user";
 
-  if (!text && fileParts.length === 0 && drafts.length === 0) {
+  if (!text && fileParts.length === 0) {
     return null;
   }
 
@@ -83,48 +71,13 @@ export function ChatMessage({
               ))}
             </div>
           ) : null}
-          {isUser ? (
-            text ? (
+          {text ? (
+            isUser ? (
               <p className="whitespace-pre-wrap">{text}</p>
-            ) : null
-          ) : (
-            <div className="space-y-3">
-              {displayBlocks.map((block, index) => {
-                if (block.type === "text") {
-                  return (
-                    <MarkdownContent
-                      key={`text-${index}`}
-                      content={block.text}
-                    />
-                  );
-                }
-
-                const typeLabel =
-                  block.draft.resourceType &&
-                  isResourceType(block.draft.resourceType)
-                    ? formatResourceType(block.draft.resourceType)
-                    : null;
-
-                return (
-                  <div
-                    key={`draft-${block.draft.title}-${index}`}
-                    className="overflow-hidden rounded-xl border border-border/80 bg-muted/30"
-                  >
-                    <div className="flex items-center gap-1.5 border-b border-border/80 px-3 py-2 text-xs text-muted-foreground">
-                      <FileText className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">
-                        Draft{typeLabel ? ` · ${typeLabel}` : ""} ·{" "}
-                        {block.draft.title}
-                      </span>
-                    </div>
-                    <div className="px-3 py-3">
-                      <MarkdownContent content={block.draft.content} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            ) : (
+              <MarkdownContent content={text} />
+            )
+          ) : null}
         </div>
 
         {isUser && canEdit && onEdit && text ? (

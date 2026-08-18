@@ -5,7 +5,6 @@ import {
   isBinaryOriginalResource,
   isEditableTextResource,
   shouldExportResourceAsPdf,
-  stripResourceTypeTitlePrefix,
 } from "./format";
 
 describe("resource format helpers", () => {
@@ -73,23 +72,5 @@ describe("resource format helpers", () => {
         },
       })
     ).toBe(false);
-  });
-
-  it("strips a redundant resource-type prefix from titles", () => {
-    expect(
-      stripResourceTypeTitlePrefix(
-        "Assignment: Solving One-Step Linear Equations",
-        "assignment"
-      )
-    ).toBe("Solving One-Step Linear Equations");
-    expect(
-      stripResourceTypeTitlePrefix("Quiz — Fractions", "quiz")
-    ).toBe("Fractions");
-    expect(
-      stripResourceTypeTitlePrefix(
-        "Solving One-Step Linear Equations",
-        "assignment"
-      )
-    ).toBe("Solving One-Step Linear Equations");
   });
 });

@@ -1,9 +1,5 @@
-import {
-  admissionLookupKeys,
-  compactAdmissionNumber,
-  findUniqueDigitPrefixStudent,
-  normalizeAdmissionNumber,
-} from "@/lib/evaluation/normalize-admission";
+import { normalizeAdmissionNumber } from "@/lib/evaluation/normalize-admission";
+import { shouldEscalateAdmission } from "@/lib/evaluation/escalate";
 import type { IndexResult } from "@/lib/evaluation/index-schema";
 import { sheetPageFromFileName } from "@/lib/evaluation/page-images";
 import type { EvaluatedScriptStatus } from "@/types/database";
@@ -36,29 +32,13 @@ export type GroupedScript = {
   hasAdmissionCollision: boolean;
 };
 
-function buildRosterLookup(
-  roster: RosterStudent[]
-): (raw: string | null | undefined) => RosterStudent | null {
-  const byKey = new Map<string, RosterStudent | "ambiguous">();
-
+function buildRosterMap(roster: RosterStudent[]): Map<string, RosterStudent> {
+  const map = new Map<string, RosterStudent>();
   for (const student of roster) {
-    for (const key of admissionLookupKeys(student.admission_number)) {
-      const existing = byKey.get(key);
-      if (existing && existing !== student) {
-        byKey.set(key, "ambiguous");
-      } else if (!existing) {
-        byKey.set(key, student);
-      }
-    }
+    const key = normalizeAdmissionNumber(student.admission_number);
+    if (key) map.set(key, student);
   }
-
-  return (raw) => {
-    for (const key of admissionLookupKeys(raw)) {
-      const hit = byKey.get(key);
-      if (hit && hit !== "ambiguous") return hit;
-    }
-    return findUniqueDigitPrefixStudent(raw, roster);
-  };
+  return map;
 }
 
 function sortPages(pages: PageWithIndex[]): PageWithIndex[] {
@@ -75,69 +55,55 @@ function sortPages(pages: PageWithIndex[]): PageWithIndex[] {
 }
 
 /**
- * Group indexed pages by admission number.
- *
- * Roster hits auto-proceed to grading (PSL-108). Model-reported confidence is
- * not a teacher-confirm gate — amber only when the number is missing, not on
- * the roster, or collides across students.
+ * Group indexed pages by admission number with amber/unmatched rules.
  */
 export function groupPagesByAdmission(input: {
   pages: PageWithIndex[];
   roster: RosterStudent[];
 }): GroupedScript[] {
-  const lookup = buildRosterLookup(input.roster);
-  const byKey = new Map<string, PageWithIndex[]>();
-  const studentByKey = new Map<string, RosterStudent | null>();
+  const rosterMap = buildRosterMap(input.roster);
+  const byAdmission = new Map<string, PageWithIndex[]>();
   const unmatched: PageWithIndex[] = [];
 
   for (const page of input.pages) {
     const raw = page.index.admission_number?.trim() ?? "";
     const normalized = normalizeAdmissionNumber(raw);
-    if (!normalized) {
+    if (!normalized || shouldEscalateAdmission(page.index.admission_confidence)) {
       unmatched.push(page);
       continue;
     }
-    const student = lookup(raw);
-    const groupKey =
-      student?.id ?? compactAdmissionNumber(normalized) ?? normalized;
-    const list = byKey.get(groupKey) ?? [];
+    const list = byAdmission.get(normalized) ?? [];
     list.push(page);
-    byKey.set(groupKey, list);
-    if (!studentByKey.has(groupKey)) studentByKey.set(groupKey, student);
+    byAdmission.set(normalized, list);
   }
 
   const groups: GroupedScript[] = [];
 
-  for (const [groupKey, pages] of byKey.entries()) {
-    const student = studentByKey.get(groupKey) ?? null;
+  for (const [admissionKey, pages] of byAdmission.entries()) {
+    const student = rosterMap.get(admissionKey) ?? null;
     const sorted = sortPages(pages);
-    const admissionNumber =
-      normalizeAdmissionNumber(student?.admission_number) ??
-      compactAdmissionNumber(sorted[0]?.index.admission_number) ??
-      groupKey;
+    const lowConfidence = sorted.some((p) =>
+      shouldEscalateAdmission(p.index.admission_confidence)
+    );
 
     groups.push({
-      groupKey,
-      admissionNumber,
+      groupKey: admissionKey,
+      admissionNumber: admissionKey,
       studentId: student?.id ?? null,
-      matchConfidence: student ? "high" : "low",
-      status: student ? "evaluating" : "identity_amber",
+      matchConfidence: student ? (lowConfidence ? "low" : "high") : null,
+      status: !student || lowConfidence ? "identity_amber" : "evaluating",
       pages: sorted,
       hasAdmissionCollision: false,
     });
   }
 
+  // Detect duplicate admission groups (same number on unrelated uploads)
   const admissionCounts = new Map<string, number>();
   for (const g of groups) {
-    if (!g.admissionNumber) continue;
-    admissionCounts.set(
-      g.admissionNumber,
-      (admissionCounts.get(g.admissionNumber) ?? 0) + 1
-    );
+    admissionCounts.set(g.groupKey, (admissionCounts.get(g.groupKey) ?? 0) + 1);
   }
   for (const g of groups) {
-    if (!g.admissionNumber) continue;
-    if ((admissionCounts.get(g.admissionNumber) ?? 0) > 1) {
+    if ((admissionCounts.get(g.groupKey) ?? 0) > 1) {
       g.hasAdmissionCollision = true;
       g.status = "identity_amber";
       g.matchConfidence = "low";
@@ -157,25 +123,4 @@ export function groupPagesByAdmission(input: {
   }
 
   return groups;
-}
-
-/**
- * Live N=1 packets are one student's pages. Prefer the roster-matched group
- * and keep every page on that script instead of taking Map insertion order.
- */
-export function coalesceLivePacketGroups(
-  groups: GroupedScript[]
-): GroupedScript | null {
-  if (groups.length === 0) return null;
-  if (groups.length === 1) return groups[0]!;
-
-  const matched = groups.find((g) => g.status === "evaluating" && g.studentId);
-  const primary = matched ?? groups[0]!;
-  return {
-    ...primary,
-    pages: sortPages(groups.flatMap((g) => g.pages)),
-    status: primary.studentId ? "evaluating" : primary.status,
-    matchConfidence: primary.studentId ? "high" : primary.matchConfidence,
-    hasAdmissionCollision: groups.some((g) => g.hasAdmissionCollision),
-  };
 }

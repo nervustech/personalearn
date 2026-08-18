@@ -13,8 +13,6 @@ describe("eval prompts (cache-friendly split)", () => {
   it("keeps index system prompt stable and user prompt short", () => {
     const system = buildIndexPrompt();
     expect(system).toContain("admission_number");
-    expect(system).toMatch(/clearly readable/i);
-    expect(system).not.toMatch(/Be conservative/i);
     expect(buildIndexUserPrompt()).toMatch(/attached page/i);
   });
 

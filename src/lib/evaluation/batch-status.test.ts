@@ -21,16 +21,8 @@ describe("deriveBatchStatus", () => {
     expect(deriveBatchStatus(["identity_amber", "ready"])).toBe("in_review");
   });
 
-  it("returns signed_off only when every script is signed off", () => {
+  it("returns signed_off when all reviewable scripts are signed off", () => {
     expect(deriveBatchStatus(["signed_off", "signed_off"])).toBe("signed_off");
-  });
-
-  it("keeps the session open when signed_off is mixed with identity exceptions", () => {
-    expect(deriveBatchStatus(["signed_off", "identity_amber"])).toBe(
-      "in_review"
-    );
-    expect(deriveBatchStatus(["signed_off", "unmatched"])).toBe("in_review");
-    expect(deriveBatchStatus(["signed_off", "failed"])).toBe("in_review");
   });
 
   it("returns draft when only identity setup states remain", () => {

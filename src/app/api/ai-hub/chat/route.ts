@@ -16,7 +16,7 @@ import {
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import { generateAiConversationTitle } from "@/lib/ai-hub/generate-conversation-title";
 import { materializeAttachmentText } from "@/lib/ai-hub/chat-attachments-server";
-import { getAssistantPersistContent, getMessageText } from "@/lib/ai-hub/message-content";
+import { getMessageText } from "@/lib/ai-hub/message-content";
 import { getChatModel } from "@/lib/ai/llm";
 import { assertChatConfigured } from "@/lib/ai/env";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
@@ -136,15 +136,15 @@ export async function POST(request: Request) {
           return;
         }
 
-        const persistContent = getAssistantPersistContent(responseMessage);
-        if (!persistContent) {
+        const assistantText = getMessageText(responseMessage).trim();
+        if (!assistantText) {
           return;
         }
 
         await appendConversationMessages(supabase, activeConversationId!, [
           {
             role: "assistant",
-            content: persistContent,
+            content: assistantText,
           },
         ]);
 
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
         if (messageCount === 2 && latestUserText) {
           const title = await generateAiConversationTitle(
             latestUserText,
-            persistContent
+            assistantText
           );
           await updateConversationTitle(supabase, activeConversationId!, title);
         }

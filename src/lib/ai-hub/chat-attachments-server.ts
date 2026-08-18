@@ -81,24 +81,15 @@ export async function materializeAttachmentText(
         }
 
         try {
-          // #region agent log
-          console.log('[DBG:6b0137] extract-before', JSON.stringify({fileName, mimeType: part.mediaType||parsed.mimeType, bytesLen: parsed.bytes.byteLength, format}));
-          // #endregion
           const text = await extractTextFromUpload({
             fileName,
             mimeType: part.mediaType || parsed.mimeType,
             bytes: parsed.bytes,
           });
-          // #region agent log
-          console.log('[DBG:6b0137] extract-success', JSON.stringify({fileName, textLen: text.length, textPreview: text.slice(0,200)}));
-          // #endregion
           extractedBlocks.push(
             `[Attached ${formatLabel(format)}: ${fileName}]\n${text}`
           );
         } catch (error) {
-          // #region agent log
-          console.log('[DBG:6b0137] extract-error', JSON.stringify({fileName, errorMsg: error instanceof Error ? error.message : String(error), errorCode: error instanceof ExtractTextError ? error.code : 'unknown'}));
-          // #endregion
           if (error instanceof ExtractTextError && error.code === "config") {
             throw error;
           }

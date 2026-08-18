@@ -14,6 +14,8 @@ const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "system", label: "System", icon: Monitor },
 ];
 
+export type ThemeMenuSide = "top" | "bottom";
+
 type ThemeToggleProps = {
   className?: string;
   variant?: "default" | "hero";
@@ -24,7 +26,21 @@ type ThemeToggleProps = {
    * anchors the theme menu to that row so it stacks flush with a parent popover.
    */
   label?: string;
+  /**
+   * Where the options panel opens. Headers default to `bottom` so the menu
+   * stays on-screen; labeled / bottom-bar rows default to `top`.
+   */
+  side?: ThemeMenuSide;
 };
+
+/** Header pickers open down; labeled rows and explicit `side` keep bottom-bar menus on-screen. */
+export function resolveThemeToggleSide(
+  side: ThemeMenuSide | undefined,
+  labeled: boolean
+): ThemeMenuSide {
+  if (side) return side;
+  return labeled ? "top" : "bottom";
+}
 
 function ThemeTriggerIcon({ theme }: { theme: Theme | undefined }) {
   if (theme === "system") return <Monitor className="h-4 w-4" />;
@@ -37,9 +53,11 @@ export function ThemeToggle({
   variant = "default",
   menuClassName,
   label,
+  side,
 }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const menuSide = resolveThemeToggleSide(side, Boolean(label));
 
   useEffect(() => setMounted(true), []);
 
@@ -95,7 +113,8 @@ export function ThemeToggle({
     return (
       <DropdownMenu
         align="start"
-        side="top"
+        side={menuSide}
+        portal={variant === "hero"}
         rootClassName="w-full"
         contentClassName={cn("left-0 right-0 w-auto", menuClassName)}
         trigger={
@@ -121,7 +140,8 @@ export function ThemeToggle({
   return (
     <DropdownMenu
       align="end"
-      side="top"
+      side={menuSide}
+      portal={variant === "hero"}
       contentClassName={menuClassName}
       trigger={
         <button

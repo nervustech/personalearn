@@ -10,7 +10,7 @@ export default function LoginPage() {
     <div className="relative flex min-h-screen flex-col">
       <HeroBackdrop />
 
-      <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
         <Link
           href="/"
           className="flex items-center gap-2 font-display font-semibold text-white transition-opacity hover:opacity-90"

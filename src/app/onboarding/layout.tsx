@@ -15,7 +15,7 @@ export default function OnboardingLayout({
         <HeroBackdrop blur />
       </div>
 
-      <header className="relative z-10 flex items-center justify-center px-4 py-6">
+      <header className="relative z-20 flex items-center justify-center px-4 py-6">
         <Link
           href="/"
           className="flex items-center gap-2 font-display font-semibold text-white transition-opacity hover:opacity-90"

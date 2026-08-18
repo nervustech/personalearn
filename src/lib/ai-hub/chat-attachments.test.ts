@@ -4,6 +4,7 @@ import {
   compactChatTransportBody,
   filesToFileUIParts,
   MAX_CHAT_FILE_BYTES,
+  MAX_CHAT_IMAGE_PICK_BYTES,
   mediaTypeForFile,
   validateChatAttachment,
   validateChatAttachments,
@@ -34,7 +35,7 @@ describe("validateChatAttachment", () => {
     ).toMatch(/Unsupported file type/);
   });
 
-  it("rejects oversized files", () => {
+  it("rejects oversized non-image files", () => {
     const bigTxt = new File([new Uint8Array(MAX_TXT_BYTES + 1)], "big.txt", {
       type: "text/plain",
     });
@@ -44,6 +45,20 @@ describe("validateChatAttachment", () => {
       type: "application/pdf",
     });
     expect(validateChatAttachment(bigPdf)).toMatch(/2 MB/);
+  });
+
+  it("allows images up to 5 MB (they will be compressed)", () => {
+    const img4mb = new File([new Uint8Array(4 * 1024 * 1024)], "photo.jpg", {
+      type: "image/jpeg",
+    });
+    expect(validateChatAttachment(img4mb)).toBeNull();
+  });
+
+  it("rejects images over 5 MB", () => {
+    const img6mb = new File([new Uint8Array(MAX_CHAT_IMAGE_PICK_BYTES + 1)], "huge.jpg", {
+      type: "image/jpeg",
+    });
+    expect(validateChatAttachment(img6mb)).toMatch(/5 MB/);
   });
 });
 

@@ -9,8 +9,12 @@ import {
 const MAX_ATTACHMENTS = 5;
 /** Stay under Vercel Functions' 4.5 MB request body (FUNCTION_PAYLOAD_TOO_LARGE). */
 export const MAX_CHAT_REQUEST_BYTES = 4 * 1024 * 1024;
-/** Raw file cap so base64 JSON plus chat metadata fits in MAX_CHAT_REQUEST_BYTES. */
+/** Non-image file cap (txt, pdf). */
 export const MAX_CHAT_FILE_BYTES = 2 * 1024 * 1024;
+/** Images are accepted up to this raw size; they'll be compressed before send. */
+export const MAX_CHAT_IMAGE_PICK_BYTES = 5 * 1024 * 1024;
+/** Target wire size after compression (raw bytes before base64). */
+const IMAGE_COMPRESS_TARGET_BYTES = 1.5 * 1024 * 1024;
 
 export type PendingAttachment = {
   id: string;
@@ -23,7 +27,10 @@ export function validateChatAttachment(file: File): string | null {
     return unsupportedTypeMessage();
   }
 
-  const maxBytes = Math.min(maxBytesForFormat(format), MAX_CHAT_FILE_BYTES);
+  const isImage = format === "image";
+  const maxBytes = isImage
+    ? MAX_CHAT_IMAGE_PICK_BYTES
+    : Math.min(maxBytesForFormat(format), MAX_CHAT_FILE_BYTES);
   if (file.size > maxBytes) {
     const limitMb = maxBytes / (1024 * 1024);
     return `${file.name} must be ${limitMb} MB or smaller for chat.`;
@@ -84,6 +91,18 @@ export async function filesToFileUIParts(files: File[]): Promise<FileUIPart[]> {
 
 async function fileToFileUIPart(file: File): Promise<FileUIPart> {
   const mediaType = mediaTypeForFile(file);
+  const isImage = mediaType.startsWith("image/");
+
+  if (isImage && file.size > IMAGE_COMPRESS_TARGET_BYTES) {
+    const compressed = await compressImage(file);
+    return {
+      type: "file",
+      mediaType: "image/jpeg",
+      filename: file.name,
+      url: toDataUrl("image/jpeg", compressed),
+    };
+  }
+
   const bytes = new Uint8Array(await file.arrayBuffer());
   return {
     type: "file",
@@ -91,6 +110,43 @@ async function fileToFileUIPart(file: File): Promise<FileUIPart> {
     filename: file.name,
     url: toDataUrl(mediaType, bytes),
   };
+}
+
+/**
+ * Compress an image using canvas. Iteratively reduces quality/dimensions
+ * until the result fits within IMAGE_COMPRESS_TARGET_BYTES.
+ */
+async function compressImage(file: File): Promise<Uint8Array> {
+  const bitmap = await createImageBitmap(file);
+  const maxDim = 2048;
+  let { width, height } = bitmap;
+
+  if (width > maxDim || height > maxDim) {
+    const scale = maxDim / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  for (const quality of [0.8, 0.6, 0.4, 0.3]) {
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+    if (blob.size <= IMAGE_COMPRESS_TARGET_BYTES) {
+      return new Uint8Array(await blob.arrayBuffer());
+    }
+  }
+
+  // Last resort: scale down further
+  const smallW = Math.round(width * 0.5);
+  const smallH = Math.round(height * 0.5);
+  const small = new OffscreenCanvas(smallW, smallH);
+  const sCtx = small.getContext("2d")!;
+  sCtx.drawImage(canvas, 0, 0, smallW, smallH);
+  const blob = await small.convertToBlob({ type: "image/jpeg", quality: 0.5 });
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 function toDataUrl(mediaType: string, bytes: Uint8Array): string {
@@ -172,5 +228,5 @@ export function compactChatTransportBody(bodyStr: string): {
 
 export function chatPayloadTooLargeMessage(bodyBytes: number): string {
   const mb = (bodyBytes / (1024 * 1024)).toFixed(1);
-  return `This file is too large to send in chat (${mb} MB request; Vercel limit is 4.5 MB). Attach a scan of about 2 MB or smaller.`;
+  return `This file is too large to send in chat (${mb} MB request; Vercel limit is 4.5 MB). Try a smaller image or fewer attachments.`;
 }

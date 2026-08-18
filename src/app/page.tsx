@@ -59,7 +59,7 @@ export default async function HomePage() {
       <section className="relative min-h-[92vh] overflow-hidden">
         <HeroBackdrop />
 
-        <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
+        <header className="relative z-20 mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
           <Link href="/" className="flex items-center gap-2 font-display font-semibold text-white">
             <BookOpen className="h-6 w-6 text-hero-accent" />
             <span>PersonaLearn</span>

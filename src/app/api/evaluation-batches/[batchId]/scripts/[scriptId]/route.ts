@@ -6,6 +6,9 @@ import {
   removeScriptFromBatch,
 } from "@/lib/evaluation/identity";
 import {
+  findInflightGeminiJob,
+} from "@/lib/evaluation/batch-jobs";
+import {
   runLiveEvaluation,
   submitEvaluateBatch,
 } from "@/lib/evaluation/poll-batches";
@@ -57,10 +60,16 @@ export async function PATCH(
     if (script.status === "evaluating") {
       const service = createServiceClient();
       const fullBatch = await requireTeacherEvaluationBatch(service, batchId);
-      if (fullBatch.mode === "live") {
-        await runLiveEvaluation(service, fullBatch, script.id);
-      } else {
-        await submitEvaluateBatch(service, fullBatch);
+      const inflight = await findInflightGeminiJob(service, {
+        batchId,
+        phase: "evaluate",
+      });
+      if (!inflight) {
+        if (fullBatch.mode === "live") {
+          await runLiveEvaluation(service, fullBatch, script.id);
+        } else {
+          await submitEvaluateBatch(service, fullBatch);
+        }
       }
     }
 

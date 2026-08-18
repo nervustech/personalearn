@@ -52,12 +52,11 @@ export function EvalSessionToolbar({
     )
   );
 
+  const gradingBusy =
+    gradingActive || startProcessing.isPending || evaluateLive.isPending;
+
   const canStartGrading =
-    pageCount > 0 &&
-    !uploadActive &&
-    !gradingActive &&
-    !startProcessing.isPending &&
-    !evaluateLive.isPending;
+    pageCount > 0 && !uploadActive && !gradingBusy;
 
   function resetAddDialog() {
     setSelectedFiles([]);
@@ -114,13 +113,21 @@ export function EvalSessionToolbar({
     setKickSummary(null);
     setFormError(null);
     try {
-      const result = await startProcessing.mutateAsync(batchId);
-      const phase = result.phase === "evaluate" ? "evaluate" : "index";
-      setKickSummary(
-        result.jobId
-          ? `Batch ${phase} job submitted — this page polls for results every few seconds.`
-          : "Batch processing checked — watch progress dots for updates."
-      );
+      if (isLive) {
+        await evaluateLive.mutateAsync({ batchId });
+        setKickSummary(
+          "Grading this student — the queue updates when marks are ready."
+        );
+      } else {
+        const result = await startProcessing.mutateAsync(batchId);
+        const phase = result.phase === "evaluate" ? "evaluate" : "index";
+        setKickSummary(
+          result.jobId
+            ? `Batch ${phase} job submitted — this page polls for results every few seconds.`
+            : "Batch processing checked — watch progress dots for updates."
+        );
+      }
+      await refetch();
       onUpdated?.();
     } catch (error) {
       setFormError(
@@ -165,7 +172,12 @@ export function EvalSessionToolbar({
             type="button"
             size="sm"
             variant="secondary"
-            disabled={startProcessing.isPending || uploadActive}
+            disabled={
+              startProcessing.isPending ||
+              evaluateLive.isPending ||
+              uploadActive ||
+              gradingActive
+            }
             onClick={handleRetryGrading}
           >
             <RefreshCw

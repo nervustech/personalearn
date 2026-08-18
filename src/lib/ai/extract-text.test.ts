@@ -27,6 +27,11 @@ vi.mock("@/lib/ai/vision-model", () => ({
   requireGoogleGenerativeAiApiKey: () => mockRequireGoogleKey(),
 }));
 
+const mockGetVisionExtractionModel = vi.fn();
+vi.mock("@/lib/ai/llm", () => ({
+  getVisionExtractionModel: () => mockGetVisionExtractionModel(),
+}));
+
 describe("detectResourceFormat", () => {
   it("detects txt, pdf, and image formats", () => {
     expect(detectResourceFormat("notes.txt", "text/plain")).toBe("txt");
@@ -83,7 +88,7 @@ describe("extractTextFromUpload", () => {
     expect(mockExtractPdfText).toHaveBeenCalled();
   });
 
-  it("extracts text from image uploads via Gemini", async () => {
+  it("extracts text from image uploads via vision model", async () => {
     mockGenerateText.mockResolvedValue({ text: "Term 2 outline" });
 
     const text = await extractTextFromUpload({

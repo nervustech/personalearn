@@ -2,71 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EvaluateResult } from "@/lib/evaluation/evaluate-schema";
 import type { IndexResult } from "@/lib/evaluation/index-schema";
 import type { GroupedScript } from "@/lib/evaluation/group-by-admission";
-import type {
-  EvaluatedScriptPage,
-  EvaluatedScriptStatus,
-} from "@/types/database";
-
-const SETTLED_SCRIPT_STATUSES = new Set<EvaluatedScriptStatus>([
-  "evaluating",
-  "ready",
-  "signed_off",
-  "failed",
-  "identity_cleared",
-  "queued_draft",
-  "drafting",
-  "drafted",
-]);
-
-export type ExistingScriptIdentity = {
-  student_id: string | null;
-  status: EvaluatedScriptStatus;
-  match_confidence: "high" | "low" | null;
-  read_admission_number?: string | null;
-};
-
-/**
- * Keep teacher-confirmed (or already-grading) identity across regroup / later
- * uploads. Never drop a settled student back to amber/unmatched (PSL-108).
- */
-export function resolveScriptIdentityOnUpsert(input: {
-  existing: ExistingScriptIdentity | null;
-  group: Pick<
-    GroupedScript,
-    "studentId" | "status" | "matchConfidence" | "admissionNumber"
-  >;
-}): {
-  studentId: string | null;
-  status: EvaluatedScriptStatus;
-  matchConfidence: "high" | "low" | null;
-  admissionNumber: string | null;
-} {
-  const { existing, group } = input;
-  const studentId = group.studentId ?? existing?.student_id ?? null;
-  const admissionNumber =
-    group.admissionNumber ?? existing?.read_admission_number ?? null;
-
-  if (
-    existing &&
-    existing.student_id &&
-    SETTLED_SCRIPT_STATUSES.has(existing.status) &&
-    (group.status === "identity_amber" || group.status === "unmatched")
-  ) {
-    return {
-      studentId,
-      status: existing.status === "failed" ? "evaluating" : existing.status,
-      matchConfidence: existing.match_confidence ?? group.matchConfidence,
-      admissionNumber,
-    };
-  }
-
-  return {
-    studentId,
-    status: group.status,
-    matchConfidence: group.matchConfidence,
-    admissionNumber,
-  };
-}
+import type { EvaluatedScriptPage } from "@/types/database";
 
 export async function persistIndexResults(
   supabase: SupabaseClient,
@@ -110,86 +46,27 @@ export async function upsertScriptFromGroup(
     readAdmissionNumber: p.index.admission_number,
   }));
 
-  let scriptId = input.existingScriptId ?? null;
-
-  const scriptFields =
-    "id, student_id, status, match_confidence, read_admission_number";
-
-  let existing: (ExistingScriptIdentity & { id: string }) | null = null;
-
-  if (scriptId) {
-    const { data, error } = await supabase
-      .from("evaluated_scripts")
-      .select(scriptFields)
-      .eq("id", scriptId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    existing = (data as (ExistingScriptIdentity & { id: string }) | null) ?? null;
-  }
-
-  if (!existing && input.group.studentId) {
-    const { data, error } = await supabase
-      .from("evaluated_scripts")
-      .select(scriptFields)
-      .eq("batch_id", input.batchId)
-      .eq("student_id", input.group.studentId)
-      .limit(1)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    existing = (data as (ExistingScriptIdentity & { id: string }) | null) ?? null;
-  }
-
-  if (!existing && input.group.admissionNumber) {
-    const { data, error } = await supabase
-      .from("evaluated_scripts")
-      .select(scriptFields)
-      .eq("batch_id", input.batchId)
-      .eq("read_admission_number", input.group.admissionNumber)
-      .limit(1)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    existing = (data as (ExistingScriptIdentity & { id: string }) | null) ?? null;
-  }
-
-  if (!existing && input.group.status === "unmatched") {
-    const { data, error } = await supabase
-      .from("evaluated_scripts")
-      .select(scriptFields)
-      .eq("batch_id", input.batchId)
-      .eq("status", "unmatched")
-      .limit(1)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    existing = (data as (ExistingScriptIdentity & { id: string }) | null) ?? null;
-  }
-
-  scriptId = existing?.id ?? scriptId;
-
-  if (scriptId) {
-    const next = resolveScriptIdentityOnUpsert({
-      existing,
-      group: input.group,
-    });
+  if (input.existingScriptId) {
     const { error } = await supabase
       .from("evaluated_scripts")
       .update({
-        student_id: next.studentId,
-        read_admission_number: next.admissionNumber,
-        match_confidence: next.matchConfidence,
+        student_id: input.group.studentId,
+        read_admission_number: input.group.admissionNumber,
+        match_confidence: input.group.matchConfidence,
         page_order: pageOrder,
-        status: next.status,
+        status: input.group.status,
       })
-      .eq("id", scriptId);
+      .eq("id", input.existingScriptId);
 
     if (error) throw new Error(error.message);
 
     for (const page of input.group.pages) {
       await supabase
         .from("evaluation_pages")
-        .update({ script_id: scriptId })
+        .update({ script_id: input.existingScriptId })
         .eq("id", page.pageId);
     }
-    return scriptId;
+    return input.existingScriptId;
   }
 
   const { data, error } = await supabase

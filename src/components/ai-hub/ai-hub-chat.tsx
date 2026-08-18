@@ -30,10 +30,6 @@ import type { ConversationRow } from "@/lib/ai-hub/conversations";
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import {
   chatAttachmentAccept,
-  chatPayloadTooLargeMessage,
-  compactChatTransportBody,
-  filesToFileUIParts,
-  MAX_CHAT_REQUEST_BYTES,
   validateChatAttachments,
   type PendingAttachment,
 } from "@/lib/ai-hub/chat-attachments";
@@ -42,7 +38,7 @@ import {
   conversationMessagesQueryKey,
   fetchConversationMessages,
 } from "@/lib/hooks/use-conversation-messages";
-import { getMessageText, getVisibleDrafts } from "@/lib/ai-hub/message-content";
+import { getMessageText } from "@/lib/ai-hub/message-content";
 import {
   conversationsQueryKey,
   useConversations,
@@ -192,19 +188,7 @@ export function AiHubChat() {
           conversationId: conversationIdRef.current,
         }),
         fetch: async (input, init) => {
-          const rawBody = typeof init?.body === "string" ? init.body : "";
-          const compacted = compactChatTransportBody(rawBody);
-          const nextInit =
-            compacted.bodyStr !== rawBody
-              ? { ...init, body: compacted.bodyStr }
-              : init;
-          if (compacted.afterBytes > MAX_CHAT_REQUEST_BYTES) {
-            throw new Error(chatPayloadTooLargeMessage(compacted.afterBytes));
-          }
-          const response = await globalThis.fetch(input, nextInit);
-          if (response.status === 413) {
-            throw new Error(chatPayloadTooLargeMessage(compacted.afterBytes));
-          }
+          const response = await globalThis.fetch(input, init);
           const conversationId = response.headers.get("X-Conversation-Id");
 
           if (
@@ -253,8 +237,7 @@ export function AiHubChat() {
       const last = finishedMessages[finishedMessages.length - 1];
       if (
         last?.role === "assistant" &&
-        !getMessageText(last).trim() &&
-        getVisibleDrafts(last).length === 0
+        !getMessageText(last).trim()
       ) {
         setActionError(
           "The assistant returned an empty reply. Confirm DEEPSEEK_API_KEY (or CHAT_PROVIDER + matching key) is set in Vercel Production, then redeploy."
@@ -524,12 +507,15 @@ export function AiHubChat() {
       setDraft("");
       setPendingAttachments([]);
 
-      const fileParts = hasFiles ? await filesToFileUIParts(files) : [];
+      const dataTransfer = new DataTransfer();
+      for (const file of files) {
+        dataTransfer.items.add(file);
+      }
 
       await sendMessage(
         {
           text: trimmed || "Please review the attached file(s).",
-          ...(hasFiles ? { files: fileParts } : {}),
+          ...(hasFiles ? { files: dataTransfer.files } : {}),
         },
         {
           body: {
@@ -832,7 +818,7 @@ export function AiHubChat() {
                   type="file"
                   accept={chatAttachmentAccept()}
                   multiple
-                  className="sr-only"
+                  className="hidden"
                   onChange={(event) => handleFilesSelected(event.target.files)}
                 />
                 <div

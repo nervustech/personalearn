@@ -1,7 +1,6 @@
 import { isFileUIPart, type UIMessage } from "ai";
 import {
   detectResourceFormat,
-  ExtractTextError,
   extractTextFromUpload,
   type ResourceFormat,
 } from "@/lib/ai/extract-text";
@@ -90,9 +89,6 @@ export async function materializeAttachmentText(
             `[Attached ${formatLabel(format)}: ${fileName}]\n${text}`
           );
         } catch (error) {
-          if (error instanceof ExtractTextError && error.code === "config") {
-            throw error;
-          }
           const detail =
             error instanceof Error ? error.message : "Could not extract text";
           extractedBlocks.push(`[Attached file: ${fileName} — ${detail}]`);

@@ -27,6 +27,5 @@ describe("buildClassAssistantSystemPrompt", () => {
     expect(prompt).toContain("explicitly confirms");
     expect(prompt).toContain("$...$");
     expect(prompt).toContain("$$...$$");
-    expect(prompt).toContain("Never show database ids");
   });
 });

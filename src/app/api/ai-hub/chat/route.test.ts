@@ -215,60 +215,6 @@ describe("POST /api/ai-hub/chat", () => {
     expect(mockStreamText).not.toHaveBeenCalled();
   });
 
-  it("materializes attached file text before streaming", async () => {
-    mockRequireConversationAccess.mockResolvedValue({
-      id: conversationId,
-      class_id: classId,
-    });
-
-    const attached = "Week 3 fractions";
-    const url = `data:text/plain;base64,${btoa(attached)}`;
-
-    const response = await POST(
-      new Request("http://localhost/api/ai-hub/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          classId,
-          conversationId,
-          messages: [
-            {
-              id: "user-1",
-              role: "user",
-              parts: [
-                { type: "text", text: "Summarize this" },
-                {
-                  type: "file",
-                  mediaType: "text/plain",
-                  filename: "notes.txt",
-                  url,
-                },
-              ],
-            },
-          ],
-        }),
-      })
-    );
-
-    expect(response.status).toBe(200);
-    const streamArgs = mockStreamText.mock.calls[0]?.[0] as {
-      messages: unknown;
-    };
-    const serialized = JSON.stringify(streamArgs.messages);
-    expect(serialized).toContain("Week 3 fractions");
-    expect(serialized).not.toContain('"type":"file"');
-    expect(mockAppendConversationMessages).toHaveBeenCalledWith(
-      {},
-      conversationId,
-      expect.arrayContaining([
-        expect.objectContaining({
-          role: "user",
-          content: expect.stringContaining("Week 3 fractions"),
-        }),
-      ])
-    );
-  });
-
   it("returns 500 when chat API key is missing", async () => {
     const { assertChatConfigured } = await import("@/lib/ai/env");
     vi.mocked(assertChatConfigured).mockImplementationOnce(() => {

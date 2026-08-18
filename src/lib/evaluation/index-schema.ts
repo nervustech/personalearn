@@ -51,10 +51,12 @@ Extract ONLY header metadata — do not grade or transcribe full answers.
 
 Return JSON with:
 - admission_number: student admission/registration number written on the page (null if missing/illegible)
-- admission_confidence: 0–1. Use high confidence (≥ 0.75) when the digits are clearly readable, even if handwriting is informal. Use low confidence only when digits are ambiguous, cut off, or missing
+- admission_confidence: 0–1 confidence in the admission number read
 - page_number: page number if written (null if absent)
 - total_pages: total pages if written (null if absent)
-- questions_found: question labels visible on this page. Prefer section-qualified labels when sections exist (e.g. "A.1", "A.2", "B.1"). Use bare labels ("1", "2a") only for a single continuous sequence. If numbering restarts without a section header, still list each occurrence in order (duplicates allowed) — do not drop later sections.`;
+- questions_found: question labels visible on this page. Prefer section-qualified labels when sections exist (e.g. "A.1", "A.2", "B.1"). Use bare labels ("1", "2a") only for a single continuous sequence. If numbering restarts without a section header, still list each occurrence in order (duplicates allowed) — do not drop later sections.
+
+Be conservative: low confidence when handwriting is unclear.`;
 }
 
 export function buildIndexUserPrompt(): string {

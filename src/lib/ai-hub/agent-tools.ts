@@ -16,7 +16,6 @@ import {
   type AgentDraft,
 } from "@/lib/ai-hub/drafts";
 import { createEvaluationBatch } from "@/lib/evaluation/batches";
-import { stripResourceTypeTitlePrefix } from "@/lib/resources/format";
 import {
   ensureAssessmentForGradableResource,
   shouldPublishAssessment,
@@ -132,10 +131,7 @@ export async function executeSaveResource(
       return userSafeError("This draft was already saved.");
     }
 
-    const title = stripResourceTypeTitlePrefix(
-      draft.title.trim(),
-      draft.resource_type
-    );
+    const title = draft.title.trim();
     const resourceType = draft.resource_type as ResourceType;
 
     if (draft.kind === "text") {
@@ -262,13 +258,7 @@ export async function executeUpdateDraft(
       draftId: input.draftId,
       classId: deps.classId,
       teacherId: deps.teacherId,
-      title:
-        input.title !== undefined
-          ? stripResourceTypeTitlePrefix(
-              input.title,
-              existing.resource_type
-            )
-          : undefined,
+      title: input.title,
       contentText: input.content,
     });
 
@@ -341,15 +331,11 @@ Create a ${typeLabel} titled "${input.title}".${extra}`,
       );
     }
 
-    const title = stripResourceTypeTitlePrefix(
-      input.title,
-      input.resourceType
-    );
     const draft = await createAgentDraft(deps.supabase, {
       classId: deps.classId,
       teacherId: deps.teacherId,
       kind: "text",
-      title,
+      title: input.title,
       resourceType: input.resourceType,
       contentText: content,
       metadata: {
@@ -913,12 +899,7 @@ export function createAgentTools(deps: AgentToolDeps) {
         resourceType: generatableResourceTypeSchema.describe(
           "Type of resource to generate"
         ),
-        title: z
-          .string()
-          .min(1)
-          .describe(
-            "Topic title only — do not prefix with the resource type (e.g. 'Solving One-Step Linear Equations', not 'Assignment: ...')"
-          ),
+        title: z.string().min(1).describe("Title for the draft resource"),
         instructions: z
           .string()
           .optional()

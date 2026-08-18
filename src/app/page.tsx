@@ -3,12 +3,7 @@ import { BookOpen, Bot, GraduationCap, Users } from "lucide-react";
 import { HeroBackdrop } from "@/components/layout/hero-backdrop";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
-import { getLandingCtas } from "@/lib/auth/post-login-path";
-import { createClient } from "@/lib/supabase/server";
-import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn } from "@/lib/utils";
-
-export const dynamic = "force-dynamic";
 
 const features = [
   {
@@ -31,28 +26,7 @@ const features = [
   },
 ];
 
-async function getHomeLandingCtas() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return getLandingCtas(false, false);
-  }
-
-  const { count } = await supabase
-    .from("classes")
-    .select("id", { count: "exact", head: true })
-    .eq("teacher_id", user.id)
-    .eq("is_active", true);
-
-  return getLandingCtas(true, (count ?? 0) > 0);
-}
-
-export default async function HomePage() {
-  const ctas = await getHomeLandingCtas();
-
+export default function HomePage() {
   return (
     <div className="min-h-screen">
       {/* Hero */}
@@ -66,13 +40,9 @@ export default async function HomePage() {
           </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle variant="hero" />
-            {ctas.signedIn ? (
-              <SignOutButton variant="hero" />
-            ) : (
-              <Link href={ctas.headerHref} className={cn(buttonVariants({ variant: "hero", size: "sm" }))}>
-                {ctas.headerLabel}
-              </Link>
-            )}
+            <Link href="/login" className={cn(buttonVariants({ variant: "hero", size: "sm" }))}>
+              Sign in
+            </Link>
           </div>
         </header>
 
@@ -90,13 +60,13 @@ export default async function HomePage() {
           </p>
           <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Link
-              href={ctas.primaryHref}
+              href="/login"
               className={cn(buttonVariants({ variant: "hero-primary", size: "lg" }))}
             >
               Get started free
             </Link>
             <Link
-              href={ctas.secondaryHref}
+              href="/dashboard"
               className={cn(buttonVariants({ variant: "hero", size: "lg" }))}
             >
               Open dashboard
@@ -171,7 +141,7 @@ export default async function HomePage() {
             </p>
           </div>
           <Link
-            href={ctas.footerHref}
+            href="/login"
             className={cn(
               buttonVariants({ variant: "secondary", size: "lg" }),
               "shrink-0 bg-white text-primary shadow-md hover:bg-white/90"

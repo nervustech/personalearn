@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { extractText as extractPdfText } from "unpdf";
-import { getVisionExtractionModel } from "@/lib/ai/llm";
+import { getGeminiFlashModel, requireGoogleGenerativeAiApiKey } from "@/lib/ai/vision-model";
 import {
   detectResourceFormat,
   maxBytesForFormat,
@@ -37,8 +37,10 @@ async function extractTextFromPdf(bytes: Uint8Array): Promise<string> {
 }
 
 async function extractTextFromImage(bytes: Uint8Array, mimeType: string): Promise<string> {
+  requireGoogleGenerativeAiApiKey();
+
   const { text } = await generateText({
-    model: getVisionExtractionModel(),
+    model: getGeminiFlashModel(),
     messages: [
       {
         role: "user",
@@ -92,7 +94,7 @@ export async function extractTextFromUpload(input: {
 
     const message =
       error instanceof Error ? error.message : "Could not extract text from file.";
-    if (message.includes("GOOGLE_GENERATIVE_AI_API_KEY") || message.includes("XAI_API_KEY")) {
+    if (message.includes("GOOGLE_GENERATIVE_AI_API_KEY")) {
       throw new ExtractTextError(message, "config");
     }
 

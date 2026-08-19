@@ -137,7 +137,7 @@ export function RecentActivityLists({
               {recentResources.map((resource) => (
                 <li key={resource.id}>
                   <Link
-                    href={`/classes/${classId}?resource=${resource.id}`}
+                    href={`/classes/${classId}/resources/${resource.id}`}
                     className="block rounded-xl border border-border/60 px-3 py-2 transition-colors hover:bg-muted/60"
                   >
                     <p className="truncate text-sm font-medium">

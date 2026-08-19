@@ -15,7 +15,7 @@ export default function OnboardingLayout({
         <HeroBackdrop blur />
       </div>
 
-      <header className="relative z-20 flex items-center justify-center px-4 py-6">
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
         <Link
           href="/"
           className="flex items-center gap-2 font-display font-semibold text-white transition-opacity hover:opacity-90"
@@ -23,7 +23,7 @@ export default function OnboardingLayout({
           <BookOpen className="h-6 w-6 text-hero-accent" />
           <span>PersonaLearn</span>
         </Link>
-        <div className="absolute right-4 top-6 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <SignOutButton variant="hero" />
           <ThemeToggle variant="hero" />
         </div>

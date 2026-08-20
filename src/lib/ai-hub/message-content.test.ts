@@ -3,8 +3,10 @@ import type { UIMessage } from "ai";
 import {
   getAssistantDisplayBlocks,
   getAssistantPersistContent,
+  getMessageReasoning,
   getVisibleDrafts,
   stripDatabaseIdsFromTeacherText,
+  toUIMessageFromRow,
   truncateMessagesBefore,
 } from "@/lib/ai-hub/message-content";
 
@@ -87,6 +89,34 @@ describe("getVisibleDrafts", () => {
   });
 });
 
+describe("getMessageReasoning", () => {
+  it("extracts reasoning text from reasoning UI parts", () => {
+    const message: UIMessage = {
+      id: "a-reason",
+      role: "assistant",
+      parts: [
+        { type: "reasoning", text: "Let's first analyze the syllabus requirement." } as UIMessage["parts"][number],
+        { type: "reasoning", text: " Then construct the lesson plan." } as UIMessage["parts"][number],
+        { type: "text", text: "Here is the lesson plan." },
+      ],
+    };
+
+    expect(getMessageReasoning(message)).toBe(
+      "Let's first analyze the syllabus requirement. Then construct the lesson plan."
+    );
+  });
+
+  it("returns empty string when message has no reasoning parts", () => {
+    const message: UIMessage = {
+      id: "a-no-reason",
+      role: "assistant",
+      parts: [{ type: "text", text: "Direct response" }],
+    };
+
+    expect(getMessageReasoning(message)).toBe("");
+  });
+});
+
 describe("getAssistantPersistContent", () => {
   it("persists stored draft markdown even when the model only summarised", () => {
     const message: UIMessage = {
@@ -161,3 +191,72 @@ describe("getAssistantPersistContent", () => {
     ).toBe("Saved Assignment.");
   });
 });
+
+describe("toUIMessageFromRow", () => {
+  it("converts plain assistant messages without drafts", () => {
+    const message = toUIMessageFromRow({
+      id: "m1",
+      role: "assistant",
+      content: "Hello teacher",
+    });
+
+    expect(message).toEqual({
+      id: "m1",
+      role: "assistant",
+      parts: [{ type: "text", text: "Hello teacher" }],
+    });
+  });
+
+  it("reconstructs drafts from tool_calls as valid tool parts", async () => {
+    const { convertToModelMessages } = await import("ai");
+    const row = {
+      id: "m2",
+      role: "assistant" as const,
+      content:
+        "Here is the plan:\n\n## Fractions Quiz\n\n# Question 1\n\nSolve 1/2 + 1/4.\n\nShould I save this?",
+      tool_calls: {
+        drafts: [
+          {
+            title: "Fractions Quiz",
+            resourceType: "quiz",
+            content: "# Question 1\n\nSolve 1/2 + 1/4.",
+          },
+        ],
+      },
+    };
+
+    const uiMessage = toUIMessageFromRow(row);
+    expect(uiMessage.parts).toHaveLength(3);
+    expect(uiMessage.parts[0]).toEqual({ type: "text", text: "Here is the plan:" });
+    expect(uiMessage.parts[1].type).toBe("tool-generate_learning_resource");
+    expect(uiMessage.parts[2]).toEqual({ type: "text", text: "Should I save this?" });
+
+    const visibleDrafts = getVisibleDrafts(uiMessage);
+    expect(visibleDrafts).toEqual([
+      {
+        title: "Fractions Quiz",
+        resourceType: "quiz",
+        content: "# Question 1\n\nSolve 1/2 + 1/4.",
+      },
+    ]);
+
+    // Verify it converts to valid model messages without empty text parts
+    const modelMessages = await convertToModelMessages([
+      userMessage("u1", "Create a quiz"),
+      uiMessage,
+      userMessage("u2", "Save it"),
+    ]);
+
+    expect(modelMessages).toHaveLength(4);
+    const assistantMsg = modelMessages[1];
+    expect(assistantMsg.role).toBe("assistant");
+    if (Array.isArray(assistantMsg.content)) {
+      for (const part of assistantMsg.content) {
+        if (part.type === "text") {
+          expect(part.text.trim().length).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+});
+

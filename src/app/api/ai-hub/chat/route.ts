@@ -16,7 +16,7 @@ import {
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import { generateAiConversationTitle } from "@/lib/ai-hub/generate-conversation-title";
 import { materializeAttachmentText } from "@/lib/ai-hub/chat-attachments-server";
-import { getAssistantPersistContent, getMessageText } from "@/lib/ai-hub/message-content";
+import { getAssistantPersistContent, getMessageText, getVisibleDrafts } from "@/lib/ai-hub/message-content";
 import { getChatModel } from "@/lib/ai/llm";
 import { assertChatConfigured } from "@/lib/ai/env";
 import { requireTeacherClass } from "@/lib/auth/require-teacher-class";
@@ -141,10 +141,13 @@ export async function POST(request: Request) {
           return;
         }
 
+        const drafts = getVisibleDrafts(responseMessage);
+
         await appendConversationMessages(supabase, activeConversationId!, [
           {
             role: "assistant",
             content: persistContent,
+            tool_calls: drafts.length > 0 ? { drafts } : null,
           },
         ]);
 

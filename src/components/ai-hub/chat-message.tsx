@@ -5,10 +5,12 @@ import { FileText, Paperclip, Pencil } from "lucide-react";
 import { MarkdownContent } from "@/components/markdown/markdown-content";
 import {
   getAssistantDisplayBlocks,
+  getMessageReasoning,
   getMessageText,
   getVisibleDrafts,
   stripDatabaseIdsFromTeacherText,
 } from "@/lib/ai-hub/message-content";
+import { ThoughtProcess } from "@/components/ai-hub/thought-process";
 import {
   formatResourceType,
   isResourceType,
@@ -19,21 +21,24 @@ type ChatMessageProps = {
   message: UIMessage;
   canEdit?: boolean;
   onEdit?: (messageId: string, text: string) => void;
+  isStreaming?: boolean;
 };
 
 export function ChatMessage({
   message,
   canEdit = false,
   onEdit,
+  isStreaming = false,
 }: ChatMessageProps) {
   const isUser = message.role === "user";
   const rawText = getMessageText(message);
   const text = isUser ? rawText : stripDatabaseIdsFromTeacherText(rawText);
+  const reasoning = isUser ? "" : getMessageReasoning(message);
   const drafts = getVisibleDrafts(message);
   const displayBlocks = isUser ? [] : getAssistantDisplayBlocks(message);
   const fileParts = message.parts.filter(isFileUIPart);
 
-  if (!text && fileParts.length === 0 && drafts.length === 0) {
+  if (!text && fileParts.length === 0 && drafts.length === 0 && !reasoning) {
     return null;
   }
 
@@ -41,7 +46,7 @@ export function ChatMessage({
     <div
       className={cn(
         "group/message flex gap-3",
-        isUser ? "justify-end" : "justify-start"
+        isUser ? "justify-end" : "justify-start animate-[fadeIn_0.3s_ease]"
       )}
     >
       <div
@@ -89,6 +94,13 @@ export function ChatMessage({
             ) : null
           ) : (
             <div className="space-y-3">
+              {reasoning ? (
+                <ThoughtProcess
+                  reasoning={reasoning}
+                  isStreaming={isStreaming}
+                  hasResponseContent={Boolean(text) || drafts.length > 0}
+                />
+              ) : null}
               {displayBlocks.map((block, index) => {
                 if (block.type === "text") {
                   return (

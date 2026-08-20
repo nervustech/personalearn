@@ -42,7 +42,10 @@ import {
   conversationMessagesQueryKey,
   fetchConversationMessages,
 } from "@/lib/hooks/use-conversation-messages";
-import { getMessageText, getVisibleDrafts } from "@/lib/ai-hub/message-content";
+import {
+  getMessageText,
+  getVisibleDrafts,
+} from "@/lib/ai-hub/message-content";
 import {
   conversationsQueryKey,
   useConversations,
@@ -276,6 +279,17 @@ export function AiHubChat() {
 
   useEffect(() => {
     conversationIdRef.current = selectedConversationId;
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (selectedConversationId) {
+      url.searchParams.set("conversation", selectedConversationId);
+    } else {
+      url.searchParams.delete("conversation");
+    }
+    const next = url.pathname + (url.search ? url.search : "");
+    if (next !== window.location.pathname + window.location.search) {
+      window.history.replaceState(window.history.state, "", next);
+    }
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -601,18 +615,17 @@ export function AiHubChat() {
   const canSend =
     (Boolean(draft.trim()) || pendingAttachments.length > 0) && !isBusy;
 
-  const visibleMessages = useMemo(() => {
-    if (!isGenerating) {
-      return messages;
-    }
+  const lastMessage = messages[messages.length - 1];
 
-    const last = messages[messages.length - 1];
-    if (last?.role === "assistant") {
-      return messages.slice(0, -1);
-    }
+  // While generating, hide the partial streaming assistant message so the
+  // response appears complete when done — not token-by-token.
+  const visibleMessages =
+    isGenerating && lastMessage?.role === "assistant"
+      ? messages.slice(0, -1)
+      : messages;
 
-    return messages;
-  }, [messages, isGenerating]);
+  // Show the thinking bubble for the entire duration of generation.
+  const showThinkingBubble = isGenerating;
 
   if (!activeClass) {
     return (
@@ -752,7 +765,7 @@ export function AiHubChat() {
                         onEdit={handleEditMessage}
                       />
                     ))}
-                    {isGenerating ? <ThinkingBubble /> : null}
+                    {showThinkingBubble ? <ThinkingBubble /> : null}
                     <div ref={messagesEndRef} />
                   </div>
                 )}

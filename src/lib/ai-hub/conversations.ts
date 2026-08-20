@@ -84,9 +84,17 @@ export async function getConversationWithMessages(
     throw new Error(`Message lookup failed: ${error.message}`);
   }
 
-  const messages = ((data ?? []) as ConversationMessageRow[])
-    .filter((row) => row.role === "user" || row.role === "assistant")
-    .map(toUIMessageFromRow);
+  const rows = ((data ?? []) as ConversationMessageRow[])
+    .filter((row) => row.role === "user" || row.role === "assistant");
+
+  const messages = rows.map((row) =>
+    toUIMessageFromRow({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      tool_calls: row.tool_calls,
+    })
+  );
 
   return { conversation, messages };
 }

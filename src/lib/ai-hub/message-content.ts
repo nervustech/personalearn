@@ -1,4 +1,4 @@
-import { isTextUIPart, type UIMessage } from "ai";
+import { isReasoningUIPart, isTextUIPart, type UIMessage } from "ai";
 import { stripResourceTypeTitlePrefix } from "@/lib/resources/format";
 
 export type ConversationMessageRole = "user" | "assistant" | "tool";
@@ -17,6 +17,13 @@ export type VisibleDraft = {
 export function getMessageText(message: Pick<UIMessage, "parts">): string {
   return message.parts
     .filter(isTextUIPart)
+    .map((part) => part.text)
+    .join("");
+}
+
+export function getMessageReasoning(message: Pick<UIMessage, "parts">): string {
+  return message.parts
+    .filter(isReasoningUIPart)
     .map((part) => part.text)
     .join("");
 }
@@ -57,9 +64,18 @@ export function getAssistantDisplayBlocks(
 }
 
 function draftFromPart(part: UIMessage["parts"][number]): VisibleDraft | null {
+  const record = part as Record<string, unknown>;
+
+  if (record._draft && typeof record._draft === "object") {
+    const d = record._draft as Record<string, unknown>;
+    if (typeof d.content === "string" && d.content.trim()) {
+      return d as unknown as VisibleDraft;
+    }
+    return null;
+  }
+
   if (!DRAFT_TOOL_TYPES.has(part.type)) return null;
 
-  const record = part as { state?: string; output?: unknown };
   if (record.state !== "output-available") return null;
   if (!record.output || typeof record.output !== "object") return null;
 
@@ -128,10 +144,101 @@ export function toUIMessageFromRow(row: {
   id: string;
   role: ConversationMessageRole;
   content: string;
+  tool_calls?: unknown | null;
 }): UIMessage {
+  const role = row.role === "user" ? "user" : "assistant";
+
+  const savedDrafts = extractSavedDrafts(row.tool_calls);
+  if (role === "assistant" && savedDrafts.length > 0) {
+    return {
+      id: row.id,
+      role,
+      parts: rebuiltPartsWithDrafts(row.content, savedDrafts),
+    };
+  }
+
   return {
     id: row.id,
-    role: row.role === "user" ? "user" : "assistant",
+    role,
     parts: [{ type: "text", text: row.content }],
   };
+}
+
+function extractSavedDrafts(toolCalls: unknown): VisibleDraft[] {
+  if (!toolCalls || typeof toolCalls !== "object") return [];
+  const record = toolCalls as Record<string, unknown>;
+  if (!Array.isArray(record.drafts)) return [];
+  return record.drafts.filter(
+    (d: unknown): d is VisibleDraft =>
+      typeof d === "object" &&
+      d !== null &&
+      typeof (d as Record<string, unknown>).content === "string"
+  );
+}
+
+function rebuiltPartsWithDrafts(
+  content: string,
+  drafts: VisibleDraft[]
+): UIMessage["parts"] {
+  const parts: UIMessage["parts"] = [];
+  let remaining = content;
+
+  for (let index = 0; index < drafts.length; index++) {
+    const draft = drafts[index];
+    const heading = `## ${draft.title}`;
+    const headingIdx = remaining.indexOf(heading);
+
+    if (headingIdx === -1) {
+      parts.push(createDraftToolPart(draft, index));
+      continue;
+    }
+
+    const before = remaining.slice(0, headingIdx).trim();
+    if (before) {
+      parts.push({ type: "text", text: before });
+    }
+
+    parts.push(createDraftToolPart(draft, index));
+
+    const afterHeading = remaining.slice(headingIdx + heading.length);
+    const draftContentIdx = afterHeading.indexOf(draft.content);
+    if (draftContentIdx !== -1) {
+      remaining = afterHeading
+        .slice(draftContentIdx + draft.content.length)
+        .trim();
+    } else {
+      remaining = afterHeading.trim();
+    }
+  }
+
+  if (remaining) {
+    parts.push({ type: "text", text: remaining });
+  }
+
+  if (parts.length === 0) {
+    parts.push({ type: "text", text: content });
+  }
+
+  return parts;
+}
+
+function createDraftToolPart(
+  draft: VisibleDraft,
+  index: number
+): UIMessage["parts"][number] {
+  return {
+    type: "tool-generate_learning_resource",
+    toolCallId: `call-draft-${index}-${draft.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30)}`,
+    state: "output-available",
+    input: {
+      title: draft.title,
+      resourceType: draft.resourceType,
+      topic: draft.title,
+    },
+    output: {
+      title: draft.title,
+      resourceType: draft.resourceType,
+      content: draft.content,
+    },
+  } as unknown as UIMessage["parts"][number];
 }

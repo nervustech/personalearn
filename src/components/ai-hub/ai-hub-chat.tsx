@@ -43,7 +43,6 @@ import {
   fetchConversationMessages,
 } from "@/lib/hooks/use-conversation-messages";
 import {
-  getMessageReasoning,
   getMessageText,
   getVisibleDrafts,
 } from "@/lib/ai-hub/message-content";

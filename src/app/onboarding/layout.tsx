@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { HeroBackdrop } from "@/components/layout/hero-backdrop";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -14,7 +15,7 @@ export default function OnboardingLayout({
         <HeroBackdrop blur />
       </div>
 
-      <header className="relative z-10 flex items-center justify-center px-4 py-6">
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-6">
         <Link
           href="/"
           className="flex items-center gap-2 font-display font-semibold text-white transition-opacity hover:opacity-90"
@@ -22,7 +23,10 @@ export default function OnboardingLayout({
           <BookOpen className="h-6 w-6 text-hero-accent" />
           <span>PersonaLearn</span>
         </Link>
-        <ThemeToggle variant="hero" className="absolute right-4 top-6" />
+        <div className="flex items-center gap-2">
+          <SignOutButton variant="hero" />
+          <ThemeToggle variant="hero" />
+        </div>
       </header>
 
       <main className="relative z-10 mx-auto flex w-full max-w-lg flex-1 flex-col px-4 pb-12 pt-2">

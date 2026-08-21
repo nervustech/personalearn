@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const TOUR_KEY = "personalearn-tour-complete";
+import {
+  fetchWelcomeTourCompleted,
+  isWelcomeTourCompleteInStorage,
+  markWelcomeTourCompleteInStorage,
+  persistWelcomeTourCompleted,
+  shouldShowWelcomeTour,
+  shouldSyncLocalCompletionToProfile,
+} from "@/lib/onboarding/welcome-tour";
+import { createClient } from "@/lib/supabase/client";
 
 const steps = [
   {
@@ -26,20 +33,90 @@ const steps = [
 ];
 
 export function WelcomeTour() {
-  const [visible, setVisible] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(TOUR_KEY) !== "true";
-  });
+  const [localCompleted] = useState(() =>
+    isWelcomeTourCompleteInStorage(
+      typeof window === "undefined" ? null : window.localStorage
+    )
+  );
+  const [dbLoaded, setDbLoaded] = useState(false);
+  const [dbCompleted, setDbCompleted] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        if (!cancelled) {
+          setDbCompleted(true);
+          setDbLoaded(true);
+        }
+        return;
+      }
+
+      try {
+        const completed = await fetchWelcomeTourCompleted(supabase, user.id);
+        if (cancelled) return;
+
+        setDbCompleted(completed);
+        setDbLoaded(true);
+
+        if (
+          shouldSyncLocalCompletionToProfile({
+            localCompleted,
+            dbCompleted: completed,
+          })
+        ) {
+          await persistWelcomeTourCompleted(supabase, user.id);
+          if (!cancelled) setDbCompleted(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setDbCompleted(localCompleted);
+          setDbLoaded(true);
+        }
+      }
+    }
+
+    void loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [localCompleted]);
+
+  const visible = shouldShowWelcomeTour({
+    dismissed,
+    localCompleted,
+    dbLoaded,
+    dbCompleted,
+  });
 
   if (!visible) return null;
 
   const current = steps[step];
   const isLast = step === steps.length - 1;
 
-  function finish() {
-    localStorage.setItem(TOUR_KEY, "true");
-    setVisible(false);
+  async function finish() {
+    markWelcomeTourCompleteInStorage(window.localStorage);
+    setDismissed(true);
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    try {
+      await persistWelcomeTourCompleted(supabase, user.id);
+    } catch {
+      // localStorage still hides the tour on this browser
+    }
   }
 
   return (
@@ -55,7 +132,7 @@ export function WelcomeTour() {
           <button
             type="button"
             className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
-            onClick={finish}
+            onClick={() => void finish()}
             aria-label="Skip tour"
           >
             <X className="h-4 w-4" />
@@ -73,7 +150,7 @@ export function WelcomeTour() {
             Back
           </Button>
           {isLast ? (
-            <Button type="button" size="sm" onClick={finish}>
+            <Button type="button" size="sm" onClick={() => void finish()}>
               Get started
             </Button>
           ) : (

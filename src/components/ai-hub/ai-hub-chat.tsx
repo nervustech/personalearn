@@ -30,6 +30,10 @@ import type { ConversationRow } from "@/lib/ai-hub/conversations";
 import { generateConversationTitle } from "@/lib/ai-hub/conversation-title";
 import {
   chatAttachmentAccept,
+  chatPayloadTooLargeMessage,
+  compactChatTransportBody,
+  filesToFileUIParts,
+  MAX_CHAT_REQUEST_BYTES,
   validateChatAttachments,
   type PendingAttachment,
 } from "@/lib/ai-hub/chat-attachments";
@@ -38,7 +42,10 @@ import {
   conversationMessagesQueryKey,
   fetchConversationMessages,
 } from "@/lib/hooks/use-conversation-messages";
-import { getMessageText } from "@/lib/ai-hub/message-content";
+import {
+  getMessageText,
+  getVisibleDrafts,
+} from "@/lib/ai-hub/message-content";
 import {
   conversationsQueryKey,
   useConversations,
@@ -188,7 +195,19 @@ export function AiHubChat() {
           conversationId: conversationIdRef.current,
         }),
         fetch: async (input, init) => {
-          const response = await globalThis.fetch(input, init);
+          const rawBody = typeof init?.body === "string" ? init.body : "";
+          const compacted = compactChatTransportBody(rawBody);
+          const nextInit =
+            compacted.bodyStr !== rawBody
+              ? { ...init, body: compacted.bodyStr }
+              : init;
+          if (compacted.afterBytes > MAX_CHAT_REQUEST_BYTES) {
+            throw new Error(chatPayloadTooLargeMessage(compacted.afterBytes));
+          }
+          const response = await globalThis.fetch(input, nextInit);
+          if (response.status === 413) {
+            throw new Error(chatPayloadTooLargeMessage(compacted.afterBytes));
+          }
           const conversationId = response.headers.get("X-Conversation-Id");
 
           if (
@@ -237,7 +256,8 @@ export function AiHubChat() {
       const last = finishedMessages[finishedMessages.length - 1];
       if (
         last?.role === "assistant" &&
-        !getMessageText(last).trim()
+        !getMessageText(last).trim() &&
+        getVisibleDrafts(last).length === 0
       ) {
         setActionError(
           "The assistant returned an empty reply. Confirm DEEPSEEK_API_KEY (or CHAT_PROVIDER + matching key) is set in Vercel Production, then redeploy."
@@ -259,6 +279,17 @@ export function AiHubChat() {
 
   useEffect(() => {
     conversationIdRef.current = selectedConversationId;
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (selectedConversationId) {
+      url.searchParams.set("conversation", selectedConversationId);
+    } else {
+      url.searchParams.delete("conversation");
+    }
+    const next = url.pathname + (url.search ? url.search : "");
+    if (next !== window.location.pathname + window.location.search) {
+      window.history.replaceState(window.history.state, "", next);
+    }
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -507,15 +538,12 @@ export function AiHubChat() {
       setDraft("");
       setPendingAttachments([]);
 
-      const dataTransfer = new DataTransfer();
-      for (const file of files) {
-        dataTransfer.items.add(file);
-      }
+      const fileParts = hasFiles ? await filesToFileUIParts(files) : [];
 
       await sendMessage(
         {
           text: trimmed || "Please review the attached file(s).",
-          ...(hasFiles ? { files: dataTransfer.files } : {}),
+          ...(hasFiles ? { files: fileParts } : {}),
         },
         {
           body: {
@@ -587,18 +615,17 @@ export function AiHubChat() {
   const canSend =
     (Boolean(draft.trim()) || pendingAttachments.length > 0) && !isBusy;
 
-  const visibleMessages = useMemo(() => {
-    if (!isGenerating) {
-      return messages;
-    }
+  const lastMessage = messages[messages.length - 1];
 
-    const last = messages[messages.length - 1];
-    if (last?.role === "assistant") {
-      return messages.slice(0, -1);
-    }
+  // While generating, hide the partial streaming assistant message so the
+  // response appears complete when done — not token-by-token.
+  const visibleMessages =
+    isGenerating && lastMessage?.role === "assistant"
+      ? messages.slice(0, -1)
+      : messages;
 
-    return messages;
-  }, [messages, isGenerating]);
+  // Show the thinking bubble for the entire duration of generation.
+  const showThinkingBubble = isGenerating;
 
   if (!activeClass) {
     return (
@@ -738,7 +765,7 @@ export function AiHubChat() {
                         onEdit={handleEditMessage}
                       />
                     ))}
-                    {isGenerating ? <ThinkingBubble /> : null}
+                    {showThinkingBubble ? <ThinkingBubble /> : null}
                     <div ref={messagesEndRef} />
                   </div>
                 )}
@@ -818,7 +845,7 @@ export function AiHubChat() {
                   type="file"
                   accept={chatAttachmentAccept()}
                   multiple
-                  className="hidden"
+                  className="sr-only"
                   onChange={(event) => handleFilesSelected(event.target.files)}
                 />
                 <div

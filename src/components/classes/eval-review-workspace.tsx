@@ -729,7 +729,9 @@ export function EvalReviewWorkspace({
   const awaitingIdentity = useMemo(
     () =>
       allScripts.some(
-        (s) => s.status === "pending" || s.status === "identity_amber"
+        (s) =>
+          (s.status === "identity_amber" || s.status === "unmatched") &&
+          !s.alreadyEvaluated
       ),
     [allScripts]
   );

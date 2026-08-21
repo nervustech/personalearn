@@ -25,18 +25,18 @@ export function deriveBatchStatus(
   );
   if (hasInFlight) return "processing";
 
-  const readyOrSigned = scriptStatuses.filter(
-    (s) => s === "ready" || s === "signed_off" || s === "drafted"
-  );
-
   if (
-    readyOrSigned.length > 0 &&
-    readyOrSigned.every((s) => s === "signed_off")
+    scriptStatuses.length > 0 &&
+    scriptStatuses.every((s) => s === "signed_off")
   ) {
     return "signed_off";
   }
 
-  if (scriptStatuses.some((s) => s === "ready" || s === "drafted")) {
+  if (
+    scriptStatuses.some(
+      (s) => s === "ready" || s === "drafted" || s === "signed_off"
+    )
+  ) {
     return "in_review";
   }
 

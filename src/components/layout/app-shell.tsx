@@ -33,9 +33,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        setMoreOpen(false);
+      const target = event.target as Node;
+      if (moreRef.current?.contains(target)) return;
+      if ((event.target as HTMLElement | null)?.closest?.("[data-pl-dropdown-panel]")) {
+        return;
       }
+      setMoreOpen(false);
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -189,7 +192,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm">
               <span className="text-muted-foreground">Appearance</span>
-              <ThemeToggle />
+              <ThemeToggle side="top" />
             </div>
             <div className="my-1 h-px bg-border/60" />
             <SignOutButton />
